@@ -1,0 +1,8 @@
+{
+	"id": "remarkable",
+	"name": "reMarkable",
+	"version": "0.1.0",
+	"minAppVersion": "0.1.0",
+	"description": "Ramène en direct les carnets de la reMarkable (interface web USB) en PDF dans le vault, et les suit où qu'on les range.",
+	"author": "Philippine Biojout"
+}

@@ -1,0 +1,28 @@
+{
+	"name": "fragment-remarkable",
+	"version": "0.1.0",
+	"description": "Plugin reMarkable pour Fragment",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc --noEmit && node esbuild.config.mjs production",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run src",
+		"version": "node version-bump.mjs && git add manifest.json versions.json"
+	},
+	"author": "Philippine Biojout",
+	"devDependencies": {
+		"@codemirror/state": "^6.4.1",
+		"@types/node": "^24.19.0",
+		"@usefragment/core": "^0.1.0",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "^0.28.2",
+		"tslib": "^2.6.3",
+		"typescript": "^7.0.2",
+		"vitest": "^5.0.2"
+	},
+	"private": true,
+	"dependencies": {
+		"fflate": "^0.8.3"
+	}
+}
