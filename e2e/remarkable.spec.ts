@@ -10,8 +10,8 @@ import { rmdocDeTest } from '/Users/philippinebiojout/Documents/IA/fragment-note
 /**
  * Le plugin reMarkable de bout en bout, contre une fausse tablette : première
  * synchro dans reMarkable/, mise à jour en direct, un carnet dont le plugin
- * fait lui-même le PDF, et le suivi d'un PDF qu'on range ailleurs, qu'on
- * supprime puis qu'on récupère.
+ * fait lui-même le PDF, et le suivi d'un PDF qu'on range ailleurs ou qu'on
+ * supprime.
  *
  * Se lance depuis Fragment, qui porte Playwright : copier ce fichier dans
  * `Fragment/app/e2e/`, `npm run build` dans le plugin, puis depuis `Fragment/app/`
@@ -152,7 +152,7 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 	let { electronApp, page } = await lancer(vault, userData);
 	try {
 		// 0. Rien n'est téléchargé avant d'avoir accepté. Premier clic sur
-		// l'icône : la demande. Refusée, la vue le dit et laisse changer d'avis.
+		// l'icône : la demande. Refusée, elle revient au clic suivant en le rappelant.
 		const icone = page.locator('.side-dock-ribbon-action[aria-label="reMarkable"]');
 		await new Promise((r) => setTimeout(r, 3000));
 		expect(existsSync(v('reMarkable'))).toBe(false);
@@ -179,14 +179,25 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await expect(page.locator('.modal')).toHaveCount(0);
 		expect(JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).autorise).toBeUndefined();
 		await icone.click();
+		await expect(page.locator('.remarkable-refus')).toHaveCount(0);
 		await page.locator('.modal button', { hasText: 'Refuser' }).click();
-		await expect(page.locator('.remarkable-refus')).toContainText('Tu n’as pas accepté');
+		await expect(page.locator('.modal')).toHaveCount(0);
 		await attendre(async () => JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).autorise === false, 'refus retenu');
 		await new Promise((r) => setTimeout(r, 3000));
 		expect(existsSync(v('reMarkable'))).toBe(false);
 		await icone.click();
+		await expect(page.locator('.remarkable-refus')).toContainText('Tu n’as pas accepté');
+		await page.locator('.modal button', { hasText: 'Autoriser' }).click();
+
+		// Autorisé : l'icône montre l'état de la tablette, dans la bulle, à sa droite.
+		await attendre(() => existsSync(v('reMarkable')), 'synchro lancée');
+		await icone.click();
 		await expect(page.locator('.modal')).toHaveCount(0);
-		await page.locator('.remarkable-vue .mod-cta', { hasText: 'Autoriser' }).click();
+		await expect(page.locator('.remarkable-bulle')).toHaveText('Tout ce que tu écris sur la tablette apparaît sur ce PDF.');
+		const aDroite = await page.evaluate(() => document.querySelector('.remarkable-bulle')!.getBoundingClientRect().left
+			>= document.querySelector('.side-dock-ribbon-action[aria-label="reMarkable"]')!.getBoundingClientRect().right);
+		expect(aDroite).toBe(true);
+		await page.keyboard.press('Escape');
 
 		// 1. Première synchro : tout dans reMarkable/, arborescence de la tablette.
 		await attendre(() => contient('reMarkable/Cours/A.pdf', 'a version 1'), 'A importé');
@@ -275,27 +286,13 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await new Promise((r) => setTimeout(r, 5000));
 		expect(existsSync(v('reMarkable/C.pdf'))).toBe(false);
 
-		// 6. Récupéré depuis la vue.
-		await page.evaluate(() => (window as any).app.plugins.plugins.get('remarkable').ouvrirVue());
-		await page.locator('.remarkable-recuperer[aria-label="Récupérer"]').click();
-		await attendre(() => contient('reMarkable/C.pdf', 'c version 2'), 'C récupéré, dernière version');
-
-		// 7. Un dossier entier supprimé puis récupéré : il revient à sa place sur la tablette.
-		await page.evaluate(() => {
-			const app = (window as any).app;
-			return app.vault.trash(app.vault.getFolderByPath('reMarkable/Classe'), false);
-		});
-		await attendre(async () => (await donnees()).b?.ignore === true, 'B ignoré avec son dossier');
-		await page.locator('.remarkable-recuperer[aria-label^="Récupérer le dossier"]').click();
-		await attendre(() => contient('reMarkable/Cours/B.pdf', 'b version 2'), 'dossier récupéré');
-
-		// 8. Renommé sur la tablette : le vault ne bouge pas.
+		// 6. Renommé sur la tablette : le vault ne bouge pas.
 		tablette.docs.get('a')!.nom = 'A renommé';
 		tablette.ecrire('a');
 		await attendre(() => contient('Rangement/A.pdf', 'a version 4'), 'A mis à jour malgré le renommage tablette');
 		expect(existsSync(v('reMarkable/Cours/A renommé.pdf'))).toBe(false);
 
-		// 9. Déplacé pendant que Fragment est fermé : retrouvé au démarrage.
+		// 7. Déplacé pendant que Fragment est fermé : retrouvé au démarrage.
 		await electronApp.close();
 		await mkdir(v('Archive'));
 		await rename(v('Rangement/A.pdf'), v('Archive/A.pdf'));
@@ -304,7 +301,7 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		tablette.ecrire('a');
 		await attendre(() => contient('Archive/A.pdf', 'a version 5'), 'A mis à jour après redémarrage');
 
-		// 10. Tablette débranchée : l'icône en haut du PDF, et les étapes au clic.
+		// 8. Tablette débranchée : l'icône en haut du PDF, et les étapes au clic.
 		await page.evaluate(() => {
 			const app = (window as any).app;
 			return app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('Archive/A.pdf'));

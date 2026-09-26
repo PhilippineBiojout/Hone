@@ -40,7 +40,8 @@ export function majEntetes(plugin: RemarkablePlugin): void {
 	}
 }
 
-function bulle(bouton: HTMLElement, live: boolean): void {
+/** La bulle d'état, sous `bouton`, ou à sa droite (l'icône du ruban). */
+export function bulle(bouton: HTMLElement, live: boolean, aDroite = false): void {
 	const menu = new Menu();
 	menu.dom.classList.add('remarkable-bulle');
 	const el = (tag: string, texte: string) => {
@@ -58,10 +59,14 @@ function bulle(bouton: HTMLElement, live: boolean): void {
 		);
 		menu.dom.append(el('strong', 'Tablette non connectée'), etapes);
 	}
-	// Sous le bouton, bord droit aligné sur le sien (le menu reste dans l'écran).
+	// Sous le bouton, bord droit aligné sur le sien, ou à sa droite, haut aligné
+	// (le menu reste dans l'écran).
 	const r = bouton.getBoundingClientRect();
-	menu.showAtPosition(r.right, r.bottom + 4);
-	menu.dom.style.left = `${Math.max(8, r.right - menu.dom.offsetWidth)}px`;
+	if (aDroite) menu.showAtPosition(r.right + 8, r.top);
+	else {
+		menu.showAtPosition(r.right, r.bottom + 4);
+		menu.dom.style.left = `${Math.max(8, r.right - menu.dom.offsetWidth)}px`;
+	}
 	const eclosion = eclore(bouton, menu.dom);
 	menu.onHide(() => eclosion.annuler());
 }

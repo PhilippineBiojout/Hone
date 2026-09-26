@@ -16,22 +16,19 @@ export function empreinte(octets: ArrayBuffer): string {
  */
 export class Synchro {
 	connectee: boolean | null = null;
-	/** Le dernier inventaire de la tablette, pour la vue. */
-	elements: ElementTablette[] = [];
-	/** Ce que la vue affiche en bas : de quoi mesurer le rythme de la tablette. */
-	journal: string[] = [];
 	private occupe = false;
 
 	constructor(
 		private readonly app: App,
 		private readonly registre: Registre,
 		private readonly tablette: Tablette,
-		/** Sauvegarde l'index et redessine la vue. */
+		/** Sauvegarde l'index et met à jour l'état en haut des PDF. */
 		private readonly changer: () => Promise<void>,
 	) {}
 
+	/** Dans la console : de quoi mesurer le rythme de la tablette. */
 	log(msg: string): void {
-		this.journal = [...this.journal.slice(-59), `[${new Date().toLocaleTimeString('fr-FR')}] ${msg}`];
+		console.log(`[remarkable] ${msg}`);
 	}
 
 	private async etreConnectee(valeur: boolean): Promise<void> {
@@ -45,12 +42,12 @@ export class Synchro {
 		if (this.occupe) return;
 		this.occupe = true;
 		try {
-			this.elements = await this.tablette.lister();
+			const elements = await this.tablette.lister();
 			await this.etreConnectee(true);
 			// Le plus récemment modifié d'abord : le carnet où l'on écrit passe
 			// devant la première synchro et devant un export lent. (Les dates
 			// ISO se trient comme des chaînes.)
-			const carnets = this.elements.filter((el) => !el.dossier).sort((a, b) => b.modifie.localeCompare(a.modifie));
+			const carnets = elements.filter((el) => !el.dossier).sort((a, b) => b.modifie.localeCompare(a.modifie));
 			for (const el of carnets) await this.suivre(el);
 		} catch {
 			await this.etreConnectee(false);

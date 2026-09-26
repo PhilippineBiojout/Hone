@@ -47,11 +47,4 @@ describe('Registre', () => {
 		r.rattacher('a', 'Ailleurs/A.pdf');
 		expect(r.carnets.a).toMatchObject({ chemin: 'Ailleurs/A.pdf', ignore: false, supprimeLe: undefined });
 	});
-
-	it('récupère un carnet ignoré pour le retélécharger', () => {
-		const r = registre();
-		r.supprimer('reMarkable/C.pdf', 1000);
-		r.recuperer(['c']);
-		expect(r.carnets.c).toMatchObject({ ignore: false, chemin: null, modifie: null });
-	});
 });

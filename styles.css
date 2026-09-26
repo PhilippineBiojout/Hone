@@ -1,67 +1,4 @@
-/* Vue reMarkable : l'état de la synchro, les carnets de la tablette et le journal. */
-
-.remarkable-vue {
-	padding: var(--size-4-3, 12px);
-	font-size: var(--font-ui-small, 13px);
-}
-
-.remarkable-etat {
-	margin-bottom: var(--size-4-3, 12px);
-	color: var(--text-muted);
-}
-
-.remarkable-etat[data-connectee="false"] {
-	color: var(--text-error, #d04040);
-}
-
-.remarkable-ligne {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-2, 8px);
-	min-height: 26px;
-}
-
-.remarkable-icone {
-	display: inline-flex;
-	color: var(--text-muted);
-}
-
-.remarkable-icone svg {
-	width: 16px;
-	height: 16px;
-}
-
-.remarkable-nom {
-	flex: 0 1 auto;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.remarkable-ou {
-	flex: 1 1 0;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	color: var(--text-faint);
-	text-align: right;
-}
-
-
-.remarkable-recuperer {
-	flex: none;
-	margin-left: auto;
-}
-
-.remarkable-journal {
-	margin-top: var(--size-4-4, 16px);
-	font-size: 11px;
-	white-space: pre-wrap;
-	color: var(--text-muted);
-}
-
-/* La demande d'autorisation, et le message quand on a refusé. */
+/* La demande d'autorisation (et le rappel quand on a refusé). */
 
 .remarkable-boutons {
 	display: flex;
@@ -70,24 +7,21 @@
 	margin-top: 16px;
 }
 
-.remarkable-boutons button,
-.remarkable-vue .remarkable-boutons .mod-cta,
-.remarkable-vue .mod-cta {
+.remarkable-boutons button {
 	padding: 4px 14px;
 	border-radius: 6px;
 	border: 1px solid var(--tab-outline-color);
 	font-size: 13px;
 }
 
-.remarkable-boutons .mod-cta,
-.remarkable-vue .mod-cta {
+.remarkable-boutons .mod-cta {
 	background: var(--color-accent);
 	border-color: var(--color-accent);
 	color: #fff;
 }
 
-.remarkable-refus {
-	margin: 0 0 var(--size-4-3, 12px);
+.remarkable-demande .remarkable-refus {
+	margin-bottom: 8px;
 	color: var(--text-muted);
 }
 

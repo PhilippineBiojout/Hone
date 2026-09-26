@@ -6,10 +6,11 @@ prototype `~/Documents/IA/remarkable-live`.
 
 ## Ce qu'il fait
 
-- **Autorisation** : rien n'est téléchargé avant d'avoir accepté. Le premier
-  clic sur l'icône tablette du ruban pose la question ; la réponse est gardée
-  (`autorise` dans `data.json`). Après un refus, la vue le dit et propose
-  d'autoriser.
+- **Autorisation** : rien n'est téléchargé avant d'avoir accepté. Un clic sur
+  l'icône tablette du ruban pose la question, dans une carte qui sort de
+  l'icône ; la réponse est gardée (`autorise` dans `data.json`). Après un
+  refus, le clic suivant la repose en le rappelant. Une fois accepté, l'icône
+  montre l'état de la tablette (live, ou les étapes pour la brancher).
 - **Première synchro** : tous les carnets arrivent dans `reMarkable/`, avec
   l'arborescence de la tablette.
 - **En haut d'un PDF de la tablette** (`src/entete.ts`) : une icône quand la
@@ -31,9 +32,6 @@ prototype `~/Documents/IA/remarkable-live`.
   son empreinte, dans les 10 s, et au démarrage pour ce qui a bougé pendant
   que Fragment était fermé.
 - **Supprimer** : un PDF supprimé du vault n'est plus suivi ni recréé.
-- **Récupérer** : la vue reMarkable (icône tablette du ruban) montre les
-  carnets de la tablette et où ils sont dans le vault ; un bouton récupère un
-  carnet ou tous les carnets non suivis d'un dossier, dans `reMarkable/`.
 - Renommer ou déplacer un carnet **sur la tablette** ne change rien au vault.
 
 L'index (id du carnet sur la tablette → chemin dans le vault) est dans

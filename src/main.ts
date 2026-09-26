@@ -2,8 +2,8 @@ import { Plugin, TFile, type TAbstractFile } from 'fragment';
 import { FENETRE_DEPLACEMENT_MS, Registre, type Entree } from './registre';
 import { Synchro } from './synchro';
 import { HOTE_PAR_DEFAUT, Tablette } from './tablette';
-import { majEntetes } from './entete';
-import { DemandeAutorisation, VUE_REMARKABLE, VueRemarkable } from './vue';
+import { DemandeAutorisation } from './demande';
+import { bulle, majEntetes } from './entete';
 
 /** Ce que le plugin garde dans `.fragment/plugins/remarkable/data.json`. */
 interface Donnees {
@@ -31,11 +31,10 @@ export default class RemarkablePlugin extends Plugin {
 		this.registre = new Registre(lu?.carnets);
 		this.synchro = new Synchro(this.app, this.registre, new Tablette(this.hote), () => this.changer());
 
-		this.registerView(VUE_REMARKABLE, (leaf) => new VueRemarkable(leaf, this));
-		// Premier clic : la demande d'autorisation. Ensuite, la vue.
+		// Tant qu'on n'a pas accepté : la demande. Ensuite : l'état de la tablette.
 		const icone = this.addRibbonIcon('tablet', 'reMarkable', () => {
-			if (this.autorise === undefined) new DemandeAutorisation(this.app, icone, (oui) => void this.autoriser(oui)).open();
-			else void this.ouvrirVue();
+			if (this.autorise) bulle(icone, this.synchro.connectee === true, true);
+			else new DemandeAutorisation(this.app, icone, this.autorise === false, (oui) => void this.autoriser(oui)).open();
 		});
 		this.registerEvent(this.app.workspace.on('layout-change', () => majEntetes(this)));
 		this.registerEvent(this.app.workspace.on('file-open', () => majEntetes(this)));
@@ -89,36 +88,16 @@ export default class RemarkablePlugin extends Plugin {
 		await this.changer();
 	}
 
-	async ouvrirVue(): Promise<void> {
-		const { workspace } = this.app;
-		let leaf = workspace.getLeavesOfType(VUE_REMARKABLE)[0];
-		if (!leaf) {
-			leaf = workspace.getLeftLeaf();
-			await leaf.setViewState({ type: VUE_REMARKABLE, active: true });
-		}
-		workspace.setActiveLeaf(leaf);
-	}
-
 	async autoriser(oui: boolean): Promise<void> {
 		this.autorise = oui;
 		await this.changer();
-		await this.ouvrirVue();
 		if (oui) void this.synchro.tour();
 	}
 
-	async recuperer(ids: string[]): Promise<void> {
-		this.registre.recuperer(ids);
-		await this.changer();
-		void this.synchro.tour();
-	}
-
-	/** Sauvegarde l'index, redessine la vue et l'état en haut des PDF. */
+	/** Sauvegarde l'index et met à jour l'état en haut des PDF. */
 	private async changer(): Promise<void> {
 		await this.saveData({ hote: this.hote, autorise: this.autorise, carnets: this.registre.carnets } satisfies Donnees);
 		majEntetes(this);
-		for (const leaf of this.app.workspace.getLeavesOfType(VUE_REMARKABLE)) {
-			if (leaf.view instanceof VueRemarkable) leaf.view.dessiner();
-		}
 	}
 }
 

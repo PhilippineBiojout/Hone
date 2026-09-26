@@ -14,7 +14,7 @@ export interface Entree {
 	/** sha1 et taille du dernier PDF écrit : de quoi le reconnaître après un déplacement hors de l'app. */
 	empreinte: string | null;
 	taille: number;
-	/** Supprimé du vault : plus recréé, sauf si on le récupère. */
+	/** Supprimé du vault : plus recréé. */
 	ignore: boolean;
 	/** Heure de la suppression : un déplacement hors de l'app arrive en delete puis create. */
 	supprimeLe?: number;
@@ -79,12 +79,5 @@ export class Registre {
 	/** Le PDF d'un carnet retrouvé ailleurs : de nouveau suivi, à ce chemin. */
 	rattacher(id: string, chemin: string): void {
 		Object.assign(this.carnets[id], { chemin, ignore: false, supprimeLe: undefined });
-	}
-
-	/** Récupérer : le carnet sera retéléchargé au prochain tour, dans reMarkable/. */
-	recuperer(ids: string[]): void {
-		for (const id of ids) {
-			Object.assign(this.carnets[id], { chemin: null, modifie: null, ignore: false, supprimeLe: undefined });
-		}
 	}
 }
