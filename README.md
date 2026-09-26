@@ -9,8 +9,14 @@ prototype `~/Documents/IA/remarkable-live`.
 - **Première synchro** : tous les carnets arrivent dans `reMarkable/`, avec
   l'arborescence de la tablette.
 - **En direct** : toutes les 2 s, le plugin lit la liste de la tablette ; un
-  carnet dont `ModifiedClient` a changé est retéléchargé (la tablette rend
-  elle-même l'écriture dans le PDF) et réécrit à l'endroit où il est dans le vault.
+  carnet dont `ModifiedClient` a changé est retéléchargé et réécrit à l'endroit
+  où il est dans le vault.
+- **Carnets écrits à la main : c'est le plugin qui fait le PDF.** Il télécharge
+  les traits bruts (`/download/{id}/rmdoc`, environ 0,5 s contre 10 s pour
+  l'export PDF de la tablette) et les dessine lui-même (`src/rmdoc.ts`) :
+  taille de page, couleurs et surligneur relevés sur le PDF de la Paper Pro.
+  Pas le fond de modèle (quadrillage, lignes). Les PDF et EPUB importés
+  passent encore par l'export PDF de la tablette, qui y rend les annotations.
 - **Ranger ailleurs** : un PDF déplacé ou renommé reste suivi. Dans l'app,
   par l'événement `rename` du vault (un dossier renommé n'en émet qu'un, les
   chemins dessous suivent). Hors de l'app (Finder, git), le cœur voit un
@@ -38,7 +44,7 @@ strict de Node refuse. Le plugin passe par `http.get` avec
 ```sh
 npm install
 npm run build   # typecheck + esbuild → main.js
-npm test        # vitest : client HTTP contre une fausse tablette, index
+npm test        # vitest : client HTTP contre une fausse tablette, rmdoc → PDF, index
 ```
 
 Le test de bout en bout (`e2e/remarkable.spec.ts`) tourne depuis Fragment,

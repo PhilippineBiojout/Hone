@@ -73,7 +73,7 @@ export class Synchro {
 		const t0 = Date.now();
 		let octets: ArrayBuffer;
 		try {
-			octets = await this.tablette.telecharger(el.id);
+			octets = await this.tablette.telecharger(el.id, el.carnet);
 		} catch (err) {
 			this.log(`${el.chemin} : export impossible (${(err as Error).message}), réessai à sa prochaine modification`);
 			await this.changer();

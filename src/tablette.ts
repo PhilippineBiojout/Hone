@@ -1,4 +1,5 @@
 import * as http from 'http';
+import { rmdocEnPdf } from './rmdoc';
 
 // Interface web USB de la reMarkable (Paramètres > Stockage > Interface web USB).
 export const HOTE_PAR_DEFAUT = 'http://10.11.99.1';
@@ -12,6 +13,8 @@ export interface ElementTablette {
 	dossier: boolean;
 	/** `ModifiedClient` : change quand la tablette enregistre le carnet. */
 	modifie: string;
+	/** Écrit à la main sur la tablette, pas un PDF ni un EPUB importé. */
+	carnet: boolean;
 }
 
 // La tablette envoie à la fois Content-Length et Transfer-Encoding: chunked.
@@ -45,7 +48,7 @@ export class Tablette {
 	async lister(dossier = '', prefixe = ''): Promise<ElementTablette[]> {
 		const { statut, corps } = await obtenir(`${this.hote}/documents/${dossier}`, 4000);
 		if (statut !== 200) throw new Error(`HTTP ${statut} sur /documents/${dossier}`);
-		const items = JSON.parse(corps.toString('utf8')) as { ID: string; VissibleName: string; Type: string; ModifiedClient: string }[];
+		const items = JSON.parse(corps.toString('utf8')) as { ID: string; VissibleName: string; Type: string; ModifiedClient: string; fileType?: string }[];
 
 		const sortie: ElementTablette[] = [];
 		for (const item of items) {
@@ -55,6 +58,7 @@ export class Tablette {
 				chemin: prefixe + segment(item.VissibleName),
 				dossier: item.Type === 'CollectionType',
 				modifie: item.ModifiedClient,
+				carnet: item.fileType === 'notebook',
 			};
 			sortie.push(el);
 			if (el.dossier) sortie.push(...(await this.lister(el.id, el.chemin + '/')));
@@ -62,10 +66,14 @@ export class Tablette {
 		return sortie;
 	}
 
-	/** Le PDF du carnet, écriture comprise : c'est la tablette qui le rend. */
-	async telecharger(id: string): Promise<ArrayBuffer> {
-		const { statut, corps } = await obtenir(`${this.hote}/download/${id}/pdf`, 60000);
+	/**
+	 * Le PDF du document, écriture comprise. Un carnet : ses traits bruts
+	 * (rmdoc, environ 0,5 s), dont on fait le PDF nous-mêmes. Un PDF ou un EPUB
+	 * importé : le PDF que rend la tablette (environ 10 s), annotations comprises.
+	 */
+	async telecharger(id: string, carnet: boolean): Promise<ArrayBuffer> {
+		const { statut, corps } = await obtenir(`${this.hote}/download/${id}/${carnet ? 'rmdoc' : 'pdf'}`, 60000);
 		if (statut !== 200) throw new Error(`HTTP ${statut}`);
-		return new Uint8Array(corps).buffer;
+		return new Uint8Array(carnet ? rmdocEnPdf(corps, id) : corps).buffer;
 	}
 }

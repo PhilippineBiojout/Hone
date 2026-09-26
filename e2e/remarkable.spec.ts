@@ -5,11 +5,13 @@ import * as net from 'net';
 import os from 'os';
 import path from 'path';
 import { pdfDeTest } from './pdfFixture';
+import { rmdocDeTest } from '/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/remarkable/src/rmdocDeTest';
 
 /**
  * Le plugin reMarkable de bout en bout, contre une fausse tablette : première
- * synchro dans reMarkable/, mise à jour en direct, et le suivi d'un PDF qu'on
- * range ailleurs, qu'on supprime puis qu'on récupère.
+ * synchro dans reMarkable/, mise à jour en direct, un carnet dont le plugin
+ * fait lui-même le PDF, et le suivi d'un PDF qu'on range ailleurs, qu'on
+ * supprime puis qu'on récupère.
  *
  * Se lance depuis Fragment, qui porte Playwright : copier ce fichier dans
  * `Fragment/app/e2e/`, `npm run build` dans le plugin, puis depuis `Fragment/app/`
@@ -19,7 +21,7 @@ import { pdfDeTest } from './pdfFixture';
 
 const PLUGIN = '/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/remarkable';
 
-interface Doc { nom: string; parent: string; dossier: boolean; modifie: number; version: number }
+interface Doc { nom: string; parent: string; dossier: boolean; modifie: number; version: number; carnet: boolean }
 
 /** Répond comme la vraie : Content-Length ET Transfer-Encoding: chunked. */
 class FausseTablette {
@@ -31,7 +33,7 @@ class FausseTablette {
 	private serveur = net.createServer((s) => {
 		s.once('data', (d) => {
 			const chemin = d.toString().split(' ')[1];
-			const id = chemin.match(/^\/download\/(.+)\/pdf$/)?.[1];
+			const id = chemin.match(/^\/download\/(.+)\/(pdf|rmdoc)$/)?.[1];
 			if (id) this.demandes.set(id, (this.demandes.get(id) ?? 0) + 1);
 			if (id && this.enPanne.has(id)) return; // on garde la connexion ouverte sans rien envoyer
 			const corps = this.repondre(chemin);
@@ -51,8 +53,9 @@ class FausseTablette {
 		this.serveur.close();
 	}
 
-	ajouter(id: string, nom: string, parent = '', dossier = false): void {
-		this.docs.set(id, { nom, parent, dossier, modifie: this.horloge++, version: 1 });
+	/** Un carnet écrit à la main arrive en rmdoc, un document importé en PDF. */
+	ajouter(id: string, nom: string, parent = '', dossier = false, carnet = false): void {
+		this.docs.set(id, { nom, parent, dossier, modifie: this.horloge++, version: 1, carnet });
 	}
 
 	/** Comme quand on écrit sur la tablette : nouvelle date, nouveau contenu. */
@@ -67,12 +70,18 @@ class FausseTablette {
 		if (liste) {
 			const items = [...this.docs].filter(([, d]) => d.parent === liste[1]).map(([id, d]) => ({
 				ID: id, VissibleName: d.nom, Type: d.dossier ? 'CollectionType' : 'DocumentType', ModifiedClient: String(d.modifie),
+				fileType: d.dossier ? undefined : d.carnet ? 'notebook' : 'pdf',
 			}));
 			return Buffer.from(JSON.stringify(items));
 		}
 		const pdf = chemin.match(/^\/download\/(.+)\/pdf$/);
 		const d = pdf && this.docs.get(pdf[1]);
-		return d ? pdfDeTest({ pages: [`${pdf![1]} version ${d.version}`] }) : null;
+		if (d && !d.carnet) return pdfDeTest({ pages: [`${pdf![1]} version ${d.version}`] });
+		// Le carnet : une page de plus à chaque version, un trait bleu sur chacune.
+		const rmdoc = chemin.match(/^\/download\/(.+)\/rmdoc$/);
+		const n = rmdoc && this.docs.get(rmdoc[1]);
+		if (!n?.carnet) return null;
+		return rmdocDeTest(rmdoc![1], Array.from({ length: n.version }, () => [{ couleur: 6, largeur: 60, points: [[-500, 300], [500, 300]] }]));
 	}
 }
 
@@ -126,6 +135,7 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 	tablette.ajouter('b', 'B', 'd1');
 	tablette.ajouter('c', 'C');
 	tablette.ajouter('e', 'E');
+	tablette.ajouter('n', 'Notes', '', false, true);
 	await writeFile(path.join(dossierPlugin, 'data.json'), JSON.stringify({ hote: await tablette.demarrer(), carnets: {} }), 'utf8');
 
 	const v = (p: string) => path.join(vault, p);
@@ -165,6 +175,29 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		tablette.ecrire('a');
 		await attendre(() => contient('reMarkable/Cours/A.pdf', 'a version 2'), 'A mis à jour');
 		await expect(couche).toContainText('a version 2', { timeout: 15_000 });
+
+		// 2 bis. Un carnet : le plugin fait le PDF depuis le rmdoc, Fragment
+		// l'affiche (trait bleu peint), et l'onglet ouvert suit la page ajoutée.
+		await attendre(() => contient('reMarkable/Notes.pdf', '/Count 1'), 'carnet importé');
+		await page.evaluate(() => {
+			const app = (window as any).app;
+			return app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('reMarkable/Notes.pdf'));
+		});
+		const bleus = () => page.evaluate(() => {
+			const app = (window as any).app;
+			const vue = app.workspace.getLeavesOfType('pdf').map((l: any) => l.view).find((v: any) => v.file?.path === 'reMarkable/Notes.pdf');
+			const canvas = [...vue.contentEl.querySelectorAll('.pdf-page canvas')] as HTMLCanvasElement[];
+			return canvas.map((c) => {
+				const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+				let n = 0;
+				for (let i = 0; i < data.length; i += 4) if (data[i + 2] > 180 && data[i] < 120) n++;
+				return n;
+			});
+		});
+		await attendre(async () => { const b = await bleus(); return b.length === 1 && b[0] > 1000; }, 'trait bleu affiché');
+		tablette.ecrire('n');
+		await attendre(() => contient('reMarkable/Notes.pdf', '/Count 2'), 'carnet mis à jour');
+		await attendre(async () => (await bleus()).length === 2, 'page ajoutée dans l’onglet ouvert');
 
 		// 3. Rangé ailleurs depuis le Finder (delete + create) : toujours suivi.
 		await mkdir(v('Rangement'));
