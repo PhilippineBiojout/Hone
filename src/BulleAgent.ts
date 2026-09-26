@@ -88,9 +88,9 @@ export class BulleAgent extends Component {
         return this._loaded;
     }
 
-    /** La conversation, sans la réponse encore attendue. */
+    /** La conversation, sans la réponse encore attendue ni les erreurs (qui ne se renvoient pas au modèle). */
     conversation(): Message[] {
-        return [...this.filEl.querySelectorAll('.agent-message:not(.is-pending)')].map((el) => ({
+        return [...this.filEl.querySelectorAll('.agent-message:not(.is-pending):not(.is-error)')].map((el) => ({
             auteur: el.classList.contains('mod-moi') ? 'moi' : 'agent',
             texte: el.textContent ?? '',
         }));
@@ -203,6 +203,8 @@ export class BulleAgent extends Component {
         const contexte = this.contexte;
         if (!question || !contexte || this.enAttente) return;
         const historique = this.conversation();
+        // Une erreur ne sert qu'au moment où elle arrive : la question suivante l'efface.
+        this.filEl.querySelectorAll('.agent-message.is-error').forEach((el) => el.remove());
         this.ajouterMessage('moi', question);
         this.champEl.value = '';
         this.ajusterChamp();

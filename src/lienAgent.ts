@@ -37,13 +37,18 @@ export class LienAgent {
         const enfant = this.lancer();
         const id = this.prochainId++;
         return new Promise<Sortie>((resoudre, rejeter) => {
-            const minuterie = setTimeout(() => {
-                this.enAttente.delete(id);
-                rejeter(new ErreurAgent('L\'agent met trop de temps à répondre.'));
-            }, DELAI_MAX);
-            this.enAttente.set(id, { resoudre, rejeter, morceau, minuterie });
+            this.enAttente.set(id, { resoudre, rejeter, morceau, minuterie: this.minuterie(id) });
             enfant.send({ id, demande } satisfies Requete);
         });
+    }
+
+    /** DELAI_MAX sans nouvelles : un morceau reçu la relance, seul le silence fait échouer. */
+    private minuterie(id: number): ReturnType<typeof setTimeout> {
+        return setTimeout(() => {
+            const attente = this.enAttente.get(id);
+            this.enAttente.delete(id);
+            attente?.rejeter(new ErreurAgent('L\'agent met trop de temps à répondre.'));
+        }, DELAI_MAX);
     }
 
     arreter(): void {
@@ -72,8 +77,11 @@ export class LienAgent {
     private recevoir(retour: Retour): void {
         const attente = this.enAttente.get(retour.id);
         if (!attente) return;
-        if (retour.type === 'morceau') return attente.morceau?.(retour.texte);
         clearTimeout(attente.minuterie);
+        if (retour.type === 'morceau') {
+            attente.minuterie = this.minuterie(retour.id);
+            return attente.morceau?.(retour.texte);
+        }
         this.enAttente.delete(retour.id);
         if (retour.type === 'fin') attente.resoudre(retour.sortie);
         else if (retour.type === 'pause') attente.rejeter(new AgentEnPause('Agent en pause (AGENT_BLOQUE=1).'));
