@@ -40,7 +40,9 @@ export function createAgentLayer(ctx: LayerContext): () => void {
     c.register(() => repere.detruire());
 
     const occupe = (): boolean => bulle.estOuverte() || action.estOuverte() || voix.estOuverte();
-    const majOccupe = (): void => annotation.suspendre(occupe());
+    // La barre ouverte rend aussi l'annotation inerte, sans bloquer le déclencheur :
+    // le clic à côté qui la ferme ne dessine rien, le suivant dessine.
+    const majOccupe = (): void => annotation.suspendre(occupe() || barre.estOuverte());
     const enchainer = (fermer: () => void): void => {
         enchainement = true;
         try { fermer(); } finally { enchainement = false; }
@@ -56,6 +58,7 @@ export function createAgentLayer(ctx: LayerContext): () => void {
             zone = null;
             bulle.fermer();
             editor.requestUpdate();
+            majOccupe();
         },
         seule: () => !bulle.estOuverte(),
         onOutil: (outil) => {
@@ -207,6 +210,7 @@ export function createAgentLayer(ctx: LayerContext): () => void {
         trait = t;
         barre.montrer();
         editor.requestUpdate();
+        majOccupe();
     });
 
     // Les widgets suivent le texte d'eux-mêmes ; restent le passage cité et les colonnes de la marge.

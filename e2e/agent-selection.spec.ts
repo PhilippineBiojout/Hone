@@ -302,6 +302,34 @@ test('la barre n\'a pas de croix : un clic à côté la ferme, un clic sur la ba
     await expect(barre(page)).toHaveCount(0);
 });
 
+test('surligneur armé, le clic à côté qui ferme la barre ne dessine rien ; le suivant dessine', async () => {
+    const { page } = h;
+    await surligner(page, 'Ligne 3 :', 'Révolution');
+    await expect(barre(page)).toBeVisible();
+    expect(await nbTraits(page)).toBe(1);
+
+    const mot = await boiteDuMot(page, 'Ligne 12 :', 'commence');
+    await page.mouse.click(mot.x + 2, mot.y + mot.height / 2);
+    await expect(barre(page)).toHaveCount(0);
+    await page.waitForTimeout(200);
+    expect(await nbTraits(page)).toBe(1);
+
+    // La barre fermée, l'annotation revient.
+    await surligner(page, 'Ligne 12 :', 'commence');
+    await expect.poll(() => nbTraits(page)).toBe(2);
+});
+
+test('chat ouvert, un clic à côté ne dessine rien', async () => {
+    const { page } = h;
+    await surligner(page, 'Ligne 3 :', 'Révolution');
+    await ouvrirChat(page);
+    const mot = await boiteDuMot(page, 'Ligne 12 :', 'commence');
+    await page.mouse.click(mot.x + 2, mot.y + mot.height / 2);
+    await page.waitForTimeout(200);
+    expect(await nbTraits(page)).toBe(1);
+    await expect(bulle(page)).toBeVisible();
+});
+
 test('chat ouvert, un clic à côté ne ferme ni la barre ni le chat', async () => {
     const { page } = h;
     await selectionner(page, 'Ligne 3 :', 'Révolution française');

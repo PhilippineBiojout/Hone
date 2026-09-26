@@ -102,7 +102,13 @@ export class BarreAgent extends Component {
         this.registerDomEvent(document, 'pointerdown', (e) => {
             const cible = e.target as Element | null;
             if (!cible || this.hote.contains(cible) || cible.closest('.toolbar, .menu')) return;
-            if (this.actions.seule()) this.fermer();
+            if (!this.actions.seule()) return;
+            this.fermer();
+            // Sur le calque d'annotation, ce clic ne fait que fermer : il ne pose pas de point.
+            if (cible.closest('.annotation-surface')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
         }, true);
     }
 
