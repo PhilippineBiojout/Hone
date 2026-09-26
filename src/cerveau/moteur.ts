@@ -5,6 +5,7 @@ import {
 } from '@openai/agents';
 import type { App } from 'fragment';
 import type { Atelier, ContexteAtelier } from '../atelier/outils-atelier';
+import type { ContexteMemoire, Memoire } from '../memoire/outils-memoire';
 import type { Demande, Sortie, Source } from '../pont/protocole';
 import type { Reglages } from '../reglages/reglages';
 import { creerAgents, type Agents } from './agents';
@@ -49,6 +50,12 @@ async function entree(acces: AccesVault, demande: Demande, avant = ''): Promise<
     }
 }
 
+/** Les noms des outils que l'agent a appelés, pour la mémoire. */
+function outilsAppeles(items: RunItem[]): string[] {
+    return items.filter((i) => i.type === 'tool_call_item')
+        .map((i) => (i.rawItem as { name?: string; type: string }).name ?? (i.rawItem as { type: string }).type);
+}
+
 /** D'après les outils réellement appelés : le web prime, puis le vault. */
 function source(items: RunItem[]): Source {
     let vault = false;
@@ -77,17 +84,19 @@ export class Moteur {
     private readonly agents: Agents | null;
     private readonly compteur: Compteur;
     private readonly atelier: Atelier | undefined;
+    private readonly memoire: Memoire | undefined;
 
-    constructor(app: App, reglages: Reglages, atelier?: Atelier) {
+    constructor(app: App, reglages: Reglages, atelier?: Atelier, memoire?: Memoire) {
         this.acces = accesVault(app);
         this.compteur = new Compteur(reglages.plafond);
         setTracingDisabled(true);
         this.atelier = reglages.atelier ? atelier : undefined;
+        this.memoire = memoire;
         const cle = reglages.cle.trim();
         if (cle && !reglages.factice) {
             // dangerouslyAllowBrowser : assumé, la clé est déjà en page (modèle Obsidian).
             setDefaultOpenAIClient(new OpenAI({ apiKey: cle, dangerouslyAllowBrowser: true }));
-            this.agents = creerAgents(this.acces, { fort: reglages.modeleFort, leger: reglages.modeleLeger }, this.atelier);
+            this.agents = creerAgents(this.acces, { fort: reglages.modeleFort, leger: reglages.modeleLeger }, this.atelier, this.memoire);
         } else {
             this.agents = null;
         }
@@ -107,9 +116,14 @@ export class Moteur {
         const agent = this.agents[demande.agent];
         // L'atelier coûte des tours (créer, tester, corriger) : on en laisse davantage.
         const tours = this.atelier ? { chat: 14, autres: 10 } : { chat: 10, autres: 6 };
-        const context: ContexteAtelier = { creations: 0 };
+        const context: ContexteAtelier & ContexteMemoire = { creations: 0, note: demande.passage.chemin };
         try {
-            const items = await entree(this.acces, demande, this.atelier?.bibliotheque.catalogue(demande.agent) ?? '');
+            // Après les consignes et les outils (fixes, en cache) : le catalogue, puis la mémoire
+            // (le récent, puis ce document), puis le document lui-même, juste avant la demande.
+            const souvenirs = await this.memoire?.avant(demande);
+            const avant = [this.atelier?.bibliotheque.catalogue(demande.agent), souvenirs?.memoire, souvenirs?.document]
+                .filter(Boolean).join('\n\n');
+            const items = await entree(this.acces, demande, avant);
             if (demande.agent === 'chat') {
                 const flux = await run(this.agents.chat, items, { stream: true, maxTurns: tours.chat, context });
                 for await (const ev of flux) {
@@ -119,16 +133,20 @@ export class Moteur {
                 }
                 await flux.completed;
                 this.compteur.noter(flux.state.usage);
-                return { texte: String(flux.finalOutput ?? ''), source: source(flux.newItems) };
+                const sortie: Sortie = { texte: String(flux.finalOutput ?? ''), source: source(flux.newItems) };
+                void this.memoire?.noter(demande, sortie, outilsAppeles(flux.newItems));
+                return sortie;
             }
             const resultat = await run(agent, items, { maxTurns: tours.autres, context });
             this.compteur.noter(resultat.state.usage);
             const final = resultat.finalOutput as Record<string, unknown> | string | undefined;
-            return demande.agent === 'bilan'
+            const sortie = demande.agent === 'bilan'
                 ? { texte: String(final ?? '') }
                 : demande.agent === 'definir' || demande.agent === 'resumer'
                     ? { texte: String((final as { texte: string }).texte), source: source(resultat.newItems) }
                     : (final as Sortie);
+            void this.memoire?.noter(demande, sortie, outilsAppeles(resultat.newItems));
+            return sortie;
         } catch (err) {
             if (err instanceof AgentEnPause) throw err;
             // OpenAI recopie un bout de la clé dans ses erreurs : on l'efface du terminal.
@@ -141,8 +159,8 @@ export class Moteur {
 let moteur: Moteur | null = null;
 
 /** Au chargement du plugin (et à chaque changement de réglages) ; la fonction rendue le libère. */
-export function ouvrirMoteur(app: App, reglages: Reglages, atelier?: Atelier): () => void {
-    const courant = moteur = new Moteur(app, reglages, atelier);
+export function ouvrirMoteur(app: App, reglages: Reglages, atelier?: Atelier, memoire?: Memoire): () => void {
+    const courant = moteur = new Moteur(app, reglages, atelier, memoire);
     return () => {
         if (moteur === courant) moteur = null;
     };

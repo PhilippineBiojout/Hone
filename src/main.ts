@@ -3,6 +3,9 @@ import { createAgentLayer } from './agentLayer';
 import { AGENTS, Bibliotheque, lireAtelier } from './atelier/bibliotheque';
 import { Atelier } from './atelier/outils-atelier';
 import { ouvrirMoteur } from './cerveau/moteur';
+import { Journal } from './memoire/journal';
+import { Memoire } from './memoire/outils-memoire';
+import { lirePreferences, Preferences } from './memoire/preferences';
 import { accesVault } from './cerveau/vault';
 import { poserLeVerre } from './decor/verre';
 import { fusionner, ModalCle, type Reglages } from './reglages/reglages';
@@ -15,6 +18,7 @@ import { brancherScan } from './scan/scan';
 export default class HonePlugin extends Plugin {
     private reglages: Reglages = fusionner(null);
     private atelier: Atelier | null = null;
+    private memoire: Memoire | null = null;
     private fermerMoteur: (() => void) | null = null;
 
     async onload(): Promise<void> {
@@ -33,6 +37,17 @@ export default class HonePlugin extends Plugin {
             notifier: (message) => new Notice(message, 6000),
         });
         this.atelier.declarerTout(AGENTS);
+
+        // La mémoire : memoire.jsonl à côté de data.json, dans le dossier du plugin.
+        const adapter = this.app.vault.adapter;
+        const fichier = `${this.app.plugins.pluginsDir}/${this.manifest.id}/memoire.jsonl`;
+        const journal = new Journal({
+            lire: async () => ((await adapter.exists(fichier)) ? adapter.read(fichier) : null),
+            ajouter: (texte) => adapter.append(fichier, texte),
+        });
+        await journal.charger();
+        this.memoire = new Memoire(journal, new Preferences(lirePreferences(data), () => void this.sauver()), accesVault(this.app));
+
         this.relancerMoteur();
         this.register(() => this.fermerMoteur?.());
 
@@ -62,12 +77,14 @@ export default class HonePlugin extends Plugin {
     /** Un seul moteur vivant : l'ancien est libéré avant d'en créer un neuf. */
     private relancerMoteur(): void {
         this.fermerMoteur?.();
-        this.fermerMoteur = ouvrirMoteur(this.app, this.reglages, this.atelier ?? undefined);
+        this.fermerMoteur = ouvrirMoteur(this.app, this.reglages, this.atelier ?? undefined, this.memoire ?? undefined);
     }
 
-    /** data.json porte les réglages ET la bibliothèque : on écrit toujours les deux. */
+    /** data.json porte les réglages, la bibliothèque et les préférences : on écrit toujours tout. */
     private async sauver(): Promise<void> {
-        await this.saveData({ ...this.reglages, atelier: this.atelier?.bibliotheque.enJSON() });
+        await this.saveData({
+            ...this.reglages, atelier: this.atelier?.bibliotheque.enJSON(), preferences: this.memoire?.preferences.toutes() ?? [],
+        });
     }
 
     /** Enregistre les réglages et reconstruit le cerveau (nouvelle clé / modèles). */

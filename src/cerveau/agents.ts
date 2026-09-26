@@ -2,6 +2,7 @@ import { Agent, webSearchTool, type AgentOutputType, type ModelSettings } from '
 import { z } from 'zod';
 import { CONSIGNES_ATELIER } from '../atelier/consignes';
 import type { Atelier } from '../atelier/outils-atelier';
+import type { Memoire } from '../memoire/outils-memoire';
 import type { NomAgent } from '../pont/protocole';
 import { outilsVault } from './outils-vault';
 import type { AccesVault } from './vault';
@@ -20,15 +21,16 @@ const texte = z.object({ texte: z.string() });
 /** Un agent par mission ; le modèle léger pour les tâches courtes, le fort pour raisonner ou dessiner.
  *  Avec l'atelier, chaque agent reçoit en plus ses méta-outils, liés à SA bibliothèque : les
  *  tableaux d'outils ne sont donc jamais partagés entre agents. */
-export function creerAgents(acces: AccesVault, modeles: { fort: string; leger: string }, atelier?: Atelier) {
+export function creerAgents(acces: AccesVault, modeles: { fort: string; leger: string }, atelier?: Atelier, memoire?: Memoire) {
     const vault = outilsVault(acces);
     const avecWeb = [...vault, webSearchTool()];
     const agent = <T extends AgentOutputType = 'text'>(
         cle: NomAgent, name: string, fort: boolean, mission: string, base: typeof avecWeb, modelSettings: ModelSettings, outputType?: T,
     ) => new Agent({
         name, model: fort ? modeles.fort : modeles.leger,
-        instructions: `${BASE}\n${mission}${atelier ? CONSIGNES_ATELIER : ''}`,
-        tools: [...base, ...(atelier?.outils(cle) ?? [])],
+        // Relues à chaque tour : les préférences notées en cours de route s'appliquent aussitôt.
+        instructions: () => `${BASE}\n${mission}${atelier ? CONSIGNES_ATELIER : ''}${memoire?.preferences.bloc() ?? ''}`,
+        tools: [...base, ...(memoire?.outils(cle) ?? []), ...(atelier?.outils(cle) ?? [])],
         // Une clé de cache par agent : ses consignes et ses outils sont fixes, le préfixe se réutilise.
         modelSettings: { ...modelSettings, providerData: { prompt_cache_key: `hone-${cle}` } },
         ...(outputType ? { outputType } : {}),
