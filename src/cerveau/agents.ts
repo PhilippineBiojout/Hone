@@ -1,5 +1,8 @@
 import { Agent, webSearchTool, type AgentOutputType, type ModelSettings } from '@openai/agents';
 import { z } from 'zod';
+import { CONSIGNES_ATELIER } from '../atelier/consignes';
+import type { Atelier } from '../atelier/outils-atelier';
+import type { NomAgent } from '../pont/protocole';
 import { outilsVault } from './outils-vault';
 import type { AccesVault } from './vault';
 
@@ -14,32 +17,38 @@ Tu ne peux rien écrire ni modifier dans le vault, et tu ne le proposes pas.`;
 const COURT: ModelSettings = { reasoning: { effort: 'low' }, text: { verbosity: 'low' }, maxTokens: 1200 };
 const texte = z.object({ texte: z.string() });
 
-/** Un agent par mission ; le modèle léger pour les tâches courtes, le fort pour raisonner ou dessiner. */
-export function creerAgents(acces: AccesVault, modeles: { fort: string; leger: string }) {
+/** Un agent par mission ; le modèle léger pour les tâches courtes, le fort pour raisonner ou dessiner.
+ *  Avec l'atelier, chaque agent reçoit en plus ses méta-outils, liés à SA bibliothèque : les
+ *  tableaux d'outils ne sont donc jamais partagés entre agents. */
+export function creerAgents(acces: AccesVault, modeles: { fort: string; leger: string }, atelier?: Atelier) {
     const vault = outilsVault(acces);
     const avecWeb = [...vault, webSearchTool()];
     const agent = <T extends AgentOutputType = 'text'>(
-        name: string, fort: boolean, mission: string, tools: typeof avecWeb, modelSettings: ModelSettings, outputType?: T,
+        cle: NomAgent, name: string, fort: boolean, mission: string, base: typeof avecWeb, modelSettings: ModelSettings, outputType?: T,
     ) => new Agent({
-        name, model: fort ? modeles.fort : modeles.leger, instructions: `${BASE}\n${mission}`, tools, modelSettings,
+        name, model: fort ? modeles.fort : modeles.leger,
+        instructions: `${BASE}\n${mission}${atelier ? CONSIGNES_ATELIER : ''}`,
+        tools: [...base, ...(atelier?.outils(cle) ?? [])],
+        // Une clé de cache par agent : ses consignes et ses outils sont fixes, le préfixe se réutilise.
+        modelSettings: { ...modelSettings, providerData: { prompt_cache_key: `hone-${cle}` } },
         ...(outputType ? { outputType } : {}),
     }) as Agent<unknown, T>;
 
     return {
-        chat: agent('Chat', true, `Tu discutes avec l'utilisateur à propos du passage sélectionné. Réponds de façon concise, en Markdown simple.`,
+        chat: agent('chat', 'Chat', true, `Tu discutes avec l'utilisateur à propos du passage sélectionné. Réponds de façon concise, en Markdown simple.`,
             avecWeb, { reasoning: { effort: 'low' }, maxTokens: 2500 }),
-        definir: agent('Définir', false, `Donne la définition du terme ou de l'expression sélectionnée, adaptée au contexte du document, en une à deux phrases.
+        definir: agent('definir', 'Définir', false, `Donne la définition du terme ou de l'expression sélectionnée, adaptée au contexte du document, en une à deux phrases.
 Pas une définition de dictionnaire : celle qui sert à comprendre ce cours.`, avecWeb, COURT, texte),
-        resumer: agent('Résumer', false, `Résume le passage sélectionné en trois puces au plus, chacune d'une ligne. Rien qui ne soit dans le passage ou le document.`,
+        resumer: agent('resumer', 'Résumer', false, `Résume le passage sélectionné en trois puces au plus, chacune d'une ligne. Rien qui ne soit dans le passage ou le document.`,
             vault, COURT, texte),
-        traduire: agent('Traduire', false, `Traduis le passage sélectionné dans la langue cible indiquée. Si le passage est déjà dans cette langue, traduis-le en anglais.
+        traduire: agent('traduire', 'Traduire', false, `Traduis le passage sélectionné dans la langue cible indiquée. Si le passage est déjà dans cette langue, traduis-le en anglais.
 Garde le sens, les termes techniques et la mise en forme Markdown. Rends seulement la traduction, et la langue vers laquelle tu as traduit.`,
             [], { ...COURT, maxTokens: 3000 }, z.object({ texte: z.string(), langue: z.string() })),
-        aider: agent('Indice', true, `Tu aides sur un exercice. Tu ne donnes JAMAIS la solution, ni un résultat final, ni un calcul qui y mène directement.
+        aider: agent('aider', 'Indice', true, `Tu aides sur un exercice. Tu ne donnes JAMAIS la solution, ni un résultat final, ni un calcul qui y mène directement.
 Les indices déjà donnés sont fournis : donnes-en un seul nouveau, un cran plus poussé, en une à trois phrases.
 Si le prochain indice révélerait la solution, mets stop à true et, dans texte, dis simplement que tu ne peux plus aider sans donner la solution.`,
             vault, { reasoning: { effort: 'medium' }, maxTokens: 2000 }, z.object({ texte: z.string(), stop: z.boolean() })),
-        visualiser: agent('Visualiser', true, `Transforme le passage en un visuel : choisis toi-même la forme qui lui convient (frise chronologique, carte mentale, schéma de processus, tableau comparatif…) et dessine-la en SVG.
+        visualiser: agent('visualiser', 'Visualiser', true, `Transforme le passage en un visuel : choisis toi-même la forme qui lui convient (frise chronologique, carte mentale, schéma de processus, tableau comparatif…) et dessine-la en SVG.
 Règles du SVG :
 - un seul élément <svg> avec un viewBox, sans width ni height ;
 - seulement : g, rect, circle, ellipse, line, path, polyline, polygon, text, tspan, marker, defs, title ;
@@ -50,7 +59,7 @@ Règles du SVG :
 Si le passage ne s'y prête pas, mets possible à false et explique pourquoi en une phrase. N'invente rien qui ne soit dans le passage ou le document.`,
             vault, { reasoning: { effort: 'low' }, maxTokens: 6000 },
             z.object({ possible: z.boolean(), svg: z.string().nullable(), raison: z.string().nullable() })),
-        bilan: agent('Bilan', false, `On te donne une discussion orale, tour par tour, à propos d'un passage. Écris-en le bilan : les points clés, en trois à cinq puces courtes, commençant par « • ».`,
+        bilan: agent('bilan', 'Bilan', false, `On te donne une discussion orale, tour par tour, à propos d'un passage. Écris-en le bilan : les points clés, en trois à cinq puces courtes, commençant par « • ».`,
             [], COURT),
     };
 }

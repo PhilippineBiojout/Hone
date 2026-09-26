@@ -6,3 +6,7 @@ couts.jsonl
 
 # Bundle généré par esbuild (npm run build) — régénéré, non versionné
 main.js
+
+# Données du plugin : la clé API et la bibliothèque de l'atelier, propres à chaque vault
+data.json
+memoire.jsonl

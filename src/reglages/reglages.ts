@@ -13,6 +13,8 @@ export interface Reglages {
     plafond: number;
     /** Force le mode factice même avec une clé (démos, tests). */
     factice: boolean;
+    /** Les agents peuvent se fabriquer des fonctions (atelier/). */
+    atelier: boolean;
 }
 
 export const REGLAGES_DEFAUT: Reglages = {
@@ -21,6 +23,7 @@ export const REGLAGES_DEFAUT: Reglages = {
     modeleLeger: 'gpt-5.4-mini',
     plafond: 500_000,
     factice: false,
+    atelier: true,
 };
 
 /** Complète les données lues du disque avec les défauts (données absentes ou partielles). */
@@ -32,6 +35,7 @@ export function fusionner(data: unknown): Reglages {
         modeleLeger: typeof d.modeleLeger === 'string' && d.modeleLeger ? d.modeleLeger : REGLAGES_DEFAUT.modeleLeger,
         plafond: typeof d.plafond === 'number' ? d.plafond : REGLAGES_DEFAUT.plafond,
         factice: d.factice === true,
+        atelier: d.atelier !== false,
     };
 }
 

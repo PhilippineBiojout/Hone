@@ -4,6 +4,7 @@ import {
     type AgentInputItem, type RunItem,
 } from '@openai/agents';
 import type { App } from 'fragment';
+import type { Atelier, ContexteAtelier } from '../atelier/outils-atelier';
 import type { Demande, Sortie, Source } from '../pont/protocole';
 import type { Reglages } from '../reglages/reglages';
 import { creerAgents, type Agents } from './agents';
@@ -20,28 +21,31 @@ export class ErreurAgent extends Error {}
 /** Pas de clé (ou mode factice) : la page répond en factice (repondre.ts). */
 export class AgentEnPause extends ErreurAgent {}
 
-const citer = ({ passage: { texte, chemin } }: Demande) =>
-    `Document ouvert : ${chemin || '(sans fichier)'}\nPassage sélectionné :\n"""\n${texte}\n"""`;
+/** `avant` : ce qui change d'une demande à l'autre sans être la demande (le catalogue des
+ *  fonctions de l'agent). Il vient APRÈS les consignes et les outils, fixes, pour que le
+ *  préfixe mis en cache par OpenAI reste le même. */
+const citer = ({ passage: { texte, chemin } }: Demande, avant = '') =>
+    `${avant ? `${avant}\n\n` : ''}Document ouvert : ${chemin || '(sans fichier)'}\nPassage sélectionné :\n"""\n${texte}\n"""`;
 
-async function entree(acces: AccesVault, demande: Demande): Promise<string | AgentInputItem[]> {
+async function entree(acces: AccesVault, demande: Demande, avant = ''): Promise<string | AgentInputItem[]> {
     switch (demande.agent) {
         case 'chat':
             // Les 12 derniers tours : chaque question renvoie tout l'historique, et se paie.
             return [
                 ...demande.historique.slice(-12).map((t) => (t.auteur === 'moi' ? user(t.texte) : assistant(t.texte))),
-                user(`${citer(demande)}\n\nQuestion : ${demande.question}`),
+                user(`${citer(demande, avant)}\n\nQuestion : ${demande.question}`),
             ];
         case 'bilan':
-            return `${citer(demande)}\n\nDiscussion :\n${demande.historique
+            return `${citer(demande, avant)}\n\nDiscussion :\n${demande.historique
                 .map((t) => `${t.auteur === 'moi' ? 'Utilisateur' : 'Agent'} : ${t.texte}`).join('\n')}`;
         case 'aider':
-            return `${citer(demande)}\n\n${demande.indices.length > 0
+            return `${citer(demande, avant)}\n\n${demande.indices.length > 0
                 ? `Indices déjà donnés :\n${demande.indices.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
                 : 'Aucun indice donné pour l\'instant.'}`;
         case 'traduire':
-            return `${citer(demande)}\n\nLangue cible : ${await langueDuVault(acces)}.`;
+            return `${citer(demande, avant)}\n\nLangue cible : ${await langueDuVault(acces)}.`;
         default:
-            return citer(demande);
+            return citer(demande, avant);
     }
 }
 
@@ -72,16 +76,18 @@ export class Moteur {
     private readonly acces: AccesVault;
     private readonly agents: Agents | null;
     private readonly compteur: Compteur;
+    private readonly atelier: Atelier | undefined;
 
-    constructor(app: App, reglages: Reglages) {
+    constructor(app: App, reglages: Reglages, atelier?: Atelier) {
         this.acces = accesVault(app);
         this.compteur = new Compteur(reglages.plafond);
         setTracingDisabled(true);
+        this.atelier = reglages.atelier ? atelier : undefined;
         const cle = reglages.cle.trim();
         if (cle && !reglages.factice) {
             // dangerouslyAllowBrowser : assumé, la clé est déjà en page (modèle Obsidian).
             setDefaultOpenAIClient(new OpenAI({ apiKey: cle, dangerouslyAllowBrowser: true }));
-            this.agents = creerAgents(this.acces, { fort: reglages.modeleFort, leger: reglages.modeleLeger });
+            this.agents = creerAgents(this.acces, { fort: reglages.modeleFort, leger: reglages.modeleLeger }, this.atelier);
         } else {
             this.agents = null;
         }
@@ -99,10 +105,13 @@ export class Moteur {
         if (refus) throw new ErreurAgent(refus);
 
         const agent = this.agents[demande.agent];
+        // L'atelier coûte des tours (créer, tester, corriger) : on en laisse davantage.
+        const tours = this.atelier ? { chat: 14, autres: 10 } : { chat: 10, autres: 6 };
+        const context: ContexteAtelier = { creations: 0 };
         try {
-            const items = await entree(this.acces, demande);
+            const items = await entree(this.acces, demande, this.atelier?.bibliotheque.catalogue(demande.agent) ?? '');
             if (demande.agent === 'chat') {
-                const flux = await run(this.agents.chat, items, { stream: true, maxTurns: 10 });
+                const flux = await run(this.agents.chat, items, { stream: true, maxTurns: tours.chat, context });
                 for await (const ev of flux) {
                     if (ev.type === 'raw_model_stream_event' && ev.data.type === 'output_text_delta') {
                         morceau?.(ev.data.delta);
@@ -112,7 +121,7 @@ export class Moteur {
                 this.compteur.noter(flux.state.usage);
                 return { texte: String(flux.finalOutput ?? ''), source: source(flux.newItems) };
             }
-            const resultat = await run(agent, items, { maxTurns: 6 });
+            const resultat = await run(agent, items, { maxTurns: tours.autres, context });
             this.compteur.noter(resultat.state.usage);
             const final = resultat.finalOutput as Record<string, unknown> | string | undefined;
             return demande.agent === 'bilan'
@@ -132,8 +141,8 @@ export class Moteur {
 let moteur: Moteur | null = null;
 
 /** Au chargement du plugin (et à chaque changement de réglages) ; la fonction rendue le libère. */
-export function ouvrirMoteur(app: App, reglages: Reglages): () => void {
-    const courant = moteur = new Moteur(app, reglages);
+export function ouvrirMoteur(app: App, reglages: Reglages, atelier?: Atelier): () => void {
+    const courant = moteur = new Moteur(app, reglages, atelier);
     return () => {
         if (moteur === courant) moteur = null;
     };
