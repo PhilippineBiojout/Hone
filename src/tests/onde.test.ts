@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { niveaux, TRAITS } from '../ui/onde';
+import { niveaux, niveauVoix, TRAITS } from '../ui/onde';
 
 /** Un spectre de 512 cases à 48 kHz, fftSize 1024 : 46,875 Hz par case. */
 const HZ = 48000 / 1024;
@@ -38,5 +38,19 @@ describe('niveaux', () => {
             expect(v).toBeGreaterThanOrEqual(0.2);
             expect(v).toBeLessThanOrEqual(1);
         }
+    });
+});
+
+describe('niveauVoix', () => {
+    it('le silence donne 0', () => {
+        expect(niveauVoix(niveaux(vide(), HZ))).toBe(0);
+    });
+
+    it('une seule bande pleine suffit à donner 1', () => {
+        expect(niveauVoix([0.2, 1, 0.2, 0.2, 0.2])).toBe(1);
+    });
+
+    it('suit la bande la plus forte, plancher retiré', () => {
+        expect(niveauVoix([0.2, 0.6, 0.4, 0.2, 0.2])).toBeCloseTo(0.5);
     });
 });

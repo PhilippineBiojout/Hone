@@ -43,6 +43,8 @@ const page = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	// React (îlot de la lueur, ui/lueur.ts) choisit sa version par NODE_ENV : sans lui, les deux s'embarquent.
+	define: { "process.env.NODE_ENV": prod ? '"production"' : '"development"' },
 });
 
 if (prod) {

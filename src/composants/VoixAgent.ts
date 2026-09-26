@@ -1,22 +1,24 @@
-import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
-import { resorber, ressort } from '../ui/animations';
-import { Onde, auHasard, niveaux } from '../ui/onde';
+import { Component, type App, type WidgetHandle } from 'fragment';
+import { ressort } from '../ui/animations';
+import { niveaux, niveauVoix } from '../ui/onde';
+import { Lueur, ondulation, type LireNiveau } from '../ui/lueur';
 import type { Message } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import { parler, type ContexteQuestion, type ReponseOrale } from '../pont/repondre';
-import { arc, boutonIcone, proteger } from '../ui/ui';
+import { boutonIcone, proteger } from '../ui/ui';
 
-const RAIDEUR = 520;                // l'étirement en pilule : spring bounce 0.16 de Motion (Skiper3)
+const LARGEUR = 370;                // la barre de libraries.dev/voice : 740 × 207 px sur la capture @2x
+const GOUTTIERE = 16;               // dans un panneau étroit, la barre garde 16 px de chaque côté
+const MONTEE = 24;                  // elle monte de 24 px, jusqu'à 24 px du bas du panneau
+const RAIDEUR = 520;                // spring bounce 0.16 de Motion, celui de l'ancien étirement (Skiper3)
 const AMORTISSEMENT = 38;
-const RETARD_CONTENU = 250;         // Skiper3 : delay 0.25
+const RETARD_CONTENU = 120;
 const APPARITION = 220;
-const RAIDEUR_SURVOL = (2 * Math.PI) ** 2;   // survol : spring duration 1, bounce 0.6 (Skiper25)
-const AMORTISSEMENT_SURVOL = 2 * (1 - 0.6) * Math.sqrt(RAIDEUR_SURVOL);
 const MS_PAR_CARACTERE = 90;        // si la synthèse vocale ne démarre jamais, la parole revient quand même
-const LISSAGE = 0.4;                // celui du navigateur (0,8) laisse l'onde debout deux secondes
+const LISSAGE = 0.4;                // celui du navigateur (0,8) laisse la voix de Hone allumée deux secondes
 
-/** rond : la barre vient d'y fondre ; refuse : pas de micro. */
-type Etat = 'rond' | 'ecoute' | 'reflechit' | 'repond' | 'refuse';
+/** arrivee : la barre monte, le micro se demande ; refuse : pas de micro. */
+type Etat = 'arrivee' | 'ecoute' | 'reflechit' | 'repond' | 'refuse';
 
 const LIBELLES: Partial<Record<Etat, string>> = {
     ecoute: 'Finir de parler',
@@ -24,9 +26,18 @@ const LIBELLES: Partial<Record<Etat, string>> = {
     repond: "Couper la parole à Hone",
 };
 
+/** La ligne d'état ; en `repond`, c'est ce que dit Hone qui s'y écrit. */
+const LIGNES: Partial<Record<Etat, string>> = {
+    ecoute: 'Je vous écoute…',
+    reflechit: 'Hone réfléchit…',
+    refuse: 'Micro refusé',
+};
+
 /**
- * La discussion orale : la barre se résorbe en rond, qui s'étire en pilule
- * (croix, onde, point, stop). ■ envoie le tour, l'agent répond à voix haute.
+ * La discussion orale : une barre en bas du panneau (libraries.dev/voice), qui
+ * monte quand on touche le micro. Une ligne d'état en haut, le micro et la croix
+ * en bas à droite, et la lueur de voice-glow au bord bas, qui suit la voix.
+ * Le micro envoie le tour, l'agent répond à voix haute.
  */
 export class VoixAgent extends Component {
 
@@ -34,19 +45,19 @@ export class VoixAgent extends Component {
     private readonly contenuEl: HTMLElement;
     private readonly stopEl: HTMLButtonElement;
     private readonly messageEl: HTMLElement;
-    private readonly onde = new Onde();
     private readonly lacherClavier: () => void;
+    /** Neuve à chaque ouverture, détruite à la fermeture : fermée, rien ne tourne. */
+    private lueur: Lueur | null = null;
     /** Ce qui arrive d'un lancement fermé est ignoré. */
     private lancement = 0;
     /** La fin d'une voix coupée ne relance rien. */
     private parole = 0;
-    private etat: Etat = 'rond';
+    private etat: Etat = 'arrivee';
     private zone: ContexteQuestion | null = null;
     private historique: Message[] = [];
     private minuterie = 0;
     private flux: MediaStream | null = null;
     private audio: AudioContext | null = null;
-    private analyseur: AnalyserNode | null = null;
     private enregistreur: MediaRecorder | null = null;
     private morceaux: Blob[] = [];
     private lecture: AudioBufferSourceNode | null = null;
@@ -64,56 +75,55 @@ export class VoixAgent extends Component {
         this.el.setAttribute('role', 'group');
         this.el.setAttribute('aria-label', 'Discussion orale');
 
-        // Premier enfant : c'est lui qui fait le petit pop de resorber().
-        const microEl = this.el.appendChild(document.createElement('span'));
-        microEl.classList.add('agent-voix-micro');
-        setIcon(microEl, 'mic');
-
         this.contenuEl = this.el.appendChild(document.createElement('div'));
         this.contenuEl.classList.add('agent-voix-contenu');
-        boutonIcone(this.contenuEl, 'x', 'Fermer', () => {
-            this.parCroix = true;
-            this.fermer();
-        }, 'agent-voix-fermer');
-        this.contenuEl.appendChild(this.onde.el);
         this.messageEl = this.contenuEl.appendChild(document.createElement('span'));
         this.messageEl.classList.add('agent-voix-message');
         this.messageEl.setAttribute('role', 'status');
-        this.contenuEl.appendChild(document.createElement('span')).classList.add('agent-voix-point');
 
-        this.stopEl = this.contenuEl.appendChild(document.createElement('button'));
-        this.stopEl.type = 'button';
-        this.stopEl.classList.add('agent-voix-stop');
-        this.stopEl.appendChild(document.createElement('span')).classList.add('agent-voix-carre');
-        arc(this.stopEl);
-        this.stopEl.addEventListener('click', () => this.surStop());
+        const actions = this.contenuEl.appendChild(document.createElement('div'));
+        actions.classList.add('agent-voix-actions');
+        this.stopEl = boutonIcone(actions, 'mic', '', () => this.surStop(), 'agent-voix-stop');
+        boutonIcone(actions, 'x', 'Fermer', () => {
+            this.parCroix = true;
+            this.fermer();
+        }, 'agent-voix-fermer');
 
         this.lacherClavier = proteger(app, this.el);
-        this.poserEtat('rond');
+        this.poserEtat('arrivee');
     }
 
     estOuverte(): boolean {
         return this._loaded;
     }
 
-    /** `depuis` : la boîte client de ce qui fond dans le rond ; `historique` : une discussion reprise. */
-    lancer(zone: ContexteQuestion, depuis: DOMRect, historique: Message[] = []): void {
+    /** `historique` : une discussion reprise. */
+    lancer(zone: ContexteQuestion, _depuis: DOMRect, historique: Message[] = []): void {
         const lancement = ++this.lancement;
         const estCourant = (): boolean => this._loaded && this.lancement === lancement;
         this.zone = { ...zone };
         this.historique = [...historique];
-        this.poserEtat('rond');
+        this.poserEtat('arrivee');
 
-        this.el.style.opacity = '0';
+        // Sous le contenu : la lueur se peint derrière le texte et les boutons.
+        this.lueur = new Lueur();
+        this.el.prepend(this.lueur.el);
         this.load();
-        this.handle = this.repere.monter(this.el, (el) => this.repere.aCote(el));
-        // Le navigateur demande le micro pendant que la barre fond.
+        this.handle = this.repere.monter(this.el, (el) => this.placer(el));
+        const suivrePanneau = new ResizeObserver(() => {
+            const a = this.placer(this.el);
+            if (a) this.handle?.setAnchor(a);
+        });
+        suivrePanneau.observe(this.repere.pane);
+        this.register(() => suivrePanneau.disconnect());
+
+        // Le navigateur demande le micro pendant que la barre monte.
         const micro = this.ouvrirMicro(estCourant);
-        const resorption = resorber(depuis, this.el);
-        this.register(() => resorption.annuler());
-        void resorption.fini.then(async () => {
-            const ok = await micro;
-            if (estCourant()) this.etirer(ok);
+        this.monter();
+        void micro.then((ok) => {
+            if (!estCourant()) return;
+            this.poserEtat(ok ? 'ecoute' : 'refuse');
+            if (ok) this.ecouter();
         });
     }
 
@@ -129,20 +139,27 @@ export class VoixAgent extends Component {
         this.historique = [];
         this.lancement++;
         this.couperVoix();
-        this.onde.repos();
+        this.lueur?.detruire();
+        this.lueur?.el.remove();
+        this.lueur = null;
         if (this.enregistreur && this.enregistreur.state !== 'inactive') this.enregistreur.stop();
         for (const piste of this.flux?.getTracks() ?? []) piste.stop();
         void this.audio?.close();
-        this.flux = this.audio = this.analyseur = this.enregistreur = this.zone = null;
+        this.flux = this.audio = this.enregistreur = this.zone = null;
         this.morceaux = [];
         this.handle?.remove();
         this.handle = null;
         this.el.remove();
-        this.el.style.opacity = '';
-        this.el.style.transition = '';
         this.el.classList.remove('est-posee');
-        this.poserEtat('rond');
+        this.poserEtat('arrivee');
         this.onFermer(historique, boite, parCroix);
+    }
+
+    /** Centrée en bas du panneau ; dans un panneau étroit, elle rétrécit plutôt que déborder. */
+    private placer(el: HTMLElement) {
+        const largeur = Math.min(LARGEUR, this.repere.paneClient().width - 2 * GOUTTIERE);
+        el.style.width = `${Math.max(0, largeur)}px`;
+        return this.repere.enBas(el, MONTEE);
     }
 
     /** Vrai si le micro est ouvert ; refusé, absent ou lancement fermé : faux. */
@@ -158,11 +175,8 @@ export class VoixAgent extends Component {
             return false;
         }
         this.flux = flux;
+        // Le nôtre sert à lire la voix de Hone ; voice-glow écoute le micro dans le sien.
         this.audio = new AudioContext();
-        this.analyseur = this.audio.createAnalyser();
-        this.analyseur.fftSize = 1024;
-        // Pas de sortie : on s'entendrait dans le haut-parleur.
-        this.audio.createMediaStreamSource(flux).connect(this.analyseur);
         this.enregistreur = new MediaRecorder(flux);
         this.enregistreur.addEventListener('dataavailable', (e) => {
             if (e.data.size > 0) this.morceaux.push(e.data);
@@ -170,23 +184,24 @@ export class VoixAgent extends Component {
         return true;
     }
 
-    private lecteur(analyseur: AnalyserNode): () => number[] {
+    /** Le niveau d'une voix qu'on joue, lu dans son analyseur, image par image. */
+    private lecteur(analyseur: AnalyserNode): LireNiveau {
         const spectre = new Uint8Array(analyseur.frequencyBinCount);
         const hzParCase = analyseur.context.sampleRate / analyseur.fftSize;
         analyseur.smoothingTimeConstant = LISSAGE;
         return () => {
             analyseur.getByteFrequencyData(spectre);
-            return niveaux(spectre, hzParCase);
+            return niveauVoix(niveaux(spectre, hzParCase));
         };
     }
 
     private ecouter(): void {
-        if (!this.enregistreur || !this.analyseur) return;
+        if (!this.enregistreur || !this.flux) return;
         this.poserEtat('ecoute');
         this.morceaux = [];
         if (this.enregistreur.state === 'inactive') this.enregistreur.start();
         void this.audio?.resume();
-        this.onde.suivre(this.lecteur(this.analyseur));
+        this.lueur?.suivre({ flux: this.flux });
     }
 
     private surStop(): void {
@@ -201,7 +216,6 @@ export class VoixAgent extends Component {
         const lancement = this.lancement;
         const estCourant = (): boolean => this._loaded && this.lancement === lancement;
         this.poserEtat('reflechit');
-        this.onde.repos();
         const enregistrement = await this.arreterEnregistrement();
         if (!estCourant() || !this.zone) return;
         let reponse: ReponseOrale;
@@ -209,8 +223,9 @@ export class VoixAgent extends Component {
             reponse = await parler(enregistrement, this.zone, this.historique);
         } catch (err: unknown) {
             if (!estCourant()) return;
-            this.messageEl.textContent = `L'agent n'a pas pu répondre : ${err instanceof Error ? err.message : String(err)}`;
             this.ecouter();
+            // Après ecouter() : la ligne d'état l'aurait effacée.
+            this.messageEl.textContent = `L'agent n'a pas pu répondre : ${err instanceof Error ? err.message : String(err)}`;
             return;
         }
         if (!estCourant()) return;
@@ -239,7 +254,7 @@ export class VoixAgent extends Component {
             if (this._loaded && courante()) this.ecouter();
         };
         this.poserEtat('repond');
-        this.messageEl.textContent = '';
+        this.messageEl.textContent = reponse.texte;
         const audio = this.audio;
         if (!reponse.audio || !audio) return this.direTexte(reponse.texte, fin);
         audio.decodeAudioData(reponse.audio.slice(0))
@@ -254,16 +269,16 @@ export class VoixAgent extends Component {
                 source.addEventListener('ended', fin);
                 this.lecture = source;
                 source.start();
-                this.onde.suivre(this.lecteur(analyseur));
+                this.lueur?.suivre({ niveau: this.lecteur(analyseur) });
             })
             .catch(() => {
                 if (this._loaded && courante()) this.direTexte(reponse.texte, fin);
             });
     }
 
-    /** La synthèse du système : on n'entend pas sa sortie, l'onde tourne au hasard. */
+    /** La synthèse du système : on n'entend pas sa sortie, la lueur ondule comme une phrase. */
     private direTexte(texte: string, fin: () => void): void {
-        this.onde.suivre(auHasard);
+        this.lueur?.suivre({ niveau: () => ondulation() });
         this.minuterie = window.setTimeout(fin, Math.max(2000, texte.length * MS_PAR_CARACTERE));
         if (!('speechSynthesis' in window)) return;
         const enonce = new SpeechSynthesisUtterance(texte);
@@ -294,40 +309,30 @@ export class VoixAgent extends Component {
         this.stopEl.setAttribute('aria-label', libelle);
         this.stopEl.title = libelle;
         this.stopEl.disabled = etat !== 'ecoute' && etat !== 'repond';
-        if (etat === 'refuse') this.messageEl.textContent = 'Micro refusé';
-        else if (etat === 'rond') this.messageEl.textContent = '';
+        this.messageEl.textContent = LIGNES[etat] ?? '';
+        this.lueur?.reflechir(etat === 'reflechit');
+        if (etat === 'reflechit' || etat === 'refuse' || etat === 'arrivee') this.lueur?.suivre(null);
     }
 
-    /** Le rond s'étire en pilule, posée à sa taille finale : le bord côté passage ne bouge pas. */
-    private etirer(micro: boolean): void {
-        const rond = this.el.getBoundingClientRect();
-        this.poserEtat(micro ? 'ecoute' : 'refuse');
-        if (micro) this.ecouter();
+    /** La barre monte du bas sur un ressort, puis le contenu arrive en fondu, flou et échelle (Skiper3). */
+    private monter(): void {
         const lancement = this.lancement;
-        const a = this.handle ? this.repere.aCote(this.el) : null;
-        if (a) this.handle?.setAnchor(a);
-        const poser = (): void => {
-            this.el.classList.add('est-posee');
-            const { easing, duree } = ressort(RAIDEUR_SURVOL, AMORTISSEMENT_SURVOL);
-            this.el.style.transition = `width ${duree}ms ${easing}`;
-        };
+        const poser = (): void => this.el.classList.add('est-posee');
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return poser();
 
-        // Translation client → repère du parent, comme eclore().
-        const pilule = this.el.getBoundingClientRect();
-        const dx = parseFloat(this.el.style.left || '0') - pilule.left;
-        const dy = parseFloat(this.el.style.top || '0') - pilule.top;
         const { easing, duree } = ressort(RAIDEUR, AMORTISSEMENT);
-        const etirement = this.el.animate([
-            { left: `${rond.left + dx}px`, top: `${rond.top + dy}px`, width: `${rond.width}px` },
-            { left: `${pilule.left + dx}px`, top: `${pilule.top + dy}px`, width: `${pilule.width}px` },
+        // `translate` et pas `transform` : le WidgetLayer pose la barre par left/top, on ne s'y mêle pas.
+        const montee = this.el.animate([
+            { translate: `0 ${MONTEE}px` },
+            { translate: '0 0' },
         ], { duration: duree, easing });
+        const fondu = this.el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: APPARITION, easing: 'ease-out' });
         const contenu = this.contenuEl.animate([
-            { opacity: 0, filter: 'blur(4px)', scale: '0.5' },
+            { opacity: 0, filter: 'blur(4px)', scale: '0.96' },
             { opacity: 1, filter: 'blur(0px)', scale: '1' },
         ], { duration: APPARITION, delay: RETARD_CONTENU, easing: 'ease-out', fill: 'backwards' });
-        this.register(() => { etirement.cancel(); contenu.cancel(); });
-        void etirement.finished.then(() => {
+        this.register(() => { montee.cancel(); fondu.cancel(); contenu.cancel(); });
+        void montee.finished.then(() => {
             if (this._loaded && this.lancement === lancement) poser();
         }).catch(() => {});
     }

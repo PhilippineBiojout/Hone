@@ -7,7 +7,7 @@
      • COMPOSANTS      surfaces, boutons, barre, bulle, carte, pied  → src/composants/
      • INTERACTIONS    traces, curseurs d'annotation, pastille        → src/interactions/
      • POSITIONNEMENT  fenêtre déplaçable / redimensionnable          → src/positionnement/
-     • COMPOSANTS+UI   discussion orale (voix) + onde                 → src/composants/ + src/ui/
+     • COMPOSANTS+UI   discussion orale (voix) + lueur                → src/composants/ + src/ui/
      • DECOR           lentille de verre des toolbars                 → src/decor/
      • SCAN            popover QR du ruban                            → src/scan/
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -65,7 +65,7 @@
 .agent-trace svg, .agent-voix-fermer svg { width: 14px; height: 14px; }
 .agent-bulle-fermer svg, .agent-pied-bouton svg { width: 15px; height: 15px; }
 .agent-bulle-micro svg, .agent-bulle-envoyer svg, .agent-action-tete .agent-action-icone svg { width: 16px; height: 16px; }
-.agent-action-cercle .agent-action-icone svg, .agent-voix-micro svg { width: 22px; height: 22px; }
+.agent-action-cercle .agent-action-icone svg { width: 22px; height: 22px; }
 
 /* L'attribut hidden ne suffit pas : un display posé ailleurs l'écraserait. */
 .agent-barre .toolbar-item[hidden], .agent-bulle-micro[hidden], .agent-action-source[hidden],
@@ -257,44 +257,47 @@
 .agent-action-carte.is-cadre .agent-action-corps { overflow-y: auto; }
 .agent-bulle.is-cadre .agent-bulle-fil { max-height: none; }
 
-/* ─── COMPOSANTS + UI · discussion orale (VoixAgent) + onde (ui/onde) ─────── */
-/* La discussion orale : un rond de 48 px étiré en pilule de 196 px, 212 au survol une fois posée */
-.agent-voix { border-radius: 24px; overflow: hidden; }
-.agent-voix:not([data-etat="rond"]) { width: 196px; }
-.agent-voix.est-posee:hover { width: 212px; }
-.agent-voix-micro {
-    position: absolute; top: 50%; left: 23px;
-    display: inline-flex;
-    translate: -50% -50%;
-    transition: opacity 120ms ease-out;
+/* ─── COMPOSANTS + UI · discussion orale (VoixAgent) + lueur (ui/lueur) ────── */
+/* La discussion orale : la barre de libraries.dev/voice, mesurée sur sa capture @2x (740 × 207).
+   370 × 104, rayon 26 ; la largeur est posée par VoixAgent.placer() (370, moins dans un panneau étroit). */
+.agent-voix {
+    --agent-voix-rayon: 26px;
+    height: 104px;
+    border-radius: var(--agent-voix-rayon);
+    overflow: hidden;
+    isolation: isolate;
 }
-.agent-voix:not([data-etat="rond"]) .agent-voix-micro { opacity: 0; }
-/* Le stop est concentrique au bout de la pilule. */
-.agent-voix-contenu { position: absolute; inset: 0; display: flex; align-items: center; gap: 10px; padding: 0 7px 0 14px; }
-.agent-voix[data-etat="rond"] .agent-voix-contenu { visibility: hidden; }
-.agent-voix-fermer { flex: none; width: 20px; height: 20px; }
-.agent-onde { display: flex; flex: none; align-items: center; gap: 4px; height: 18px; margin: 0 auto; }
-.agent-onde-trait { width: 2px; height: 14px; border-radius: 1px; background: currentColor; }
-.agent-voix[data-etat="repond"] .agent-onde { color: var(--color-accent); }
-.agent-voix[data-etat="reflechit"] .agent-onde { animation: agent-action-respire 1.6s ease-in-out infinite; }
+/* La lueur de voice-glow : un calque sur toute la barre, sous le contenu, jamais cible des clics. */
+.agent-voix-lueur { position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; }
+.agent-voix-faisceau { width: 100%; height: 100%; }
+.agent-voix-cadre { width: 100%; height: 100%; border-radius: var(--agent-voix-rayon); }
+.agent-voix-contenu { position: absolute; inset: 0; z-index: 1; }
+/* La ligne d'état, à la place de « Ask me anything.. » : centrée à 28 px du haut, à 14 px du bord.
+   Les cotes se comptent depuis le bord extérieur : 1 px de moins, pour le filet. */
 .agent-voix-message {
-    display: none; flex: 1; min-width: 0;
+    position: absolute; top: 15px; left: 13px; right: 13px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 16px; line-height: 24px;
 }
-.agent-voix[data-etat="refuse"] .agent-voix-message, .agent-voix-message:not(:empty) { display: block; }
-.agent-voix-message:not(:empty) ~ .agent-voix-point { display: none; }
-.agent-voix[data-etat="refuse"] .agent-onde, .agent-voix[data-etat="refuse"] .agent-voix-point,
-.agent-voix[data-etat="refuse"] .agent-voix-stop,
-.agent-voix-contenu:has(.agent-voix-message:not(:empty)) .agent-onde { display: none; }
-.agent-voix-point { flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); opacity: 0.6; }
-.agent-voix-stop { position: relative; flex: none; width: 32px; height: 32px; background: transparent; color: var(--text-normal); }
-.agent-voix-stop:disabled { cursor: default; }
-.agent-voix-carre { width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
-.agent-voix-stop .agent-action-arc { display: none; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); }
-.agent-voix[data-etat="reflechit"] .agent-voix-stop .agent-action-arc { display: block; }
-.agent-voix[data-etat="reflechit"] .agent-voix-carre { display: none; }
+.agent-voix[data-etat="repond"] .agent-voix-message { color: var(--text-normal); }
+/* Les deux ronds de 36 px, à 12 px du bord droit et du bas, 12 px entre eux. */
+.agent-voix-actions { position: absolute; right: 11px; bottom: 11px; display: flex; gap: 12px; }
+.agent-voix .agent-voix-stop, .agent-voix .agent-voix-fermer {
+    flex: none; width: 36px; height: 36px;
+    border: 1px solid color-mix(in srgb, var(--text-normal) 10%, transparent);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--text-normal) 8%, transparent);
+    color: var(--text-normal);
+    transition: background-color 120ms ease-out;
+}
+.agent-voix .agent-voix-stop:hover:not(:disabled), .agent-voix .agent-voix-fermer:hover {
+    background: color-mix(in srgb, var(--text-normal) 16%, transparent);
+}
+.agent-voix .agent-voix-stop svg, .agent-voix .agent-voix-fermer svg { width: 16px; height: 16px; }
+.agent-voix-stop:disabled { cursor: default; opacity: 0.5; }
+.agent-voix[data-etat="refuse"] .agent-voix-stop { display: none; }
+.agent-voix[data-etat="arrivee"] .agent-voix-actions { visibility: hidden; }
 
 /* ─── DECOR · lentille de verre des toolbars (verre.ts) ───────────────────── */
 /* La lentille de verre des barres d'outils (verre.ts) : au-dessus des boutons, jamais cible des clics */
@@ -343,8 +346,8 @@
 @media (prefers-reduced-motion: reduce) {
     .agent-action-arc { animation: agent-action-respire 1.6s ease-in-out infinite; }
     .toolbar-option > .toolbar-option-dot::after { transition: none; }
-    /* Ni ressort des traits, ni rebond du survol (posés en style par VoixAgent). */
-    .agent-onde-trait, .agent-voix { transition: none !important; }
+    /* La barre orale et ses ronds : pas de fondu au survol. */
+    .agent-voix, .agent-voix-stop, .agent-voix-fermer { transition: none !important; }
     .toolbar-glass { transform: none; transition: opacity 120ms ease; }
 }
 

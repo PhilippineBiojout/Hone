@@ -46,6 +46,11 @@ export class Repere {
         return { x: (x - o.x) / (p.x - o.x), y: (y - o.y) / (p.y - o.y) };
     }
 
+    /** Le panneau de la note, pour qui doit suivre sa taille. */
+    get pane(): HTMLElement {
+        return this.paneEl;
+    }
+
     paneClient(): DOMRect {
         return this.paneEl.getBoundingClientRect();
     }
@@ -96,6 +101,17 @@ export class Repere {
         const taille = this.ecartDocument(el.offsetWidth, el.offsetHeight);
         const { x, y } = auDessus({ ref, largeur: taille.dx, hauteur: taille.dy, ecart: options.ecart ?? 8, cadre, obstacles });
         return this.ancre(x, y);
+    }
+
+    /**
+     * L'ancre qui pose `el` (monté, on le mesure) centré en bas du panneau, à `marge` px du bord.
+     * Ancre `viewport` : elle ne suit pas le défilement, la barre reste en bas pendant qu'on lit.
+     */
+    enBas(el: HTMLElement, marge = 24): WidgetAnchor | null {
+        const pane = this.paneClient();
+        const x = pane.left + (pane.width - el.offsetWidth) / 2;
+        const y = pane.bottom - el.offsetHeight - marge;
+        return this.widgets.viewportAnchorAt(x, y);
     }
 
     /** Monte `el` puis le pose avec `placer`, dans la même tâche : la place provisoire ne se voit pas. */

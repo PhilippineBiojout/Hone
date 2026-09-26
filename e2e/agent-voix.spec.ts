@@ -4,10 +4,10 @@ import os from 'os';
 import path from 'path';
 
 /**
- * La discussion orale (VoixAgent.ts) : le micro de la barre, sous la tête de
- * chat, fait fondre la barre dans un rond qui s'étire en pilule. L'onde suit
- * le micro, ■ envoie le tour, l'agent répond à voix haute, la croix rend le
- * micro.
+ * La discussion orale (VoixAgent.ts) : le micro de la barre, après la tête de
+ * chat, fait monter une barre en bas du panneau (libraries.dev/voice). La lueur
+ * de voice-glow suit le micro, le micro de la barre envoie le tour, l'agent
+ * répond à voix haute, la croix rend le micro.
  *
  * Pas de vrai micro : `getUserMedia` est remplacé dans la page par un
  * oscillateur à 220 Hz dont on règle le volume, et la synthèse vocale par un
@@ -189,9 +189,8 @@ async function volume(page: Page, niveau: number): Promise<void> {
     }, niveau);
 }
 
-/** Les cinq échelles verticales de l'onde, lues dans la transformation calculée. */
-const echelles = (page: Page) => voix(page).locator('.agent-onde-trait').evaluateAll((els) =>
-    els.map((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).d));
+/** La lueur de voice-glow : son enveloppe porte data-voice-type, et data-processing quand elle balaie. */
+const lueur = (page: Page) => voix(page).locator('.agent-voix-lueur [data-voice-type]');
 
 /** Surligne un passage, puis ouvre la discussion orale par le micro de la barre. */
 async function ouvrirVoix(page: Page): Promise<void> {
@@ -201,7 +200,7 @@ async function ouvrirVoix(page: Page): Promise<void> {
     await expect(voix(page)).toBeVisible();
 }
 
-/** Attend la fin de l'étirement : plus aucune animation sur la pilule. */
+/** Attend la fin de la montée : plus aucune animation sur la barre. */
 async function attendrePosee(page: Page): Promise<void> {
     await expect(voix(page)).toHaveClass(/est-posee/, { timeout: 4_000 });
 }
@@ -225,47 +224,77 @@ test('le micro est dans la barre courte, juste après la tête de chat', async (
     expect(libelles).toEqual(["Discuter avec Hone", "Parler à Hone", 'Définir', 'Visualiser', "Plus d'outils"]);
 });
 
-test('le micro fait fondre la barre dans un rond, qui s\'étire en pilule de 196 px', async () => {
+test('le micro fait monter une barre de 370 × 104, centrée en bas du panneau', async () => {
     const { page } = h;
     await simulerAudio(page);
     await surligner(page, 'Ligne 3 :', 'Révolution');
     await expect(barre(page)).toBeVisible();
     await micro(page).click();
     await expect(barre(page)).toHaveCount(0);
-    await expect(voix(page)).toHaveAttribute('data-etat', 'rond');
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
     await attendrePosee(page);
-    // Pointeur hors de la pilule : pas d'élargissement de survol.
-    await page.mouse.move(5, 5);
-    await expect.poll(async () => (await voix(page).boundingBox())!.width, { timeout: 4_000 }).toBeCloseTo(196, 0);
-    expect((await voix(page).boundingBox())!.height).toBeCloseTo(48, 0);
+    await expect(voix(page).locator('.agent-voix-message')).toHaveText('Je vous écoute…');
 
-    // À droite du passage, à sa hauteur.
-    const mot = await boiteDuMot(page, 'Ligne 3 :', 'Révolution');
     const b = (await voix(page).boundingBox())!;
-    expect(b.x).toBeGreaterThanOrEqual(mot.x + mot.width - 1);
-    expect(b.y).toBeLessThan(mot.y + mot.height);
-    expect(b.y + b.height).toBeGreaterThan(mot.y);
+    expect(b.width).toBeCloseTo(370, 0);
+    expect(b.height).toBeCloseTo(104, 0);
+    expect(await voix(page).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('26px');
+    // Centrée sur le panneau de la note, à 24 px de son bas.
+    const pane = await page.evaluate(() => {
+        const w = window as unknown as { app: any };
+        const r = (w.app.workspace.getLeavesOfType('markdown')[0].view.contentEl as HTMLElement).getBoundingClientRect();
+        return { x: r.left, width: r.width, bas: r.bottom };
+    });
+    expect(b.x + b.width / 2).toBeCloseTo(pane.x + pane.width / 2, -1);
+    expect(pane.bas - (b.y + b.height)).toBeCloseTo(24, -1);
+
+    // Deux ronds de 36 px à 12 px du bord droit et du bas : le micro, puis la croix.
+    const s = (await stop(page).boundingBox())!;
+    const f = (await voix(page).locator('.agent-voix-fermer').boundingBox())!;
+    expect(s.width).toBeCloseTo(36, 0);
+    expect(f.width).toBeCloseTo(36, 0);
+    expect(b.x + b.width - (f.x + f.width)).toBeCloseTo(12, 0);
+    expect(b.y + b.height - (f.y + f.height)).toBeCloseTo(12, 0);
+    expect(f.x - (s.x + s.width)).toBeCloseTo(12, 0);
 });
 
-test('l\'onde reste à plat sans son et se lève quand on parle', async () => {
+test('la barre reste en bas quand on fait défiler la note', async () => {
     const { page } = h;
     await simulerAudio(page);
     await ouvrirVoix(page);
     await attendrePosee(page);
-    await expect(voix(page).locator('.agent-onde-trait')).toHaveCount(5);
-    // 4 px sur 14 : le minimum de Skiper25.
-    await expect.poll(async () => Math.max(...await echelles(page)), { timeout: 3_000 }).toBeLessThan(0.3);
-
-    await volume(page, 1);
-    // 220 Hz tombe dans la deuxième bande (175 à 380 Hz).
-    await expect.poll(async () => (await echelles(page))[1], { timeout: 3_000 }).toBeGreaterThan(0.6);
-
-    await volume(page, 0);
-    await expect.poll(async () => Math.max(...await echelles(page)), { timeout: 3_000 }).toBeLessThan(0.3);
+    const avant = (await voix(page).boundingBox())!;
+    await page.mouse.move(600, 300);
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(300);
+    const apres = (await voix(page).boundingBox())!;
+    expect(apres.y).toBeCloseTo(avant.y, 0);
 });
 
-test('■ envoie le tour : l\'agent réfléchit, répond à voix haute, puis la pilule écoute de nouveau', async () => {
+test('la lueur de voice-glow est là, et balaie pendant que l\'agent réfléchit', async () => {
+    const { page } = h;
+    await simulerAudio(page);
+    await ouvrirVoix(page);
+    await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
+    await expect(lueur(page)).toHaveCount(1);
+    await expect(lueur(page)).toHaveAttribute('data-voice-type', 'default');
+    await expect(lueur(page)).not.toHaveAttribute('data-processing', /.*/);
+    // Sous le contenu : elle ne prend jamais un clic.
+    expect(await voix(page).locator('.agent-voix-lueur').evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+
+    await volume(page, 1);
+    await page.waitForTimeout(300);
+    await stop(page).click();
+    await expect(voix(page)).toHaveAttribute('data-etat', 'reflechit');
+    await expect(voix(page).locator('.agent-voix-message')).toHaveText('Hone réfléchit…');
+    await expect(lueur(page)).toHaveAttribute('data-processing', /.*/);
+    await expect(voix(page)).toHaveAttribute('data-etat', 'repond', { timeout: 4_000 });
+    await expect(lueur(page)).not.toHaveAttribute('data-processing', /.*/);
+    // La réponse s'écrit sur la ligne d'état.
+    await expect(voix(page).locator('.agent-voix-message')).toContainText('numéro 1');
+});
+
+test('le micro de la barre orale envoie le tour : l\'agent réfléchit, répond à voix haute, puis la barre écoute de nouveau', async () => {
     const { page } = h;
     await simulerAudio(page);
     await ouvrirVoix(page);
@@ -289,13 +318,14 @@ test('■ envoie le tour : l\'agent réfléchit, répond à voix haute, puis la 
     expect(dits2[1]).toContain('numéro 2');
 });
 
-test('la croix ferme la pilule et rend le micro', async () => {
+test('la croix ferme la barre, rend le micro et retire la lueur', async () => {
     const { page } = h;
     await simulerAudio(page);
     await ouvrirVoix(page);
     await attendrePosee(page);
     await voix(page).locator('[aria-label="Fermer"]').click();
     await expect(voix(page)).toHaveCount(0);
+    await expect(page.locator('.agent-voix-lueur')).toHaveCount(0);
     await expect(page.locator('.agent-zone')).toHaveCount(0);
     const etats = await page.evaluate(() =>
         ((window as unknown as { __voix: any }).__voix.pistes as MediaStreamTrack[]).map((p) => p.readyState));
@@ -303,7 +333,7 @@ test('la croix ferme la pilule et rend le micro', async () => {
     expect(etats.every((e) => e === 'ended')).toBe(true);
 });
 
-test('pilule ouverte : un trait à côté ne pose rien', async () => {
+test('barre ouverte : un trait à côté ne pose rien', async () => {
     const { page } = h;
     await simulerAudio(page);
     await ouvrirVoix(page);
@@ -315,7 +345,7 @@ test('pilule ouverte : un trait à côté ne pose rien', async () => {
     await expect(voix(page)).toBeVisible();
 });
 
-test('micro refusé : la pilule le dit, et sa croix la ferme', async () => {
+test('micro refusé : la barre le dit, et sa croix la ferme', async () => {
     const { page } = h;
     await simulerAudio(page, true);
     await ouvrirVoix(page);
@@ -332,7 +362,7 @@ const carte = (page: Page) => page.locator('.agent-action-carte');
 const bulle = (page: Page) => page.locator('.agent-bulle');
 const traces = (page: Page) => page.locator('.agent-trace');
 
-/** Un tour de parole complet : on parle, ■, l'agent répond, la pilule écoute de nouveau. */
+/** Un tour de parole complet : on parle, micro, l'agent répond, la barre écoute de nouveau. */
 async function unTour(page: Page): Promise<void> {
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
     await volume(page, 1);
@@ -342,14 +372,14 @@ async function unTour(page: Page): Promise<void> {
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
 }
 
-/** La croix de la pilule, puis la carte du bilan arrivée. */
+/** La croix de la barre, puis la carte du bilan arrivée. */
 async function fermerVoix(page: Page): Promise<void> {
     await voix(page).locator('[aria-label="Fermer"]').click();
     await expect(voix(page)).toHaveCount(0);
     await expect(carte(page)).toBeVisible({ timeout: 4_000 });
 }
 
-test('après un tour, la croix de la pilule ouvre la carte du bilan', async () => {
+test('après un tour, la croix de la barre ouvre la carte du bilan', async () => {
     const { page } = h;
     await simulerAudio(page);
     await ouvrirVoix(page);

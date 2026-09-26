@@ -5,7 +5,7 @@ sélection fait apparaître une barre qui ouvre un chat et des outils d'IA sur l
 
 ## Stack & commandes
 - TypeScript, bundlé par esbuild (`esbuild.config.mjs`), types via `@usefragment/core`.
-- Deps runtime : `@openai/agents` + `openai` (SDK bundlé DANS `main.js` → ~1,9 Mo), `zod`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable).
+- Deps runtime : `@openai/agents` + `openai` (SDK bundlé DANS `main.js` → ~1,9 Mo), `zod`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable), `voice-glow` + `react`/`react-dom` (la lueur de la discussion orale, îlot React unique dans `ui/lueur.ts`).
 - Scripts : `npm run build` (tsc --noEmit + esbuild prod), `npm test` (vitest run src), `npm run dev`.
 - **node_modules pas versionné** : faire `npm install` avant un build à froid ; l'API Fragment se lit via l'usage, pas via le core.
 
@@ -46,7 +46,7 @@ src/
   interactions/         annotation.ts, declencheur.ts, traces.ts, zoneDuTrait.ts
   positionnement/       repere.ts, placement.ts, fenetre.ts
   composants/           BarreAgent.ts, BulleAgent.ts, ActionAgent.ts, VoixAgent.ts
-  ui/                   ui.ts, animations.ts, onde.ts, nettoyerSvg.ts
+  ui/                   ui.ts, animations.ts, onde.ts, lueur.ts, nettoyerSvg.ts
   cerveau/              moteur.ts, agents.ts, outils-vault.ts, garde.ts, langue.ts, couts.ts, vault.ts
   pont/                 repondre.ts (façade), protocole.ts (types de domaine)
   reglages/             reglages.ts (clé API + Modal de saisie)
@@ -65,8 +65,8 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `interactions/traces.ts` (CarnetTraces) : historique en mémoire, une icône par réponse fermée dans la marge gauche ; remappée à l'édition.
 - `positionnement/fenetre.ts` : widget déplaçable/redimensionnable (Cadre). `positionnement/placement.ts` : maths de placement (aCote).
 - `composants/BarreAgent.ts` : barre verticale (Toolbar) posée à côté du passage.
-- `composants/BulleAgent` (chat), `composants/ActionAgent` (carte d'outil), `composants/VoixAgent` (oral, back factice → « Gradium »).
-- `ui/ui.ts` (atomes : OUTILS, boutonIcone, arc…), `ui/animations.ts` (éclore/résorber…), `ui/onde.ts` (les 5 barres).
+- `composants/BulleAgent` (chat), `composants/ActionAgent` (carte d'outil), `composants/VoixAgent` (oral : barre en bas du panneau, back factice → « Gradium »).
+- `ui/ui.ts` (atomes : OUTILS, boutonIcone, arc…), `ui/animations.ts` (éclore/résorber…), `ui/onde.ts` (le spectre en 5 bandes et le niveau d'une voix), `ui/lueur.ts` (le `VoiceBeam` de voice-glow, seul endroit où vit React).
 - `decor/verre.ts` : lentille de verre décorative (feDisplacementMap) sur toute `.toolbar` — indépendant de l'agent, Chromium seulement.
 - `ui/nettoyerSvg.ts` : assainit le SVG de « visualiser » avant affichage.
 - `pont/repondre.ts` : la façade que les composants appellent (chat/outils/oral) + repli factice ; `pont/protocole.ts` : les types de domaine.
