@@ -1,4 +1,4 @@
-import { Component, type App, type WidgetHandle } from 'fragment';
+import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
 import { ressort } from '../ui/animations';
 import { niveaux, niveauVoix } from '../ui/onde';
 import { Lueur, ondulation, type LireNiveau } from '../ui/lueur';
@@ -84,6 +84,7 @@ export class VoixAgent extends Component {
         const actions = this.contenuEl.appendChild(document.createElement('div'));
         actions.classList.add('agent-voix-actions');
         this.stopEl = boutonIcone(actions, 'mic', '', () => this.surStop(), 'agent-voix-stop');
+        this.stopEl.dataset.icone = 'mic';
         boutonIcone(actions, 'x', 'Fermer', () => {
             this.parCroix = true;
             this.fermer();
@@ -105,7 +106,10 @@ export class VoixAgent extends Component {
         this.historique = [...historique];
         this.poserEtat('arrivee');
 
-        // Sous le contenu : la lueur se peint derrière le texte et les boutons.
+        // Sous le contenu : la lueur se peint derrière le texte et les boutons. Une
+        // ancienne encore là (lancer sans fermer) ne doit pas tourner dans le vide.
+        this.lueur?.detruire();
+        this.lueur?.el.remove();
         this.lueur = new Lueur();
         this.el.prepend(this.lueur.el);
         this.load();
@@ -309,6 +313,13 @@ export class VoixAgent extends Component {
         this.stopEl.setAttribute('aria-label', libelle);
         this.stopEl.title = libelle;
         this.stopEl.disabled = etat !== 'ecoute' && etat !== 'repond';
+        // Pendant que Hone parle, le bouton coupe sa voix : un carré, plus un micro.
+        const icone = etat === 'repond' ? 'square' : 'mic';
+        if (this.stopEl.dataset.icone !== icone) {
+            this.stopEl.dataset.icone = icone;
+            this.stopEl.replaceChildren();
+            setIcon(this.stopEl, icone);
+        }
         this.messageEl.textContent = LIGNES[etat] ?? '';
         this.lueur?.reflechir(etat === 'reflechit');
         if (etat === 'reflechit' || etat === 'refuse' || etat === 'arrivee') this.lueur?.suivre(null);

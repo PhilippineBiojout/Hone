@@ -292,6 +292,10 @@ test('la lueur de voice-glow est là, et balaie pendant que l\'agent réfléchit
     await expect(lueur(page)).not.toHaveAttribute('data-processing', /.*/);
     // La réponse s'écrit sur la ligne d'état.
     await expect(voix(page).locator('.agent-voix-message')).toContainText('numéro 1');
+    // Pendant que Hone parle, le bouton coupe sa voix : un carré, et le micro revient ensuite.
+    await expect(stop(page)).toHaveAttribute('data-icone', 'square');
+    await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
+    await expect(stop(page)).toHaveAttribute('data-icone', 'mic');
 });
 
 test('le micro de la barre orale envoie le tour : l\'agent réfléchit, répond à voix haute, puis la barre écoute de nouveau', async () => {
