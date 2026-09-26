@@ -52,6 +52,7 @@ src/
   reglages/             reglages.ts (clé API + Modal de saisie)
   scan/                 scan.ts, relais.ts
   remarkable/           remarkable.ts (brancherRemarkable), tablette.ts, rmdoc.ts, synchro.ts, registre.ts, …
+  codex/                transport.ts, rpc.ts, view.ts, codex.ts
   decor/                verre.ts
   tests/                TOUS les *.test.ts (vitest) — `npm test` = `vitest run src`
 ```
@@ -78,6 +79,22 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   worker Cloudflare `wss://hone-relay.lasky.workers.dev`. La photo reçue est rangée dans `Scans/`.
   Site + worker vivent dans le dépôt `github.com/RebornFlamme/Hone` (dossiers `docs/` et `relay/`).
   Styles sous `.scan-popover` / `.scan-qr` en fin de `styles.css`.
+- `codex/` : panneau de chat **Codex** (fusionné depuis l'ex-plugin `codex-on-fragment`, 2026-09-27).
+  `brancherCodex(this, () => this.reglages.codex)` dans `main.ts::onload` pose une icône de ruban
+  (`addRibbonIcon('bot', 'Open Codex')`) + la commande « Open Codex panel » qui révèle une `CodexView`
+  (ItemView) dans le dock droit. **Code en anglais** (choix assumé : l'autre repo passe aussi en anglais).
+  N'utilise PAS OpenAI : pilote le binaire **`codex app-server`** en JSON-RPC sur stdin/stdout via
+  `node:child_process` (résolu par le shim require de l'hôte — mêmes builtins que Node). 3 couches :
+  `transport.ts` (spawn ; sur Windows passe par `cmd.exe /d /s /c` car `.cmd` non spawnable, kill via
+  `taskkill /t`), `rpc.ts` (`JsonRpcClient` : 3 formes de messages — requête serveur `id+method`,
+  réponse `id` seul, notification `method` seul), `view.ts` (`CodexView` : transcript + composer +
+  boutons d'approbation Approve/For session/Decline ; streaming des deltas en direct). `codex.ts` câble
+  tout et fait l'ouverture de vue via l'API core réelle (`workspace.rightSplit` + `createLeafInParent`
+  + `WorkspaceSidedock.expand()` — le core n'a PAS `getRightLeaf`/`revealLeaf`, contrairement à Obsidian).
+  Config dans les réglages (`reglages.ts::CodexSettings` : `codexPath`, `model`, `approvalPolicy`,
+  `sandbox`), lue paresseusement. Styles `.codex-*` en fin de `styles.css`. `cwd` = racine du coffre.
+  ⚠️ `esbuild.config.mjs` externalise aussi les builtins préfixés `node:` (`...builtins.map(m => 'node:'+m)`)
+  car `builtin-modules` ne liste que les noms nus — sans ça le bundle échoue sur `node:child_process`.
 
 ## Cerveau (page) — `src/cerveau/`
 - `moteur.ts` : le chef d'orchestre côté IA (ex-`agent-serveur`). Construit les agents avec la clé,

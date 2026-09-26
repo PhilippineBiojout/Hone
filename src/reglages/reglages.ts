@@ -4,6 +4,19 @@ import { Modal, type App } from 'fragment';
 // Il n'y a pas encore de PluginSettingTab dans l'API Fragment : on saisit la clé via
 // un petit Modal maison.
 
+/** Réglages du panneau Codex (pilote `codex app-server` en JSON-RPC). Édité à la
+ *  main dans les données du plugin ; pas d'UI dédiée pour l'instant. */
+export interface CodexSettings {
+    /** Nom du binaire (résolu via PATH) ou chemin absolu. */
+    codexPath: string;
+    /** Id du modèle, ou null pour laisser le serveur choisir. */
+    model: string | null;
+    /** "never" | "on-request" | "on-failure" | "untrusted". */
+    approvalPolicy: string;
+    /** "read-only" | "workspace-write" | "danger-full-access". */
+    sandbox: string;
+}
+
 export interface Reglages {
     /** La clé OpenAI. Vide → Hone répond en factice. */
     cle: string;
@@ -16,7 +29,16 @@ export interface Reglages {
     /** Les agents peuvent se fabriquer des fonctions (atelier/). La clé `atelier` de data.json
      *  est la bibliothèque elle-même : l'interrupteur a donc un autre nom. */
     atelierActif: boolean;
+    /** Config du panneau Codex (fonctionnalité fusionnée depuis codex-on-fragment). */
+    codex: CodexSettings;
 }
+
+export const CODEX_DEFAUT: CodexSettings = {
+    codexPath: 'codex',
+    model: null,
+    approvalPolicy: 'on-request',
+    sandbox: 'workspace-write',
+};
 
 export const REGLAGES_DEFAUT: Reglages = {
     cle: '',
@@ -25,11 +47,13 @@ export const REGLAGES_DEFAUT: Reglages = {
     plafond: 500_000,
     factice: false,
     atelierActif: true,
+    codex: CODEX_DEFAUT,
 };
 
 /** Complète les données lues du disque avec les défauts (données absentes ou partielles). */
 export function fusionner(data: unknown): Reglages {
     const d = (data ?? {}) as Partial<Reglages>;
+    const c = (d.codex ?? {}) as Partial<CodexSettings>;
     return {
         cle: typeof d.cle === 'string' ? d.cle : REGLAGES_DEFAUT.cle,
         modeleFort: typeof d.modeleFort === 'string' && d.modeleFort ? d.modeleFort : REGLAGES_DEFAUT.modeleFort,
@@ -37,6 +61,12 @@ export function fusionner(data: unknown): Reglages {
         plafond: typeof d.plafond === 'number' ? d.plafond : REGLAGES_DEFAUT.plafond,
         factice: d.factice === true,
         atelierActif: d.atelierActif !== false,
+        codex: {
+            codexPath: typeof c.codexPath === 'string' && c.codexPath ? c.codexPath : CODEX_DEFAUT.codexPath,
+            model: typeof c.model === 'string' ? c.model : CODEX_DEFAUT.model,
+            approvalPolicy: typeof c.approvalPolicy === 'string' && c.approvalPolicy ? c.approvalPolicy : CODEX_DEFAUT.approvalPolicy,
+            sandbox: typeof c.sandbox === 'string' && c.sandbox ? c.sandbox : CODEX_DEFAUT.sandbox,
+        },
     };
 }
 

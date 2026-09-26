@@ -574,3 +574,191 @@
 	position: absolute;
 	background: var(--tab-outline-color);
 }
+
+/* ── Codex panel (fusionné depuis codex-on-fragment) ─────────────────────────
+   Panneau de chat pilotant `codex app-server`. Variables de thème Fragment/
+   Obsidian → suit clair/sombre et l'accent actif automatiquement. */
+.codex-panel {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: 8px;
+	padding: 8px;
+	box-sizing: border-box;
+}
+
+.codex-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--background-modifier-border, #3a3a3a);
+}
+.codex-header__icon {
+	display: inline-flex;
+	color: var(--text-muted, #999);
+}
+.codex-header__title {
+	font-weight: 600;
+	color: var(--text-normal, #ddd);
+}
+.codex-header__status {
+	margin-left: auto;
+	font-size: 12px;
+	color: var(--text-muted, #999);
+}
+.codex-header__restart {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	border: none;
+	color: var(--text-muted, #999);
+	cursor: pointer;
+	padding: 2px;
+	border-radius: 4px;
+}
+.codex-header__restart:hover {
+	background: var(--background-modifier-hover, rgba(255, 255, 255, 0.08));
+	color: var(--text-normal, #ddd);
+}
+
+.codex-transcript {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-right: 4px;
+}
+
+.codex-msg {
+	border-radius: 8px;
+	padding: 8px 10px;
+	font-size: 14px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.codex-msg--user {
+	background: var(--interactive-accent, #7c5cff);
+	color: var(--text-on-accent, #fff);
+	align-self: flex-end;
+	max-width: 85%;
+}
+.codex-msg--assistant {
+	background: var(--background-secondary, #2a2a2a);
+	color: var(--text-normal, #ddd);
+	align-self: flex-start;
+	max-width: 95%;
+}
+.codex-msg--reasoning {
+	background: transparent;
+	color: var(--text-faint, #777);
+	font-style: italic;
+	font-size: 12.5px;
+	padding: 2px 10px;
+}
+.codex-msg--system {
+	background: var(--background-modifier-error, #5a2a2a);
+	color: var(--text-normal, #eee);
+	font-size: 12.5px;
+}
+.codex-msg--command {
+	background: var(--background-primary-alt, #1e1e1e);
+	padding: 0;
+	overflow: hidden;
+}
+.codex-cmd__out {
+	margin: 0;
+	padding: 8px 10px;
+	font-family: var(--font-monospace, ui-monospace, monospace);
+	font-size: 12px;
+	color: var(--text-muted, #aaa);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.codex-approval {
+	border: 1px solid var(--interactive-accent, #7c5cff);
+	border-radius: 8px;
+	padding: 8px 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.codex-approval.is-answered {
+	opacity: 0.6;
+	border-color: var(--background-modifier-border, #3a3a3a);
+}
+.codex-approval__label {
+	font-size: 13px;
+	color: var(--text-normal, #ddd);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.codex-approval__actions {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.codex-approval__actions button {
+	cursor: pointer;
+	border-radius: 6px;
+	padding: 4px 10px;
+	font-size: 12px;
+	border: 1px solid var(--background-modifier-border, #3a3a3a);
+	background: var(--background-secondary, #2a2a2a);
+	color: var(--text-normal, #ddd);
+}
+.codex-approval__actions button.mod-cta {
+	background: var(--interactive-accent, #7c5cff);
+	color: var(--text-on-accent, #fff);
+	border-color: transparent;
+}
+.codex-approval__actions button.mod-warning {
+	background: var(--background-modifier-error, #5a2a2a);
+	color: #fff;
+	border-color: transparent;
+}
+.codex-approval__done {
+	font-size: 12px;
+	color: var(--text-muted, #999);
+}
+
+.codex-composer {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border-top: 1px solid var(--background-modifier-border, #3a3a3a);
+	padding-top: 8px;
+}
+.codex-composer__input {
+	resize: vertical;
+	min-height: 48px;
+	width: 100%;
+	box-sizing: border-box;
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border, #3a3a3a);
+	background: var(--background-primary, #1a1a1a);
+	color: var(--text-normal, #ddd);
+	padding: 6px 8px;
+	font-family: inherit;
+	font-size: 14px;
+}
+.codex-composer__send {
+	align-self: flex-end;
+	cursor: pointer;
+	border-radius: 6px;
+	padding: 5px 14px;
+	font-size: 13px;
+	border: none;
+	background: var(--interactive-accent, #7c5cff);
+	color: var(--text-on-accent, #fff);
+}
+.codex-composer__send:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
