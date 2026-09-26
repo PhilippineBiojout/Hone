@@ -623,3 +623,37 @@ test('la barre se déplace par sa poignée, puis défile avec le texte', async (
     const c = (await barre(page).boundingBox())!;
     expect(Math.abs(c.y - (b.y - 100))).toBeLessThan(2);
 });
+
+// Le Keymap du cœur écoute en capture sur window : sans la portée de clavier.ts,
+// Mod+W tapé dans le chat fermait l'onglet, et Échap fermait la barre et le chat.
+test('dans le chat, les raccourcis de l\'app ne passent pas, et Échap quitte le champ sans rien fermer', async () => {
+    const { page } = h;
+    const etat = () => page.evaluate(() => {
+        const app = (window as unknown as { app: any }).app;
+        return {
+            feuilles: app.workspace.getLeavesOfType('markdown').length,
+            texte: app.workspace.getLeavesOfType('markdown')[0]?.view.getEditor()?.getValue() as string,
+        };
+    });
+    await surligner(page, 'Ligne 5 :', 'commence');
+    await ouvrirChat(page);
+    const avant = await etat();
+
+    const champ = page.locator('.agent-bulle-champ');
+    await champ.click();
+    await page.keyboard.type('Pourquoi');
+    await page.keyboard.press('ControlOrMeta+b');
+    await page.keyboard.press('ControlOrMeta+w');
+    await page.waitForTimeout(300);
+
+    const apres = await etat();
+    expect(apres.feuilles).toBe(avant.feuilles);
+    expect(apres.texte).toBe(avant.texte);
+    await expect(champ).toHaveValue('Pourquoi');
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    await expect(bulle(page)).toBeVisible();
+    await expect(barre(page)).toBeVisible();
+    expect(await champ.evaluate((el) => el === document.activeElement)).toBe(false);
+});
