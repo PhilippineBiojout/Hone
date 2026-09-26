@@ -3,20 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Demande, Requete, Retour, Sortie } from './protocole';
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Le lien entre la page et le processus de l'agent (serveur/agent-serveur.ts).
-//  Il lance le processus au premier besoin, lui envoie des demandes numérotées
-//  et rend à chacune sa réponse. La clé n'arrive jamais ici : ce fichier ne
-//  lit pas le .env, il ne voit passer que du texte.
-//
-//  ★ COMMENT on lance : `child_process.fork`, par le Node de la page (le
-//    chargeur de plugins passe tout nom autre que `fragment` au require de
-//    Node, et esbuild les laisse external). Le binaire est celui d'Electron
-//    lui-même, en mode Node (ELECTRON_RUN_AS_NODE) : aucun Node à installer
-//    à côté.
-// ═══════════════════════════════════════════════════════════════════════════
+/** Le message d'une erreur de l'agent, montré tel quel. */
+export class ErreurAgent extends Error {}
+/** AGENT_BLOQUE=1 : la page répond en factice (repondre.ts). */
+export class AgentEnPause extends ErreurAgent {}
 
-/** Au-delà, la demande est abandonnée : un réseau qui pend ne laisse pas un rond tourner sans fin. */
 const DELAI_MAX = 90_000;
 
 interface EnAttente {
@@ -26,27 +17,18 @@ interface EnAttente {
     minuterie: ReturnType<typeof setTimeout>;
 }
 
-/** Le message qu'une erreur de l'agent montre à l'utilisateur, tel quel. */
-export class ErreurAgent extends Error {}
-
-/** AGENT_BLOQUE=1 : l'agent ne répond pas, la page répond en factice (repondre.ts). */
-export class AgentEnPause extends ErreurAgent {}
-
+/**
+ * Le processus de l'agent, lancé au premier besoin avec le binaire d'Electron en
+ * mode Node. La clé n'arrive jamais ici : ce fichier ne lit pas le .env.
+ */
 export class LienAgent {
-
     private enfant: ChildProcess | null = null;
     private prochainId = 1;
     private readonly enAttente = new Map<number, EnAttente>();
 
-    constructor(
-        private readonly racineVault: string,
-        private readonly dossierPlugin: string,
-    ) {}
+    constructor(private readonly racineVault: string, private readonly dossierPlugin: string) {}
 
-    /**
-     * Le plugin a un .env : on regarde qu'il EXISTE, sans le lire. Le contenu
-     * (la clé) n'est lu que par le processus de l'agent.
-     */
+    /** Le .env existe (on ne le lit pas). */
     configure(): boolean {
         return fs.existsSync(path.join(this.dossierPlugin, '.env'));
     }
@@ -60,12 +42,10 @@ export class LienAgent {
                 rejeter(new ErreurAgent('L\'agent met trop de temps à répondre.'));
             }, DELAI_MAX);
             this.enAttente.set(id, { resoudre, rejeter, morceau, minuterie });
-            const requete: Requete = { id, demande };
-            enfant.send(requete);
+            enfant.send({ id, demande } satisfies Requete);
         });
     }
 
-    /** Au déchargement du plugin : le processus s'arrête, les demandes en cours échouent. */
     arreter(): void {
         this.enfant?.kill();
         this.enfant = null;
@@ -73,32 +53,26 @@ export class LienAgent {
     }
 
     private lancer(): ChildProcess {
-        if (this.enfant && this.enfant.connected) return this.enfant;
-        const enfant = fork(path.join(this.dossierPlugin, 'agent-serveur.js'), [
-            `--vault=${this.racineVault}`,
-            `--plugin=${this.dossierPlugin}`,
-        ], {
-            execPath: process.execPath,
-            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-            stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
-        });
+        if (this.enfant?.connected) return this.enfant;
+        const enfant = fork(path.join(this.dossierPlugin, 'agent-serveur.js'),
+            [`--vault=${this.racineVault}`, `--plugin=${this.dossierPlugin}`], {
+                execPath: process.execPath,
+                env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+                stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+            });
         enfant.on('message', (m) => this.recevoir(m as Retour));
-        // Mort en route (plantage, tué) : les demandes en cours échouent, la suivante le relance.
+        // Mort en route : les demandes en cours échouent, la suivante le relance.
         enfant.on('exit', () => {
             if (this.enfant === enfant) this.enfant = null;
             this.toutRejeter('L\'agent s\'est arrêté, réessaie.');
         });
-        this.enfant = enfant;
-        return enfant;
+        return this.enfant = enfant;
     }
 
     private recevoir(retour: Retour): void {
         const attente = this.enAttente.get(retour.id);
         if (!attente) return;
-        if (retour.type === 'morceau') {
-            attente.morceau?.(retour.texte);
-            return;
-        }
+        if (retour.type === 'morceau') return attente.morceau?.(retour.texte);
         clearTimeout(attente.minuterie);
         this.enAttente.delete(retour.id);
         if (retour.type === 'fin') attente.resoudre(retour.sortie);
@@ -115,21 +89,18 @@ export class LienAgent {
     }
 }
 
-// ── Le lien du plugin, unique ───────────────────────────────────────────────
-
 let lien: LienAgent | null = null;
 
-/** Appelé au chargement du plugin ; la fonction rendue l'arrête au déchargement. */
+/** Au chargement du plugin ; la fonction rendue l'arrête au déchargement. */
 export function ouvrirLien(racineVault: string, dossierPlugin: string): () => void {
-    lien = new LienAgent(racineVault, dossierPlugin);
-    const courant = lien;
+    const courant = lien = new LienAgent(racineVault, dossierPlugin);
     return () => {
         courant.arreter();
         if (lien === courant) lien = null;
     };
 }
 
-/** Le lien, ou null : plugin pas chargé (tests unitaires, e2e en mode factice). */
+/** Null hors du plugin chargé (tests, e2e en factice). */
 export function lienCourant(): LienAgent | null {
     return lien;
 }

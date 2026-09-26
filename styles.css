@@ -1,688 +1,204 @@
-/* Tout ce que l'agent pose sur la page est un widget du cœur (WidgetLayer),
-   monté dans le plan document : `left/top` y sont écrits par le cœur, et le
-   plan défile avec le texte. Les z-index se comparent entre widgets du plan
-   (dont la racine est à 200, au-dessus des surlignages). Tout est en var(--…)
-   de index.css, pour suivre le thème clair comme le sombre. */
-
-/* Le plan document vit dans le scroller de l'éditeur, qui impose sa police
-   de code. Les widgets de l'agent reprennent celle de l'interface (:root,
-   index.css) : sans ça, la carte et le chat s'écrivaient en chasse fixe. */
-.agent-bulle,
-.agent-action-carte,
-.agent-action-cercle,
-.agent-voix,
-.agent-barre-hote,
-.agent-trace-rangee,
-.agent-eclosion {
+/* Tout est un widget du plan document (WidgetLayer), en var(--…) pour suivre les deux thèmes.
+   Le plan hérite la police de code du scroller : on reprend celle de l'interface. */
+.agent-bulle, .agent-action-carte, .agent-action-cercle, .agent-voix,
+.agent-barre-hote, .agent-trace-rangee, .agent-eclosion {
     font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
     line-height: 1.5;
     font-weight: 400;
 }
 
-.agent-bulle {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 950;   /* au-dessus de la toolbar (900), sous le menu (1000) */
-    display: flex;
-    flex-direction: column;
-    width: 320px;
-    border-radius: 12px;
+/* Les surfaces : le fond, le filet et l'ombre de la Toolbar du cœur. */
+.agent-bulle, .agent-action-carte, .agent-action-cercle, .agent-voix {
+    position: absolute; top: 0; left: 0;
+    color: var(--text-normal);
+}
+.agent-bulle, .agent-action-carte, .agent-action-cercle, .agent-action-forme, .agent-voix {
     background: var(--background-secondary);
     border: 1px solid var(--tab-outline-color);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    color: var(--text-normal);
-    font-size: 13px;
 }
+/* 950 : au-dessus de la toolbar (900), sous le menu (1000). 940 : la place de la barre. */
+.agent-bulle, .agent-action-carte { z-index: 950; border-radius: 12px; font-size: 13px; }
+.agent-action-cercle, .agent-voix { z-index: 940; width: 48px; height: 48px; box-sizing: border-box; }
+.agent-bulle { display: flex; flex-direction: column; width: 320px; }
+.agent-action-carte { width: 300px; }
 
-/* ── La barre verticale (BarreAgent.ts) ─────────────────────────────────── */
-
-/* C'est la Toolbar du cœur (toolbar.css) : fond, filet, rayon et ombre en
-   viennent. L'hôte est un widget 0×0 ancré au document ; la Toolbar s'y pose. */
-.agent-barre-hote {
-    z-index: 940;   /* sous la bulle (950) */
-}
-
-.agent-barre.toolbar {
-    z-index: auto;
-    gap: 4px;
-}
-
-.agent-barre .toolbar-section {
-    gap: 4px;
-}
-
-/* Les outils cachés tant que la barre n'est pas rallongée : l'attribut
-   `hidden` ne suffit pas, le `display: flex` de .toolbar-item l'écraserait. */
-.agent-barre .toolbar-item[hidden] {
-    display: none;
-}
-
-/* Les boutons de l'agent : des ronds cerclés, plus que des items de barre. */
-.agent-barre .toolbar-item.agent-barre-bouton {
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    box-sizing: border-box;
+/* Les boutons à icône */
+.agent-bulle-fermer, .agent-bulle-micro, .agent-bulle-envoyer, .agent-pied-bouton,
+.agent-voix-fermer, .agent-voix-stop, .agent-trace {
+    display: inline-flex; align-items: center; justify-content: center;
     padding: 0;
+    cursor: pointer;
+}
+.agent-bulle-fermer, .agent-bulle-micro, .agent-bulle-envoyer, .agent-pied-bouton, .agent-voix-fermer { border: 0; }
+.agent-bulle-fermer, .agent-pied-bouton, .agent-voix-fermer { border-radius: 6px; background: transparent; color: var(--text-muted); }
+.agent-bulle-fermer, .agent-pied-bouton, .agent-trace { width: 24px; height: 24px; }
+.agent-bulle-fermer:hover, .agent-pied-bouton:hover, .agent-voix-fermer:hover { color: var(--text-normal); }
+.agent-bulle-fermer:hover, .agent-pied-bouton:hover, .agent-pied-annuler:hover,
+.agent-voix-stop:hover:not(:disabled) { background: rgba(128, 128, 128, 0.18); }
+.agent-barre .toolbar-item.agent-barre-bouton, .agent-trace, .agent-voix-stop {
     border: 1px solid var(--tab-outline-color);
     border-radius: 50%;
-    color: var(--text-normal);
-    cursor: pointer;
 }
-
-.agent-barre .toolbar-item .toolbar-item-icon {
-    opacity: 1;
+.agent-bulle-fermer:focus-visible, .agent-bulle-micro:focus-visible, .agent-bulle-envoyer:focus-visible,
+.agent-pied-bouton:focus-visible, .agent-pied-annuler:focus-visible, .agent-pied-supprimer:focus-visible,
+.agent-trace:focus-visible, .agent-voix-stop:focus-visible, .agent-voix-fermer:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
 }
+.agent-barre .agent-barre-fermer svg, .agent-barre .agent-barre-plus svg, .agent-action-source svg,
+.agent-trace svg, .agent-voix-fermer svg { width: 14px; height: 14px; }
+.agent-bulle-fermer svg, .agent-pied-bouton svg { width: 15px; height: 15px; }
+.agent-bulle-micro svg, .agent-bulle-envoyer svg, .agent-action-tete .agent-action-icone svg { width: 16px; height: 16px; }
+.agent-action-cercle .agent-action-icone svg, .agent-voix-micro svg { width: 22px; height: 22px; }
 
-/* La croix et « … » ne sont pas des outils : plus petits, sans cercle. */
-.agent-barre .toolbar-item.agent-barre-fermer,
+/* L'attribut hidden ne suffit pas : un display posé ailleurs l'écraserait. */
+.agent-barre .toolbar-item[hidden], .agent-bulle-micro[hidden], .agent-action-source[hidden],
+.agent-pied[hidden], .agent-pied [hidden] { display: none; }
+
+/* La barre verticale (la Toolbar du cœur, dans un hôte 0×0 ancré au document) */
+.agent-barre-hote { z-index: 940; }
+.agent-barre.toolbar { z-index: auto; gap: 4px; }
+.agent-barre .toolbar-section { gap: 4px; }
+.agent-barre .toolbar-item.agent-barre-bouton, .agent-barre .toolbar-item.agent-barre-fermer,
 .agent-barre .toolbar-item.agent-barre-plus {
     justify-content: center;
-    width: 20px;
-    height: 20px;
     box-sizing: border-box;
     padding: 0;
     cursor: pointer;
 }
+.agent-barre .toolbar-item.agent-barre-bouton { width: 28px; height: 28px; color: var(--text-normal); }
+.agent-barre .toolbar-item .toolbar-item-icon { opacity: 1; }
+.agent-barre .toolbar-item.agent-barre-fermer, .agent-barre .toolbar-item.agent-barre-plus { width: 20px; height: 20px; }
 
-.agent-barre .agent-barre-fermer svg,
-.agent-barre .agent-barre-plus svg {
-    width: 14px;
-    height: 14px;
-}
-
-/* ── L'en-tête : la zone citée, et la croix ─────────────────────────────── */
-
-.agent-bulle-tete {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 8px 8px 12px;
-}
-
+/* La bulle du chat */
+.agent-bulle-tete, .agent-action-tete { display: flex; align-items: center; gap: 8px; }
+.agent-bulle-tete { padding: 8px 8px 8px 12px; }
 .agent-bulle-extrait {
-    flex: 1;
-    min-width: 0;
+    flex: 1; min-width: 0;
     padding-left: 8px;
     border-left: 2px solid var(--color-accent);
     color: var(--text-muted);
     font-size: var(--font-ui-small);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
-.agent-bulle-fermer,
-.agent-bulle-micro,
-.agent-bulle-envoyer {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    padding: 0;
-    border: none;
-    cursor: pointer;
-}
-
-.agent-bulle-fermer {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted);
-}
-
-.agent-bulle-fermer:hover {
-    background: rgba(128, 128, 128, 0.18);
-    color: var(--text-normal);
-}
-
-.agent-bulle-fermer svg {
-    width: 15px;
-    height: 15px;
-}
-
-.agent-bulle-fermer:focus-visible,
-.agent-bulle-micro:focus-visible,
-.agent-bulle-envoyer:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 1px;
-}
-
-/* ── Le fil ─────────────────────────────────────────────────────────────── */
-
+.agent-bulle-fermer, .agent-bulle-micro, .agent-bulle-envoyer { flex-shrink: 0; }
 .agent-bulle-fil {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-height: 140px;   /* une fenêtre de chat dès l'ouverture, saisie en bas (le schéma) */
-    max-height: 240px;
+    display: flex; flex-direction: column; gap: 6px;
+    min-height: 140px; max-height: 240px;
     padding: 4px 12px 8px;
     overflow-y: auto;
 }
-
-.agent-message {
-    max-width: 85%;
-    padding: 6px 10px;
-    border-radius: 10px;
-    line-height: 1.4;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    user-select: text;
-}
-
-.agent-message.mod-moi {
-    align-self: flex-end;
-    background: var(--color-accent);
-    color: #ffffff;
-}
-
-.agent-message.mod-agent {
-    align-self: flex-start;
-    background: rgba(128, 128, 128, 0.16);
-}
-
-.agent-message.is-pending {
-    color: var(--text-muted);
-}
-
-.agent-message.is-error {
-    color: #e93147;   /* le rouge des entrées destructives du menu */
-}
-
-/* Le bilan d'une discussion orale relue par écrit : en tête du fil, sur toute
-   sa largeur, filet d'accent comme la citation de l'en-tête. */
+.agent-message, .agent-bilan, .agent-action-corps { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.agent-message { max-width: 85%; padding: 6px 10px; border-radius: 10px; line-height: 1.4; }
+.agent-message.mod-moi { align-self: flex-end; background: var(--color-accent); color: #ffffff; }
+.agent-message.mod-agent { align-self: flex-start; background: rgba(128, 128, 128, 0.16); }
+.agent-message.is-pending { color: var(--text-muted); }
+/* Le rouge des entrées destructives du menu. */
+.agent-message.is-error, .agent-action-corps.is-error { color: #e93147; }
+.agent-bilan, .agent-action-corps { line-height: 1.45; }
 .agent-bilan {
     padding: 8px 10px;
     border-left: 2px solid var(--color-accent);
     border-radius: 0 8px 8px 0;
     background: rgba(128, 128, 128, 0.10);
-    line-height: 1.45;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    user-select: text;
 }
-
-.agent-bilan-titre {
-    margin-bottom: 2px;
-    color: var(--text-muted);
-    font-size: var(--font-ui-small);
-    font-weight: 600;
-}
-
-/* ── La saisie ──────────────────────────────────────────────────────────── */
-
+.agent-bilan-titre { margin-bottom: 2px; color: var(--text-muted); font-size: var(--font-ui-small); font-weight: 600; }
 .agent-bulle-saisie {
-    display: flex;
-    align-items: flex-end;
-    gap: 6px;
-    margin: 0;
-    padding: 8px;
+    display: flex; align-items: flex-end; gap: 6px;
+    margin: 0; padding: 8px;
     border-top: 1px solid var(--tab-outline-color);
 }
-
 .agent-bulle-champ {
-    flex: 1;
-    min-width: 0;
-    box-sizing: border-box;
-    max-height: 120px;
+    flex: 1; min-width: 0; box-sizing: border-box; max-height: 120px;
     padding: 6px 8px;
-    border: 1px solid var(--tab-outline-color);
-    border-radius: 8px;
-    background: var(--workspace-bg);
-    color: var(--text-normal);
-    font: inherit;
-    line-height: 1.4;
+    border: 1px solid var(--tab-outline-color); border-radius: 8px;
+    background: var(--workspace-bg); color: var(--text-normal);
+    font: inherit; line-height: 1.4;
     resize: none;
 }
+.agent-bulle-champ:focus { outline: none; border-color: var(--color-accent); }
+.agent-bulle-envoyer, .agent-bulle-micro { width: 30px; height: 30px; border-radius: 8px; }
+.agent-bulle-envoyer { background: var(--color-accent); color: #ffffff; }
+.agent-bulle-micro { background: rgba(128, 128, 128, 0.16); color: var(--text-normal); }
+.agent-bulle-micro:hover { background: rgba(128, 128, 128, 0.28); }
+.agent-bulle-envoyer:disabled { opacity: 0.4; cursor: default; }
 
-.agent-bulle-champ:focus {
-    outline: none;
-    border-color: var(--color-accent);
-}
+/* L'éclosion : entre la barre (940) et la bulle (950), transparente aux clics. */
+.agent-eclosion { position: absolute; z-index: 945; pointer-events: none; }
+.agent-eclosion-forme { position: absolute; background: var(--tab-outline-color); }
 
-.agent-bulle-envoyer {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
-    background: var(--color-accent);
-    color: #ffffff;
-}
+/* Le passage visé : invisible, mais sa boîte sert aux e2e. */
+.agent-zone { position: absolute; border-radius: 3px; background: transparent; pointer-events: none; }
 
-.agent-bulle-micro {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
-    background: rgba(128, 128, 128, 0.16);
-    color: var(--text-normal);
-}
-
-.agent-bulle-micro:hover {
-    background: rgba(128, 128, 128, 0.28);
-}
-
-.agent-bulle-micro[hidden] {
-    display: none;
-}
-
-.agent-bulle-micro svg {
-    width: 16px;
-    height: 16px;
-}
-
-.agent-bulle-envoyer:disabled {
-    opacity: 0.4;
-    cursor: default;
-}
-
-.agent-bulle-envoyer svg {
-    width: 16px;
-    height: 16px;
-}
-
-/* ── L'éclosion (eclosion.ts) ─────────────────────────────────────────────── */
-
-/* Le calque fantôme de l'animation d'ouverture : entre la barre (940) et la
-   bulle (950), et transparent aux clics. Les formes sont pleines, de la couleur
-   du contour des boutons de la barre : la goutte sort du bouton tête de chat. */
-.agent-eclosion {
-    position: absolute;
-    z-index: 945;
-    pointer-events: none;
-}
-
-.agent-eclosion-forme {
-    position: absolute;
-    background: var(--tab-outline-color);
-}
-
-/* ── La zone suivie, dans le texte ──────────────────────────────────────── */
-
-/* Posée par un layer CM6 derrière le texte (above: false), en coordonnées
-   document : même mécanique que le surligneur des annotations. Invisible :
-   le trait qu'on a tracé suffit à montrer le passage. La boîte reste, elle
-   donne aux tests e2e le texte que l'agent a compris du trait. */
-.agent-zone {
-    position: absolute;
-    border-radius: 3px;
-    background: transparent;
-    pointer-events: none;
-}
-
-/* ── Un outil lancé (ActionAgent.ts) ─────────────────────────────────────── */
-
-/* Le gros rond qui remplace la barre pendant que l'agent réfléchit : le fond
-   et le filet de la barre, l'icône de l'outil au centre. */
-.agent-action-cercle {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 940;   /* la place de la barre */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-    box-sizing: border-box;
-    border-radius: 50%;
-    background: var(--background-secondary);
-    border: 1px solid var(--tab-outline-color);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    color: var(--text-normal);
-}
-
-.agent-action-cercle .agent-action-icone svg {
-    width: 22px;
-    height: 22px;
-}
-
-.agent-action-icone {
-    display: inline-flex;
-}
-
-/* L'arc qui tourne autour du rond : un quart de cercle à la couleur d'accent,
-   posé 5 px au-delà du filet. */
+/* Un outil lancé : le rond qui réfléchit, puis la carte */
+.agent-action-cercle { display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+.agent-action-icone { display: inline-flex; }
 .agent-action-arc {
-    position: absolute;
-    inset: -6px;
-    width: calc(100% + 12px);
-    height: calc(100% + 12px);
+    position: absolute; inset: -6px;
+    width: calc(100% + 12px); height: calc(100% + 12px);
     overflow: visible;
     pointer-events: none;
     animation: agent-action-tourne 0.9s linear infinite;
 }
+.agent-action-arc circle { fill: none; stroke: var(--color-accent); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 25 75; }
+.agent-action-cercle.is-fini .agent-action-arc { display: none; }
+@keyframes agent-action-tourne { to { transform: rotate(360deg); } }
+@keyframes agent-action-respire { 50% { opacity: 0.3; } }
+.agent-action-forme { position: absolute; z-index: 941; box-sizing: border-box; pointer-events: none; }
+.agent-action-tete { padding: 8px 8px 4px 12px; }
+.agent-action-titre { flex: 1; font-weight: 600; }
+.agent-action-corps { padding: 4px 12px 12px; }
+.agent-action-source { display: inline-flex; color: var(--text-muted); }
+.agent-action-corps.is-visuel { white-space: normal; color: var(--text-normal); }
+.agent-action-corps.is-visuel svg { display: block; width: 100%; height: auto; max-height: 60vh; }
+.agent-action-corps.is-stop { color: var(--text-muted); font-style: italic; }
 
-.agent-action-arc circle {
-    fill: none;
-    stroke: var(--color-accent);
-    stroke-width: 2.5;
-    stroke-linecap: round;
-    stroke-dasharray: 25 75;
-}
+/* Le pied : la poubelle à gauche (un double clic ne tombe pas sur « Supprimer »), la tête de chat à droite */
+.agent-pied { display: flex; align-items: center; min-height: 28px; padding: 4px 8px 8px; }
+.agent-bulle .agent-pied { padding-top: 0; }
+.agent-pied-discuter { margin-left: auto; }
+.agent-pied-confirmation { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
+.agent-pied-confirmation span { flex-basis: 100%; padding: 2px 4px 0; color: var(--text-muted); }
+.agent-pied-annuler, .agent-pied-supprimer { height: 26px; padding: 0 10px; border-radius: 6px; font: inherit; cursor: pointer; }
+.agent-pied-annuler { border: 1px solid var(--tab-outline-color); background: transparent; color: var(--text-normal); }
+/* Plus sombre que #e93147 : le blanc dessus passe 4,5:1. */
+.agent-pied-supprimer { border: 0; background: #d3263b; color: #ffffff; font-weight: 600; }
+.agent-pied-supprimer:hover { background: #b81f32; }
+.agent-occupe .annotation-surface.is-armed { cursor: default; }
 
-.agent-action-cercle.is-fini .agent-action-arc {
-    display: none;
-}
-
-@keyframes agent-action-tourne {
-    to { transform: rotate(360deg); }
-}
-
-/* Moins de mouvement demandé : l'arc ne tourne plus, il respire. */
-@media (prefers-reduced-motion: reduce) {
-    .agent-action-arc {
-        animation: agent-action-respire 1.6s ease-in-out infinite;
-    }
-}
-
-@keyframes agent-action-respire {
-    50% { opacity: 0.3; }
-}
-
-/* La forme qui part de la barre et se pose sur le rond (resorber). */
-.agent-action-forme {
-    position: absolute;
-    z-index: 941;
-    box-sizing: border-box;
-    background: var(--background-secondary);
-    border: 1px solid var(--tab-outline-color);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    pointer-events: none;
-}
-
-/* La carte de la réponse : l'aspect de la bulle du chat. */
-.agent-action-carte {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 950;
-    width: 300px;
-    border-radius: 12px;
-    background: var(--background-secondary);
-    border: 1px solid var(--tab-outline-color);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    color: var(--text-normal);
-    font-size: 13px;
-}
-
-.agent-action-tete {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 8px 4px 12px;
-}
-
-.agent-action-tete .agent-action-icone svg {
-    width: 16px;
-    height: 16px;
-}
-
-.agent-action-titre {
-    flex: 1;
-    font-weight: 600;
-}
-
-.agent-action-corps {
-    padding: 4px 12px 12px;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    user-select: text;
-}
-
-.agent-action-corps.is-error {
-    color: #e93147;
-}
-
-/* Le globe : la réponse vient du web. Discret, dans la couleur du texte secondaire. */
-.agent-action-source {
-    display: inline-flex;
-    color: var(--text-muted);
-}
-
-.agent-action-source[hidden] {
-    display: none;
-}
-
-.agent-action-source svg {
-    width: 14px;
-    height: 14px;
-}
-
-/* Le dessin de Visualiser : il prend la largeur de la carte, et la suit quand
-   on l'agrandit (viewBox, sans taille fixe). Le texte du dessin hérite de la
-   couleur de la carte (currentColor), donc des deux thèmes. */
-.agent-action-corps.is-visuel {
-    white-space: normal;
-    color: var(--text-normal);
-}
-
-.agent-action-corps.is-visuel svg {
-    display: block;
-    width: 100%;
-    height: auto;
-    max-height: 60vh;
-}
-
-/* L'indice qui s'arrête : il ne donnera pas la solution. */
-.agent-action-corps.is-stop {
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-/* ── La poubelle d'une réponse rouverte, et sa confirmation (supprimer.ts) ── */
-
-.agent-pied {
-    display: flex;
-    align-items: center;
-    min-height: 28px;
-    padding: 4px 8px 8px;
-}
-
-.agent-pied[hidden],
-.agent-pied [hidden] {
-    display: none;
-}
-
-/* La poubelle à GAUCHE : à droite, « Supprimer » apparaissait sous le curseur
-   qui venait de la cliquer, et un double clic supprimait sans confirmer. */
-
-/* Le chat a déjà son filet au-dessus de la saisie : le pied se colle dessous. */
-.agent-bulle .agent-pied {
-    padding-top: 0;
-}
-
-.agent-pied-bouton {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-}
-
-.agent-pied-bouton:hover {
-    background: rgba(128, 128, 128, 0.18);
-    color: var(--text-normal);
-}
-
-.agent-pied-bouton svg {
-    width: 15px;
-    height: 15px;
-}
-
-/* La tête de chat à DROITE, loin de la poubelle : l'une enchaîne, l'autre efface. */
-.agent-pied-discuter {
-    margin-left: auto;
-}
-
-.agent-pied-confirmation {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    width: 100%;
-}
-
-/* La question sur sa ligne, les deux boutons dessous, à droite. */
-.agent-pied-confirmation span {
-    flex-basis: 100%;
-    padding: 2px 4px 0;
-    color: var(--text-muted);
-}
-
-.agent-pied-annuler,
-.agent-pied-supprimer {
-    height: 26px;
-    padding: 0 10px;
-    border-radius: 6px;
-    font: inherit;
-    cursor: pointer;
-}
-
-.agent-pied-annuler {
-    border: 1px solid var(--tab-outline-color);
-    background: transparent;
-    color: var(--text-normal);
-}
-
-.agent-pied-annuler:hover {
-    background: rgba(128, 128, 128, 0.18);
-}
-
-/* Rouge plus sombre que celui des erreurs (#e93147) : le blanc dessus passe 4,5:1. */
-.agent-pied-supprimer {
-    border: 0;
-    background: #d3263b;
-    color: #ffffff;
-    font-weight: 600;
-}
-
-.agent-pied-supprimer:hover {
-    background: #b81f32;
-}
-
-.agent-pied-bouton:focus-visible,
-.agent-pied-annuler:focus-visible,
-.agent-pied-supprimer:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 1px;
-}
-
-/* Chat ou carte ouverts : la surface d'annotation ne dessine plus (agentLayer),
-   le curseur ne doit pas promettre le contraire. */
-.agent-occupe .annotation-surface.is-armed {
-    cursor: default;
-}
-
-/* ── L'historique dans la marge (traces.ts) ─────────────────────────────── */
-
-/* Une icône par réponse fermée, à la hauteur de son passage. Plus discrète que
-   les boutons de la barre : elle se lit comme une note en marge, pas comme un
-   outil. Le widget du cœur est la RANGÉE : une ancre de marge lui impose la
-   largeur de la bande. L'icône s'y range côté texte. */
-.agent-trace-rangee {
-    display: flex;
-    justify-content: flex-end;
-    box-sizing: border-box;
-}
-
+/* L'historique dans la marge : la rangée est le widget, l'icône s'y range côté texte */
+.agent-trace-rangee { display: flex; justify-content: flex-end; box-sizing: border-box; }
 .agent-trace {
     pointer-events: auto;
     flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 1px solid var(--tab-outline-color);
-    border-radius: 50%;
     background: var(--background-secondary);
     color: var(--text-muted);
-    cursor: pointer;
     opacity: 0.75;
     transition: opacity 120ms ease, color 120ms ease;
 }
+.agent-trace:hover, .agent-trace:focus-visible { opacity: 1; color: var(--text-normal); }
+.agent-trace.is-ouverte { visibility: hidden; }
 
-.agent-trace:hover,
-.agent-trace:focus-visible {
-    opacity: 1;
-    color: var(--text-normal);
-}
-
-.agent-trace:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 1px;
-}
-
-.agent-trace svg {
-    width: 14px;
-    height: 14px;
-}
-
-/* Sa réponse est rouverte : l'icône s'efface mais garde sa place (traces.ts). */
-.agent-trace.is-ouverte {
-    visibility: hidden;
-}
-
-/* ── Les curseurs de l'annotation ──────────────────────────────────────────
-   Pas l'agent lui-même, mais rien ne doit vivre dans le cœur. Chaque outil a
-   pour curseur son icône de la toolbar (lucide `pencil`, `highlighter`,
-   `eraser`), déjà inclinée, cernée de blanc pour rester lisible sur les deux
-   thèmes. Le point chaud est là où l'outil touche la page : la mine du crayon
-   (2 22), le coin bas-gauche de la pointe biseautée du surligneur (3 20), le
-   milieu du bout de la gomme (5 18). Le repli reste celui du cœur.
-
-   Le cœur ne dit pas quel outil est armé, sauf pour la gomme (`mod-gomme`) :
-   on le lit sur le bouton actif de la barre d'annotation du même pane. Chat
-   ou carte ouverts (`agent-occupe`), la surface est inerte : pas de curseur
-   d'outil, la règle `.agent-occupe` plus haut remet `default`. */
+/* Le curseur de chaque outil d'annotation, lu sur le bouton actif (le cœur ne le dit que pour la gomme) */
 .view-content:not(.agent-occupe):has(.toolbar-item.is-active[aria-label="Crayon"]) .annotation-surface.is-armed {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='white' stroke-width='4'%3E%3Cpath d='M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'/%3E%3Cpath d='m15 5 4 4'/%3E%3C/g%3E%3Cg stroke='black' stroke-width='2'%3E%3Cpath d='M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'/%3E%3Cpath d='m15 5 4 4'/%3E%3C/g%3E%3C/svg%3E") 2 22, crosshair;
 }
-
 .view-content:not(.agent-occupe):has(.toolbar-item.is-active[aria-label="Surligneur"]) .annotation-surface.is-armed {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='white' stroke-width='4'%3E%3Cpath d='m9 11-6 6v3h9l3-3'/%3E%3Cpath d='m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4'/%3E%3C/g%3E%3Cg stroke='black' stroke-width='2'%3E%3Cpath d='m9 11-6 6v3h9l3-3'/%3E%3Cpath d='m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4'/%3E%3C/g%3E%3C/svg%3E") 3 20, crosshair;
 }
-
 .view-content:not(.agent-occupe) .annotation-surface.mod-gomme {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='white' stroke-width='4'%3E%3Cpath d='M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21'/%3E%3Cpath d='m5.082 11.09 8.828 8.828'/%3E%3C/g%3E%3Cg stroke='black' stroke-width='2'%3E%3Cpath d='M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21'/%3E%3Cpath d='m5.082 11.09 8.828 8.828'/%3E%3C/g%3E%3C/svg%3E") 5 18, cell;
 }
 
-/* ── La pastille choisie dans la barre d'annotation ────────────────────────
-   Pas l'agent lui-même non plus. Le cœur marque la couleur et l'épaisseur
-   choisies d'un carré à bordure accent autour d'un rond ; on le remplace par
-   un anneau de la couleur de la pastille, détaché d'elle par un écart vide
-   (façon Apple Notes). L'anneau est un `::after` qui hérite du fond de la
-   pastille, posé inline par `setOptions`, et creusé par un masque : l'écart ne
-   dépend pas du fond de la barre, il tient sur les deux thèmes. Diamètre fixe
-   de 20 px, pour que les trois épaisseurs aient le même anneau. Les options à
-   icône gardent le marquage du cœur. */
+/* La pastille choisie de l'annotation : un anneau détaché (un ::after masqué) au lieu du carré du cœur */
 .toolbar-option.is-active:has(> .toolbar-option-dot),
-.toolbar-option.is-active:has(> .toolbar-option-dot):hover {
-    border-color: transparent;
-    background: transparent;
-}
-
-.toolbar-option > .toolbar-option-dot {
-    position: relative;
-}
-
+.toolbar-option.is-active:has(> .toolbar-option-dot):hover { border-color: transparent; background: transparent; }
+.toolbar-option > .toolbar-option-dot { position: relative; }
 .toolbar-option > .toolbar-option-dot::after {
     content: '';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 20px;
-    height: 20px;
+    position: absolute; left: 50%; top: 50%;
+    width: 20px; height: 20px;
     border-radius: 50%;
     background: inherit;
     -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px));
@@ -692,324 +208,82 @@
     transition: opacity 150ms ease, transform 150ms ease;
     pointer-events: none;
 }
+.toolbar-option.is-active > .toolbar-option-dot::after { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
-.toolbar-option.is-active > .toolbar-option-dot::after {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .toolbar-option > .toolbar-option-dot::after {
-        transition: none;
-    }
-}
-
-/* ── Le chat et les cartes en widget (widget.ts) ───────────────────────────
-   L'en-tête se tient pour déplacer ; une bande invisible le long de chaque
-   bord et de chaque coin agrandit, et le curseur montre dans quel sens. */
-
-.agent-widget-poignee {
-    cursor: grab;
-    user-select: none;
-}
-
-.agent-widget-poignee button {
-    cursor: pointer;
-}
-
-.agent-widget.is-geste,
-.agent-widget.is-geste .agent-widget-poignee {
-    cursor: grabbing;
-    user-select: none;
-}
-
-.agent-widget-bord {
-    position: absolute;
-    z-index: 1;
-}
-
-/* Les bords débordent de moitié : on les attrape sans viser au pixel. */
-.agent-widget-bord.mod-n,
-.agent-widget-bord.mod-s { left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+/* Le chat et les cartes : déplacés par l'en-tête, agrandis par des bandes qui débordent des bords */
+.agent-widget-poignee { cursor: grab; user-select: none; }
+.agent-widget-poignee button { cursor: pointer; }
+.agent-widget.is-geste, .agent-widget.is-geste .agent-widget-poignee { cursor: grabbing; user-select: none; }
+.agent-widget-bord { position: absolute; z-index: 1; }
+.agent-widget-bord.mod-n, .agent-widget-bord.mod-s { left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
 .agent-widget-bord.mod-n { top: -4px; }
 .agent-widget-bord.mod-s { bottom: -4px; }
-
-.agent-widget-bord.mod-e,
-.agent-widget-bord.mod-w { top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+.agent-widget-bord.mod-e, .agent-widget-bord.mod-w { top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
 .agent-widget-bord.mod-e { right: -4px; }
 .agent-widget-bord.mod-w { left: -4px; }
-
-.agent-widget-bord.mod-ne,
-.agent-widget-bord.mod-nw,
-.agent-widget-bord.mod-se,
-.agent-widget-bord.mod-sw { width: 14px; height: 14px; z-index: 2; }
+.agent-widget-bord.mod-ne, .agent-widget-bord.mod-nw,
+.agent-widget-bord.mod-se, .agent-widget-bord.mod-sw { width: 14px; height: 14px; z-index: 2; }
 .agent-widget-bord.mod-ne { top: -4px; right: -4px; cursor: nesw-resize; }
 .agent-widget-bord.mod-sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
 .agent-widget-bord.mod-nw { top: -4px; left: -4px; cursor: nwse-resize; }
 .agent-widget-bord.mod-se { bottom: -4px; right: -4px; cursor: nwse-resize; }
+.agent-widget.is-cadre { box-sizing: border-box; }
+.agent-action-carte.is-cadre { display: flex; flex-direction: column; }
+.agent-action-carte.is-cadre .agent-action-corps, .agent-bulle.is-cadre .agent-bulle-fil { flex: 1; min-height: 0; }
+.agent-action-carte.is-cadre .agent-action-corps { overflow-y: auto; }
+.agent-bulle.is-cadre .agent-bulle-fil { max-height: none; }
 
-/* Taille imposée : la boîte mesurée au premier geste est la boîte posée. */
-.agent-widget.is-cadre {
-    box-sizing: border-box;
-}
-
-.agent-action-carte.is-cadre {
-    display: flex;
-    flex-direction: column;
-}
-
-.agent-action-carte.is-cadre .agent-action-corps {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-.agent-bulle.is-cadre .agent-bulle-fil {
-    flex: 1;
-    min-height: 0;
-    max-height: none;
-}
-
-
-/* ── La discussion orale (VoixAgent.ts, onde.ts) ────────────────────────────
-   Un rond de 48 px (celui des outils) qui s'étire en pilule de 196 px
-   (Skiper3), et s'élargit de 16 px au survol (Skiper25). La largeur est
-   animée en JS pendant l'étirement ; `est-posee` n'arrive qu'après, avec la
-   transition du survol, pour que les deux ne se superposent pas. */
-
-.agent-voix {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 940;   /* la place de la barre */
-    width: 48px;
-    height: 48px;
-    box-sizing: border-box;
-    border-radius: 24px;
-    overflow: hidden;
-    background: var(--background-secondary);
-    border: 1px solid var(--tab-outline-color);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    color: var(--text-normal);
-}
-
-.agent-voix:not([data-etat="rond"]) {
-    width: 196px;
-}
-
-.agent-voix.est-posee:hover {
-    width: 212px;
-}
-
-/* Le micro du rond, centré ; il s'efface quand le rond s'étire. */
+/* La discussion orale : un rond de 48 px étiré en pilule de 196 px, 212 au survol une fois posée */
+.agent-voix { border-radius: 24px; overflow: hidden; }
+.agent-voix:not([data-etat="rond"]) { width: 196px; }
+.agent-voix.est-posee:hover { width: 212px; }
 .agent-voix-micro {
-    position: absolute;
-    top: 50%;
-    left: 23px;
+    position: absolute; top: 50%; left: 23px;
     display: inline-flex;
     translate: -50% -50%;
     transition: opacity 120ms ease-out;
 }
-
-.agent-voix-micro svg {
-    width: 22px;
-    height: 22px;
-}
-
-.agent-voix:not([data-etat="rond"]) .agent-voix-micro {
-    opacity: 0;
-}
-
-/* Croix à gauche, onde au milieu, point et stop à droite ; le stop est
-   concentrique au bout de la pilule (8 px de chaque côté). */
-.agent-voix-contenu {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 7px 0 14px;
-}
-
-.agent-voix[data-etat="rond"] .agent-voix-contenu {
-    visibility: hidden;
-}
-
-.agent-voix-fermer {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-}
-
-.agent-voix-fermer svg {
-    width: 14px;
-    height: 14px;
-}
-
-.agent-voix-fermer:hover {
-    color: var(--text-normal);
-}
-
-.agent-onde {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 4px;
-    height: 18px;
-    margin: 0 auto;
-}
-
-.agent-onde-trait {
-    width: 2px;
-    height: 14px;
-    border-radius: 1px;
-    background: currentColor;
-}
-
-/* L'agent parle : l'onde prend la couleur d'accent. */
-.agent-voix[data-etat="repond"] .agent-onde {
-    color: var(--color-accent);
-}
-
-/* L'agent réfléchit : les traits à plat respirent. */
-.agent-voix[data-etat="reflechit"] .agent-onde {
-    animation: agent-action-respire 1.6s ease-in-out infinite;
-}
-
+.agent-voix:not([data-etat="rond"]) .agent-voix-micro { opacity: 0; }
+/* Le stop est concentrique au bout de la pilule. */
+.agent-voix-contenu { position: absolute; inset: 0; display: flex; align-items: center; gap: 10px; padding: 0 7px 0 14px; }
+.agent-voix[data-etat="rond"] .agent-voix-contenu { visibility: hidden; }
+.agent-voix-fermer { flex: none; width: 20px; height: 20px; }
+.agent-onde { display: flex; flex: none; align-items: center; gap: 4px; height: 18px; margin: 0 auto; }
+.agent-onde-trait { width: 2px; height: 14px; border-radius: 1px; background: currentColor; }
+.agent-voix[data-etat="repond"] .agent-onde { color: var(--color-accent); }
+.agent-voix[data-etat="reflechit"] .agent-onde { animation: agent-action-respire 1.6s ease-in-out infinite; }
 .agent-voix-message {
-    display: none;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
+    display: none; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--text-muted);
     font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
-
-.agent-voix[data-etat="refuse"] .agent-voix-message,
-.agent-voix-message:not(:empty) {
-    display: block;
-}
-
-.agent-voix-message:not(:empty) ~ .agent-voix-point {
-    display: none;
-}
-
-.agent-voix[data-etat="refuse"] .agent-onde,
-.agent-voix[data-etat="refuse"] .agent-voix-point,
+.agent-voix[data-etat="refuse"] .agent-voix-message, .agent-voix-message:not(:empty) { display: block; }
+.agent-voix-message:not(:empty) ~ .agent-voix-point { display: none; }
+.agent-voix[data-etat="refuse"] .agent-onde, .agent-voix[data-etat="refuse"] .agent-voix-point,
 .agent-voix[data-etat="refuse"] .agent-voix-stop,
-.agent-voix-contenu:has(.agent-voix-message:not(:empty)) .agent-onde {
-    display: none;
-}
+.agent-voix-contenu:has(.agent-voix-message:not(:empty)) .agent-onde { display: none; }
+.agent-voix-point { flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); opacity: 0.6; }
+.agent-voix-stop { position: relative; flex: none; width: 32px; height: 32px; background: transparent; color: var(--text-normal); }
+.agent-voix-stop:disabled { cursor: default; }
+.agent-voix-carre { width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
+.agent-voix-stop .agent-action-arc { display: none; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); }
+.agent-voix[data-etat="reflechit"] .agent-voix-stop .agent-action-arc { display: block; }
+.agent-voix[data-etat="reflechit"] .agent-voix-carre { display: none; }
 
-.agent-voix-point {
-    flex: none;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--text-muted);
-    opacity: 0.6;
-}
-
-.agent-voix-stop {
-    position: relative;
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border: 1px solid var(--tab-outline-color);
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-normal);
-    cursor: pointer;
-}
-
-.agent-voix-stop:hover:not(:disabled) {
-    background: rgba(128, 128, 128, 0.18);
-}
-
-.agent-voix-stop:disabled {
-    cursor: default;
-}
-
-.agent-voix-stop:focus-visible,
-.agent-voix-fermer:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 1px;
-}
-
-/* ■ : 10 px, à peine arrondi. */
-.agent-voix-carre {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-    background: currentColor;
-}
-
-/* L'arc des outils, resserré sur le stop : il reste dans la pilule. */
-.agent-voix-stop .agent-action-arc {
-    display: none;
-    inset: -3px;
-    width: calc(100% + 6px);
-    height: calc(100% + 6px);
-}
-
-.agent-voix[data-etat="reflechit"] .agent-voix-stop .agent-action-arc {
-    display: block;
-}
-
-.agent-voix[data-etat="reflechit"] .agent-voix-carre {
-    display: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    /* Ni ressort des traits, ni rebond du survol (posé en style par VoixAgent). */
-    .agent-onde-trait,
-    .agent-voix {
-        transition: none !important;
-    }
-}
-
-
-/* ═══ La lentille de verre des barres d'outils (src/verre.ts) ═══
-   Une goutte posée AU-DESSUS des boutons, qui ne capte jamais rien : le clic
-   passe au travers, jusqu'au bouton qu'elle grossit. */
-
-
+/* La lentille de verre des barres d'outils (verre.ts) : au-dessus des boutons, jamais cible des clics */
 .toolbar-glass {
-    /* Le verre : un voile à peine teinté, un liseré clair en haut qui accroche
-       la lumière, un liseré sombre en bas, une ombre courte qui le décolle. */
     --toolbar-glass-teinte: rgba(255, 255, 255, 0.06);
     --toolbar-glass-reflet: rgba(255, 255, 255, 0.42);
     --toolbar-glass-arete: rgba(255, 255, 255, 0.14);
     --toolbar-glass-creux: rgba(0, 0, 0, 0.35);
     --toolbar-glass-ombre: rgba(0, 0, 0, 0.35);
     --toolbar-glass-lumiere: 1.08;
-
-    position: absolute;
-    z-index: 1;
-    left: 0;
-    top: 0;
-    width: 0;
-    height: 0;
+    position: absolute; z-index: 1; left: 0; top: 0; width: 0; height: 0;
     border-radius: 8px;
     pointer-events: none;
     background: var(--toolbar-glass-teinte);
-    /* ★ L'ordre compte : la réfraction d'abord, sur l'image nette ; le flou
-       léger et la saturation ensuite, sur l'image déjà courbée. */
+    /* La réfraction d'abord, sur l'image nette ; flou et saturation ensuite. */
     backdrop-filter: var(--toolbar-glass-filtre) blur(0.4px) saturate(1.5) brightness(var(--toolbar-glass-lumiere));
     box-shadow:
         inset 0 1px 0.5px var(--toolbar-glass-reflet),
@@ -1020,16 +294,9 @@
     transform: scale(0.6);
     transition: opacity 140ms ease, transform 160ms ease;
 }
-
-.toolbar-glass.is-visible {
-    opacity: 1;
-    transform: scale(1);
-}
-
+.toolbar-glass.is-visible { opacity: 1; transform: scale(1); }
 @media (prefers-color-scheme: light) {
     .toolbar-glass {
-        /* Sur fond clair, le voile doit rester presque nul : à 0,35 il
-           délavait l'icône qu'il était censé grossir. */
         --toolbar-glass-teinte: rgba(255, 255, 255, 0.1);
         --toolbar-glass-reflet: rgba(255, 255, 255, 0.95);
         --toolbar-glass-arete: rgba(0, 0, 0, 0.08);
@@ -1038,37 +305,19 @@
         --toolbar-glass-lumiere: 1;
     }
 }
-
-@media (prefers-reduced-motion: reduce) {
-    .toolbar-glass {
-        transform: none;
-        transition: opacity 120ms ease;
-    }
-}
-
-/* Le <svg> qui porte le filtre : présent dans le document (sinon url(#…) ne
-   trouve rien), mais sans taille ni rendu. */
-.toolbar-glass-defs {
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden;
-}
-
-/* ★ La lentille EST le survol : le fond gris d'origine, dessous, se verrait au
-   travers comme une seconde boîte décalée. La barre qui porte une lentille
-   (:has) l'éteint ; sans lentille, il revient tel quel. */
+/* Le <svg> du filtre doit être dans le document pour que url(#…) le trouve. */
+.toolbar-glass-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+/* La lentille est le survol : le fond gris du cœur se verrait au travers. L'état actif garde le sien. */
 .toolbar:has(> .toolbar-glass) .toolbar-item:hover,
 .toolbar:has(> .toolbar-glass) .toolbar-option:hover,
-.toolbar:has(> .toolbar-glass) .toolbar-handle:hover {
-    background: transparent;
-}
+.toolbar:has(> .toolbar-glass) .toolbar-handle:hover { background: transparent; }
+.toolbar:has(> .toolbar-glass) .toolbar-item.is-active:hover { background: var(--color-accent); }
+.toolbar:has(> .toolbar-glass) .toolbar-option.is-active:hover { background: rgba(128, 128, 128, 0.12); }
 
-/* L'état actif garde son fond : c'est l'information, pas le survol. */
-.toolbar:has(> .toolbar-glass) .toolbar-item.is-active:hover {
-    background: var(--color-accent);
-}
-
-.toolbar:has(> .toolbar-glass) .toolbar-option.is-active:hover {
-    background: rgba(128, 128, 128, 0.12);
+@media (prefers-reduced-motion: reduce) {
+    .agent-action-arc { animation: agent-action-respire 1.6s ease-in-out infinite; }
+    .toolbar-option > .toolbar-option-dot::after { transition: none; }
+    /* Ni ressort des traits, ni rebond du survol (posés en style par VoixAgent). */
+    .agent-onde-trait, .agent-voix { transition: none !important; }
+    .toolbar-glass { transform: none; transition: opacity 120ms ease; }
 }

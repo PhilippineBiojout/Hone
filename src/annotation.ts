@@ -1,22 +1,10 @@
-import type { App } from 'fragment';
+import type { App, Component } from 'fragment';
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Ce que l'agent demande au calque d'annotation, en UN seul endroit.
-//
-//  L'annotation n'a pas encore d'API publique : un plugin ne peut ni savoir
-//  qu'un trait vient d'être posé, ni où est sa barre, ni suspendre la saisie.
-//  Ce fichier donne à l'agent l'interface dont il a besoin (`Annotation`), et
-//  la remplit aujourd'hui avec ce qui existe. C'est la liste des demandes
-//  faites à l'équipe du cœur :
-//
-//    1. un événement « trait posé » qui porte le trait (aujourd'hui seul
-//       `change` existe : on retient les id déjà vus) ;
-//    2. la boîte de la barre d'annotation (aujourd'hui : un sélecteur) ;
-//    3. une suspension de la saisie de dessin (aujourd'hui : le pointerdown
-//       arrêté en capture, et une classe pour le curseur).
-//
-//  Quand l'API existera, seul ce fichier changera.
-// ═══════════════════════════════════════════════════════════════════════════
+// Ce que l'agent demande au calque d'annotation, qui n'a pas encore d'API publique.
+// Demandes faites au cœur, qui ne changeront que ce fichier :
+//   1. un événement « trait posé » qui porte le trait (aujourd'hui : `change`, et les id déjà vus) ;
+//   2. la boîte de la barre d'annotation (aujourd'hui : un sélecteur) ;
+//   3. suspendre la saisie de dessin (aujourd'hui : pointerdown arrêté en capture, et une classe).
 
 /** Un trait d'annotation (views/annotation/AnnotationSource.ts). */
 export interface Stroke {
@@ -30,17 +18,16 @@ export interface Stroke {
 }
 
 export interface Annotation {
-    /** Un trait NEUF, posé à la main : ni un undo, ni un redo. */
+    /** Un trait neuf, posé à la main : ni un undo, ni un redo. */
     surTraitPose(cb: (path: string, stroke: Stroke) => void): void;
-    /** Efface un trait (passe par la pile d'annulation : Cmd+Z le remet). */
+    /** Efface un trait par la pile d'annulation : Cmd+Z le remet. */
     effacer(path: string, id: string): void;
-    /** La boîte client de la barre d'annotation de ce pane, s'il y en a une. */
+    /** La boîte client de la barre d'annotation de ce pane. */
     barre(): DOMRect | null;
     /** Tant que c'est vrai, un clic sur la page ne dessine rien ; l'outil armé est gardé. */
     suspendre(oui: boolean): void;
     /** Le document affiché a changé : ses traits existants ne sont pas neufs. */
     connaitre(): void;
-    detruire(): void;
 }
 
 interface SourceAnnotation {
@@ -49,9 +36,9 @@ interface SourceAnnotation {
     on(name: 'change', cb: (path: string) => void): { off(): void };
 }
 
-export function brancherAnnotation(app: App, paneEl: HTMLElement, chemin: () => string): Annotation {
-    // Demande 1 : le plugin d'annotation n'est joignable que par le registre
-    // interne des plugins.
+/** Branche l'agent sur l'annotation de ce pane ; tout se défait avec `composant`. */
+export function brancherAnnotation(composant: Component, app: App, paneEl: HTMLElement, chemin: () => string): Annotation {
+    // Demande 1 : le plugin d'annotation n'est joignable que par le registre interne.
     const interne = app as unknown as { plugins?: { plugins?: Map<string, unknown> } };
     const source = (interne.plugins?.plugins?.get('annotation') as { source?: SourceAnnotation } | undefined)?.source;
 
@@ -68,32 +55,25 @@ export function brancherAnnotation(app: App, paneEl: HTMLElement, chemin: () => 
         connaitre();
         if (neuf) for (const cb of abonnes) cb(path, neuf);
     });
+    composant.register(() => ref?.off());
 
-    // Demande 3 : arrêter le pointerdown avant la surface de dessin, plutôt
-    // que de désarmer l'outil. La classe sert au curseur (styles.css).
     let suspendu = false;
-    const bloquer = (e: PointerEvent): void => {
+    composant.registerDomEvent(paneEl, 'pointerdown', (e) => {
         if (!suspendu || !(e.target instanceof Element) || !e.target.closest('.annotation-surface')) return;
         e.preventDefault();
         e.stopPropagation();
-    };
-    paneEl.addEventListener('pointerdown', bloquer, true);
+    }, true);
+    composant.register(() => paneEl.classList.remove('agent-occupe'));
 
     return {
         surTraitPose: (cb) => { abonnes.push(cb); },
         effacer: (path, id) => source?.erase(path, id),
-        // Demande 2 : la barre d'annotation est la Toolbar du pane qui n'est pas
-        // celle de l'agent.
+        // Demande 2 : la Toolbar du pane qui n'est pas celle de l'agent.
         barre: () => paneEl.querySelector('.toolbar:not(.agent-barre)')?.getBoundingClientRect() ?? null,
         suspendre: (oui) => {
             suspendu = oui;
-            paneEl.classList.toggle('agent-occupe', oui);
+            paneEl.classList.toggle('agent-occupe', oui); // pour le curseur (styles.css)
         },
         connaitre,
-        detruire: () => {
-            ref?.off();
-            paneEl.removeEventListener('pointerdown', bloquer, true);
-            paneEl.classList.remove('agent-occupe');
-        },
     };
 }
