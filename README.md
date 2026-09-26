@@ -6,8 +6,15 @@ prototype `~/Documents/IA/remarkable-live`.
 
 ## Ce qu'il fait
 
+- **Autorisation** : rien n'est téléchargé avant d'avoir accepté. Le premier
+  clic sur l'icône tablette du ruban pose la question ; la réponse est gardée
+  (`autorise` dans `data.json`). Après un refus, la vue le dit et propose
+  d'autoriser.
 - **Première synchro** : tous les carnets arrivent dans `reMarkable/`, avec
   l'arborescence de la tablette.
+- **En haut d'un PDF de la tablette** (`src/entete.ts`) : une icône quand la
+  tablette n'est pas connectée (au clic, les étapes pour la brancher), le mot
+  « live » quand elle l'est (au clic : tout ce qu'on écrit apparaît sur le PDF).
 - **En direct** : toutes les 2 s, le plugin lit la liste de la tablette ; un
   carnet dont `ModifiedClient` a changé est retéléchargé et réécrit à l'endroit
   où il est dans le vault.

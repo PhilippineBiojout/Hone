@@ -60,3 +60,62 @@
 	white-space: pre-wrap;
 	color: var(--text-muted);
 }
+
+/* La demande d'autorisation, et le message quand on a refusé. */
+
+.remarkable-boutons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.remarkable-boutons button,
+.remarkable-vue .remarkable-boutons .mod-cta,
+.remarkable-vue .mod-cta {
+	padding: 4px 14px;
+	border-radius: 6px;
+	border: 1px solid var(--tab-outline-color);
+	font-size: 13px;
+}
+
+.remarkable-boutons .mod-cta,
+.remarkable-vue .mod-cta {
+	background: var(--color-accent);
+	border-color: var(--color-accent);
+	color: #fff;
+}
+
+.remarkable-refus {
+	margin: 0 0 var(--size-4-3, 12px);
+	color: var(--text-muted);
+}
+
+/* En haut d'un PDF de la tablette : « live » écrit à la place de l'icône. */
+
+.view-action.remarkable-statut[data-live="true"] {
+	width: auto;
+	padding: 0 6px;
+	font-size: var(--font-ui-small, 12px);
+	font-weight: 600;
+	color: var(--color-accent);
+	opacity: 1;
+}
+
+.remarkable-bulle {
+	min-width: 0;
+	max-width: 260px;
+	padding: 10px 12px;
+	user-select: text;
+	line-height: 1.4;
+}
+
+.remarkable-bulle p,
+.remarkable-bulle ol {
+	margin: 0;
+}
+
+.remarkable-bulle ol {
+	margin-top: 6px;
+	padding-left: 18px;
+}

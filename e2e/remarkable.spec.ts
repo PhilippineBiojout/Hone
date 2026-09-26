@@ -151,6 +151,22 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 
 	let { electronApp, page } = await lancer(vault, userData);
 	try {
+		// 0. Rien n'est téléchargé avant d'avoir accepté. Premier clic sur
+		// l'icône : la demande. Refusée, la vue le dit et laisse changer d'avis.
+		const icone = page.locator('.side-dock-ribbon-action[aria-label="reMarkable"]');
+		await new Promise((r) => setTimeout(r, 3000));
+		expect(existsSync(v('reMarkable'))).toBe(false);
+		await icone.click();
+		await expect(page.locator('.modal')).toContainText('Autoriser Fragment à télécharger');
+		await page.locator('.modal button', { hasText: 'Refuser' }).click();
+		await expect(page.locator('.remarkable-refus')).toContainText('Tu n’as pas accepté');
+		await attendre(async () => JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).autorise === false, 'refus retenu');
+		await new Promise((r) => setTimeout(r, 3000));
+		expect(existsSync(v('reMarkable'))).toBe(false);
+		await icone.click();
+		await expect(page.locator('.modal')).toHaveCount(0);
+		await page.locator('.remarkable-vue .mod-cta', { hasText: 'Autoriser' }).click();
+
 		// 1. Première synchro : tout dans reMarkable/, arborescence de la tablette.
 		await attendre(() => contient('reMarkable/Cours/A.pdf', 'a version 1'), 'A importé');
 		await attendre(() => contient('reMarkable/Cours/B.pdf', 'b version 1'), 'B importé');
@@ -198,6 +214,14 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		tablette.ecrire('n');
 		await attendre(() => contient('reMarkable/Notes.pdf', '/Count 2'), 'carnet mis à jour');
 		await attendre(async () => (await bleus()).length === 2, 'page ajoutée dans l’onglet ouvert');
+
+		// En haut du PDF, tablette connectée : « live », et la phrase au clic.
+		const statut = page.locator('.remarkable-statut:visible');
+		await expect(statut).toHaveText('live');
+		await statut.click();
+		await expect(page.locator('.remarkable-bulle')).toHaveText('Tout ce que tu écris sur la tablette apparaît sur ce PDF.');
+		await page.keyboard.press('Escape');
+		await expect(page.locator('.remarkable-bulle')).toHaveCount(0);
 
 		// 3. Rangé ailleurs depuis le Finder (delete + create) : toujours suivi.
 		await mkdir(v('Rangement'));
@@ -255,6 +279,20 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await attendre(async () => (await donnees()).a?.chemin === 'Archive/A.pdf', 'A retrouvé au démarrage');
 		tablette.ecrire('a');
 		await attendre(() => contient('Archive/A.pdf', 'a version 5'), 'A mis à jour après redémarrage');
+
+		// 10. Tablette débranchée : l'icône en haut du PDF, et les étapes au clic.
+		await page.evaluate(() => {
+			const app = (window as any).app;
+			return app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('Archive/A.pdf'));
+		});
+		await expect(page.locator('.remarkable-statut:visible')).toHaveText('live');
+		tablette.arreter();
+		await expect(page.locator('.remarkable-statut:visible')).toHaveAttribute('aria-label', 'Tablette non connectée', { timeout: 15_000 });
+		await expect(page.locator('.remarkable-statut:visible svg')).toHaveCount(1);
+		await page.locator('.remarkable-statut:visible').click();
+		await expect(page.locator('.remarkable-bulle')).toContainText('Branche la tablette en USB-C.');
+		await expect(page.locator('.remarkable-bulle')).toContainText('Active l’interface web USB');
+		await page.screenshot({ path: path.join(os.tmpdir(), 'remarkable-debranchee.png') });
 	} finally {
 		await electronApp.close();
 		tablette.arreter();

@@ -1,4 +1,4 @@
-import { ItemView, setIcon, type WorkspaceLeaf } from 'fragment';
+import { ItemView, Modal, setIcon, type App, type WorkspaceLeaf } from 'fragment';
 import type RemarkablePlugin from './main';
 
 export const VUE_REMARKABLE = 'remarkable-view';
@@ -39,6 +39,14 @@ export class VueRemarkable extends ItemView {
 		const racine = this.contentEl;
 		racine.replaceChildren();
 
+		// Pas encore accepté, ou refusé : rien n'est téléchargé, et on peut changer d'avis.
+		if (this.plugin.autorise !== true) {
+			el(racine, 'p', 'remarkable-refus', 'Tu n’as pas accepté que Fragment télécharge les dossiers et documents de la reMarkable.');
+			const b = el(racine, 'button', 'mod-cta', 'Autoriser');
+			b.addEventListener('click', () => void this.plugin.autoriser(true));
+			return;
+		}
+
 		const etat = synchro.connectee === null ? 'recherche de la tablette…' : synchro.connectee ? 'connectée' : 'injoignable';
 		el(racine, 'div', 'remarkable-etat', etat).dataset.connectee = String(synchro.connectee);
 
@@ -71,5 +79,25 @@ export class VueRemarkable extends ItemView {
 		b.setAttribute('aria-label', titre);
 		setIcon(b, 'download');
 		b.addEventListener('click', () => void this.plugin.recuperer(ids));
+	}
+}
+
+/** La demande, au premier clic sur l'icône de la tablette. */
+export class DemandeAutorisation extends Modal {
+	constructor(app: App, private readonly repondre: (oui: boolean) => void) {
+		super(app);
+		this.setTitle('reMarkable');
+	}
+
+	onOpen(): void {
+		el(this.contentEl, 'p', '', 'Autoriser Fragment à télécharger les dossiers et documents de la reMarkable, en PDF, dans reMarkable/ ?');
+		const boutons = el(this.contentEl, 'div', 'remarkable-boutons');
+		for (const [texte, oui] of [['Refuser', false], ['Autoriser', true]] as const) {
+			const b = el(boutons, 'button', oui ? 'mod-cta' : '', texte);
+			b.addEventListener('click', () => {
+				this.close();
+				this.repondre(oui);
+			});
+		}
 	}
 }
