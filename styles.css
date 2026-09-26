@@ -119,3 +119,40 @@
 	margin-top: 6px;
 	padding-left: 18px;
 }
+
+/* La demande sort de l'icône du ruban (src/eclosion.ts) et s'ouvre à côté :
+   pas de voile, pas de croix (Échap ou un clic à côté ferment). Sur le modèle
+   du QR code du scan, dans le plugin agent. */
+
+.remarkable-demande {
+	display: block;
+}
+
+.remarkable-demande .modal-bg {
+	background: transparent;
+}
+
+.remarkable-demande .modal {
+	position: absolute;
+	width: 320px;
+	padding: 16px 18px;
+	border-radius: 12px;
+}
+
+.remarkable-demande .modal-close-button {
+	display: none;
+}
+
+.remarkable-demande .modal-content p {
+	margin: 0;
+}
+
+.remarkable-eclosion {
+	position: absolute;
+	pointer-events: none;
+}
+
+.remarkable-eclosion-forme {
+	position: absolute;
+	background: var(--tab-outline-color);
+}

@@ -33,8 +33,8 @@ export default class RemarkablePlugin extends Plugin {
 
 		this.registerView(VUE_REMARKABLE, (leaf) => new VueRemarkable(leaf, this));
 		// Premier clic : la demande d'autorisation. Ensuite, la vue.
-		this.addRibbonIcon('tablet', 'reMarkable', () => {
-			if (this.autorise === undefined) new DemandeAutorisation(this.app, (oui) => void this.autoriser(oui)).open();
+		const icone = this.addRibbonIcon('tablet', 'reMarkable', () => {
+			if (this.autorise === undefined) new DemandeAutorisation(this.app, icone, (oui) => void this.autoriser(oui)).open();
 			else void this.ouvrirVue();
 		});
 		this.registerEvent(this.app.workspace.on('layout-change', () => majEntetes(this)));

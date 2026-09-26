@@ -156,8 +156,29 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		const icone = page.locator('.side-dock-ribbon-action[aria-label="reMarkable"]');
 		await new Promise((r) => setTimeout(r, 3000));
 		expect(existsSync(v('reMarkable'))).toBe(false);
+		// Elle sort de l'icône (la goutte, puis la carte), s'ouvre à côté, sans voile.
 		await icone.click();
+		await expect(page.locator('.remarkable-eclosion')).toHaveCount(1);
 		await expect(page.locator('.modal')).toContainText('Autoriser Fragment à télécharger');
+		await expect(page.locator('.remarkable-eclosion')).toHaveCount(0, { timeout: 3000 });
+		const boites = await page.evaluate(() => {
+			const r = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+			return {
+				icone: r('.side-dock-ribbon-action[aria-label="reMarkable"]'),
+				carte: r('.remarkable-demande .modal'),
+				voile: getComputedStyle(document.querySelector('.remarkable-demande .modal-bg')!).backgroundColor,
+				opacite: getComputedStyle(document.querySelector('.remarkable-demande .modal')!).opacity,
+			};
+		});
+		expect(boites.carte.left).toBeGreaterThanOrEqual(boites.icone.right);
+		expect(Math.abs(boites.carte.top - boites.icone.top)).toBeLessThan(4);
+		expect(boites.voile).toBe('rgba(0, 0, 0, 0)');
+		expect(boites.opacite).toBe('1');
+		// Échap : fermée sans réponse, la question revient au clic suivant.
+		await page.keyboard.press('Escape');
+		await expect(page.locator('.modal')).toHaveCount(0);
+		expect(JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).autorise).toBeUndefined();
+		await icone.click();
 		await page.locator('.modal button', { hasText: 'Refuser' }).click();
 		await expect(page.locator('.remarkable-refus')).toContainText('Tu n’as pas accepté');
 		await attendre(async () => JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).autorise === false, 'refus retenu');

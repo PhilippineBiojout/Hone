@@ -1,4 +1,5 @@
 import { ItemView, Modal, setIcon, type App, type WorkspaceLeaf } from 'fragment';
+import { eclore, type Eclosion } from './eclosion';
 import type RemarkablePlugin from './main';
 
 export const VUE_REMARKABLE = 'remarkable-view';
@@ -82,11 +83,18 @@ export class VueRemarkable extends ItemView {
 	}
 }
 
-/** La demande, au premier clic sur l'icône de la tablette. */
+/**
+ * La demande, au premier clic sur l'icône de la tablette. Elle en sort comme
+ * une carte de l'agent (le rond de l'icône devient la carte), et s'ouvre à côté,
+ * sans voile. Fermée sans réponse (Échap, clic à côté), elle reviendra au prochain clic.
+ */
 export class DemandeAutorisation extends Modal {
-	constructor(app: App, private readonly repondre: (oui: boolean) => void) {
+	private eclosion: Eclosion | null = null;
+
+	constructor(app: App, private readonly icone: HTMLElement, private readonly repondre: (oui: boolean) => void) {
 		super(app);
 		this.setTitle('reMarkable');
+		this.containerEl.classList.add('remarkable-demande');
 	}
 
 	onOpen(): void {
@@ -99,5 +107,16 @@ export class DemandeAutorisation extends Modal {
 				this.repondre(oui);
 			});
 		}
+
+		// À 8 px à droite de l'icône, alignée sur son haut, sans sortir de l'écran.
+		const r = this.icone.getBoundingClientRect();
+		const carte = this.modalEl;
+		carte.style.left = `${r.right + 8}px`;
+		carte.style.top = `${Math.max(8, Math.min(r.top, window.innerHeight - carte.offsetHeight - 8))}px`;
+		this.eclosion = eclore(this.icone, carte);
+	}
+
+	onClose(): void {
+		this.eclosion?.annuler();
 	}
 }
