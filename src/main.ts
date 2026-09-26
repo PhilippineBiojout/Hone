@@ -7,6 +7,7 @@ import { Journal } from './memoire/journal';
 import { Memoire } from './memoire/outils-memoire';
 import { lirePreferences, Preferences } from './memoire/preferences';
 import { accesVault } from './cerveau/vault';
+import { brancherCodex } from './codex/codex';
 import { poserLeVerre } from './decor/verre';
 import { fusionner, ModalCle, type Reglages } from './reglages/reglages';
 import { brancherScan } from './scan/scan';
@@ -70,6 +71,7 @@ export default class HonePlugin extends Plugin {
         poserLeVerre(this);
         brancherScan(this);
         await brancherRemarkable(this);
+        brancherCodex(this, () => this.reglages.codex);
 
         if (!this.reglages.cle) {
             new Notice('Hone : ajoute ta clé OpenAI via la commande « Hone : clé API… ».', 8000);
