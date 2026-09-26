@@ -1,6 +1,7 @@
 import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
 import { resorber } from './ActionAgent';
 import { arc, boutonIcone } from './bouton';
+import { proteger } from './clavier';
 import { ressort } from './eclosion';
 import type { Repere } from './repere';
 import { Onde, auHasard, niveaux } from './onde';
@@ -103,6 +104,9 @@ export class VoixAgent extends Component {
     /** Fermée par sa croix : seul ce geste demande un bilan. */
     private parCroix = false;
 
+    /** Retire la portée clavier (clavier.ts), au démontage. */
+    private readonly lacherClavier: () => void;
+
     constructor(
         app: App,
         repere: Repere,
@@ -120,12 +124,12 @@ export class VoixAgent extends Component {
         // Le micro du rond : le premier enfant, qui fait le petit pop de resorber().
         const microEl = this.el.appendChild(document.createElement('span'));
         microEl.classList.add('agent-voix-micro');
-        setIcon(app, microEl, 'mic');
+        setIcon(microEl, 'mic');
 
         this.contenuEl = this.el.appendChild(document.createElement('div'));
         this.contenuEl.classList.add('agent-voix-contenu');
 
-        boutonIcone(app, this.contenuEl, 'x', 'Fermer', () => {
+        boutonIcone(this.contenuEl, 'x', 'Fermer', () => {
             this.parCroix = true;
             this.fermer();
         }, 'agent-voix-fermer');
@@ -147,7 +151,7 @@ export class VoixAgent extends Component {
         arc(this.stopEl);
         this.stopEl.addEventListener('click', () => this.surStop());
 
-        this.el.addEventListener('keydown', (e) => e.stopPropagation());
+        this.lacherClavier = proteger(app, this.el);
         this.poserEtat('rond');
     }
 
@@ -188,6 +192,7 @@ export class VoixAgent extends Component {
     }
 
     onunload(): void {
+        this.lacherClavier();
         const historique = this.historique;
         const boite = this.el.getBoundingClientRect();
         const parCroix = this.parCroix;

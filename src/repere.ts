@@ -1,4 +1,4 @@
-import type { Editor, OverlayHost, WidgetAnchor, WidgetHandle, WidgetLayer } from 'fragment';
+import { WidgetLayer, type OverlayHost, type TextSurface, type WidgetAnchor, type WidgetHandle } from 'fragment';
 import type { Stroke } from './annotation';
 import { aCote, type Boite } from './placement';
 
@@ -21,27 +21,25 @@ export class Repere {
 
     readonly widgets: WidgetLayer;
 
-    private readonly editor: Editor;
+    private readonly editor: TextSurface;
     private readonly overlays: OverlayHost;
     private readonly paneEl: HTMLElement;
     private readonly trait: () => Stroke | null;
     private readonly barreAnnotation: () => DOMRect | null;
 
     constructor(
-        editor: Editor,
+        editor: TextSurface,
         overlays: OverlayHost,
         paneEl: HTMLElement,
         trait: () => Stroke | null,
         barreAnnotation: () => DOMRect | null,
-        /** La classe du cœur (pont.ts, tant qu'elle n'est pas exportée). */
-        Classe: new (editor: Editor, overlays: OverlayHost) => WidgetLayer,
     ) {
         this.editor = editor;
         this.overlays = overlays;
         this.paneEl = paneEl;
         this.trait = trait;
         this.barreAnnotation = barreAnnotation;
-        this.widgets = new Classe(editor, overlays);
+        this.widgets = new WidgetLayer(editor, overlays);
     }
 
     detruire(): void {

@@ -1,5 +1,6 @@
 import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
 import { arc, boutonIcone } from './bouton';
+import { proteger } from './clavier';
 import { eclore, ressort, type Eclosion } from './eclosion';
 import { Fenetre, type Cadre } from './fenetre';
 import type { Repere } from './repere';
@@ -73,9 +74,11 @@ export class ActionAgent extends Component {
     /** Ce que montre la carte, lu par le calque à la fermeture. */
     private montre: Resultat | null = null;
 
-    private readonly app: App;
     private readonly repere: Repere;
     private readonly onFermer: () => void;
+
+    /** Retire la portée clavier (clavier.ts), au démontage. */
+    private readonly lacherClavier: () => void;
 
     constructor(
         app: App,
@@ -85,7 +88,6 @@ export class ActionAgent extends Component {
         onDiscuter: () => void,
     ) {
         super();
-        this.app = app;
         this.repere = repere;
         this.onFermer = onFermer;
 
@@ -112,9 +114,9 @@ export class ActionAgent extends Component {
         this.sourceEl.classList.add('agent-action-source');
         this.sourceEl.title = 'Réponse tirée du web';
         this.sourceEl.setAttribute('aria-label', 'Réponse tirée du web');
-        setIcon(app, this.sourceEl, 'globe');
+        setIcon(this.sourceEl, 'globe');
         this.sourceEl.hidden = true;
-        boutonIcone(app, tete, 'x', 'Fermer', () => this.fermer(), 'agent-bulle-fermer');
+        boutonIcone(tete, 'x', 'Fermer', () => this.fermer(), 'agent-bulle-fermer');
 
         this.corpsEl = this.carteEl.appendChild(document.createElement('div'));
         this.corpsEl.classList.add('agent-action-corps');
@@ -122,12 +124,12 @@ export class ActionAgent extends Component {
 
         // La tête de chat sur toute réponse arrivée, la poubelle seulement sur
         // une réponse rouverte depuis la marge.
-        this.pied = new PiedSupprimer(app, onSupprimer, onDiscuter);
+        this.pied = new PiedSupprimer(onSupprimer, onDiscuter);
         this.carteEl.appendChild(this.pied.el);
 
         this.fenetre = new Fenetre(this.carteEl, tete, repere);
 
-        this.carteEl.addEventListener('keydown', (e) => e.stopPropagation());
+        this.lacherClavier = proteger(app, this.carteEl, () => this.pied.echap());
     }
 
     estOuverte(): boolean {
@@ -240,8 +242,8 @@ export class ActionAgent extends Component {
 
     /** L'icône et le nom (de l'outil, ou du bilan) sur le rond et la carte, le corps vidé. */
     private preparer({ icone, libelle }: { icone: string; libelle: string }): void {
-        setIcon(this.app, this.iconeCercleEl, icone);
-        setIcon(this.app, this.iconeCarteEl, icone);
+        setIcon(this.iconeCercleEl, icone);
+        setIcon(this.iconeCarteEl, icone);
         this.titreEl.textContent = libelle;
         this.carteEl.setAttribute('aria-label', libelle);
         this.corpsEl.textContent = '';
@@ -277,6 +279,7 @@ export class ActionAgent extends Component {
     }
 
     onunload(): void {
+        this.lacherClavier();
         this.cadreFerme = this.fenetre.estMontee() ? this.fenetre.cadre() : null;
         this.retirerRond();
         this.fenetre.retirer();

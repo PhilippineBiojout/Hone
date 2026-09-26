@@ -1,4 +1,4 @@
-import { setIcon, type App } from 'fragment';
+import { setIcon } from 'fragment';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Les petits morceaux de DOM que la bulle, la carte et la pilule ont en
@@ -12,7 +12,6 @@ import { setIcon, type App } from 'fragment';
  * formulaire, dont le `submit` fait le travail.
  */
 export function boutonIcone(
-    app: App,
     parent: HTMLElement,
     icone: string,
     libelle: string,
@@ -24,7 +23,7 @@ export function boutonIcone(
     el.classList.add(...classes);
     el.setAttribute('aria-label', libelle);
     el.title = libelle;
-    setIcon(app, el, icone);
+    setIcon(el, icone);
     if (onClick) el.addEventListener('click', onClick);
     return el;
 }

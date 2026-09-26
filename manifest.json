@@ -2,5 +2,7 @@
     "id": "agent",
     "name": "Agent",
     "version": "0.1.0",
-    "description": "Un trait d'annotation fait apparaître une barre qui ouvre le chat et les outils de l'agent."
+    "minAppVersion": "0.1.0",
+    "description": "Un trait d'annotation fait apparaître une barre qui ouvre le chat et les outils de l'agent.",
+    "author": "Philippine Biojout"
 }

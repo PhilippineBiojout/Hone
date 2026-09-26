@@ -1,10 +1,10 @@
-import type { Editor, FileView, ItemView, LayerContext, Marker, Rect } from 'fragment';
+import type { TextSurface, FileView, ItemView, LayerContext, Marker, Rect } from 'fragment';
 import { ActionAgent } from './ActionAgent';
 import { brancherAnnotation, type Stroke } from './annotation';
 import { BarreAgent } from './BarreAgent';
 import { BulleAgent } from './BulleAgent';
 import { brancherDeclencheurs, SELECTION } from './declencheur';
-import { classeWidgetLayer, hasText } from './pont';
+import { hasText } from './pont';
 import { Repere } from './repere';
 import type { ContexteQuestion } from './repondre';
 import { CarnetTraces, texteEntre, type Trace } from './traces';
@@ -28,12 +28,7 @@ export function createAgentLayer(ctx: LayerContext): () => void {
     const surface = ctx.editor;
     // Pas de texte adressable (PDF scanné, image) : rien à citer.
     if (!surface || !hasText(surface)) return () => {};
-    const editor: Editor = surface;
-    const Classe = classeWidgetLayer(ctx.app);
-    if (!Classe) {
-        console.error("[agent] désactivé sur cette vue : WidgetLayer introuvable (ni exporté par le cœur, ni dans le calque « Widgets de document »).");
-        return () => {};
-    }
+    const editor: TextSurface = surface;
 
     const paneEl = (ctx.view as ItemView).contentEl;
     const chemin = (): string => (ctx.view as FileView).file?.path ?? '';
@@ -44,7 +39,7 @@ export function createAgentLayer(ctx: LayerContext): () => void {
     let trait: Stroke | null = null;
 
     const annotation = brancherAnnotation(ctx.app, paneEl, chemin);
-    const repere = new Repere(editor, ctx.overlays, paneEl, () => trait, () => annotation.barre(), Classe);
+    const repere = new Repere(editor, ctx.overlays, paneEl, () => trait, () => annotation.barre());
 
     // ── Les pièces ─────────────────────────────────────────────────────────
 
@@ -238,7 +233,7 @@ export function createAgentLayer(ctx: LayerContext): () => void {
         editor.requestUpdate();
     };
 
-    const carnet = new CarnetTraces(ctx.app, editor, repere, chemin, rouvrir);
+    const carnet = new CarnetTraces(editor, repere, chemin, rouvrir);
     // La marge change de largeur avec le pane : l'icône passe de l'ancre de
     // marge à l'ancre document, ou l'inverse.
     const offGeometrie = ctx.overlays.onGeometryChange(() => carnet.placer());

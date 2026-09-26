@@ -1,5 +1,6 @@
 import { Component, type App } from 'fragment';
 import { boutonIcone } from './bouton';
+import { proteger } from './clavier';
 import { eclore } from './eclosion';
 import { Fenetre, type Cadre } from './fenetre';
 import type { Repere } from './repere';
@@ -74,6 +75,9 @@ export class BulleAgent extends Component {
      */
     private readonly onFermer: (messages: Message[], contexte: ContexteQuestion | null, cadre: Cadre | null, origine: Outil | null, bilan: string | null) => void;
 
+    /** Retire la portée clavier (clavier.ts), au démontage. */
+    private readonly lacherClavier: () => void;
+
     constructor(
         app: App,
         repere: Repere,
@@ -100,7 +104,7 @@ export class BulleAgent extends Component {
         this.extraitEl = tete.appendChild(document.createElement('div'));
         this.extraitEl.classList.add('agent-bulle-extrait');
 
-        boutonIcone(app, tete, 'x', 'Fermer', () => this.fermer(), 'agent-bulle-fermer');
+        boutonIcone(tete, 'x', 'Fermer', () => this.fermer(), 'agent-bulle-fermer');
 
         // ── Le fil : vide tant qu'on n'a rien demandé, masqué en CSS ──
         this.filEl = this.dom.appendChild(document.createElement('div'));
@@ -131,13 +135,13 @@ export class BulleAgent extends Component {
             }
         });
 
-        this.microEl = boutonIcone(app, saisie, 'mic', 'Reprendre la discussion à voix haute', () => onMicro(), 'agent-bulle-micro');
+        this.microEl = boutonIcone(saisie, 'mic', 'Reprendre la discussion à voix haute', () => onMicro(), 'agent-bulle-micro');
         this.microEl.hidden = true;
 
-        this.envoyerEl = boutonIcone(app, saisie, 'arrow-up', 'Envoyer', null, 'agent-bulle-envoyer');
+        this.envoyerEl = boutonIcone(saisie, 'arrow-up', 'Envoyer', null, 'agent-bulle-envoyer');
 
         // La poubelle, seulement sur une conversation rouverte depuis la marge.
-        this.pied = new PiedSupprimer(app, onSupprimer);
+        this.pied = new PiedSupprimer(onSupprimer);
         this.dom.appendChild(this.pied.el);
 
         // Attrapée par l'en-tête, elle se déplace ; par un bord, elle
@@ -147,7 +151,7 @@ export class BulleAgent extends Component {
 
         // Ce qu'on tape dans la bulle ne doit pas atteindre les raccourcis de
         // l'app (Cmd+Z annulerait un trait d'annotation au lieu d'un mot).
-        this.dom.addEventListener('keydown', (e) => e.stopPropagation());
+        this.lacherClavier = proteger(app, this.dom, () => this.pied.echap());
     }
 
     // ── L'état, vu de l'extérieur ─────────────────────────────────────────
@@ -266,6 +270,7 @@ export class BulleAgent extends Component {
     }
 
     onunload(): void {
+        this.lacherClavier();
         const messages = this.conversation();
         const contexte = this.contexte;
         const cadre = this.fenetre.cadre();

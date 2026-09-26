@@ -1,4 +1,3 @@
-import type { App } from 'fragment';
 import { boutonIcone } from './bouton';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -31,12 +30,12 @@ export class PiedSupprimer {
     private poubelle = false;
     private discuter = false;
 
-    constructor(app: App, onSupprimer: () => void, onDiscuter?: () => void) {
+    constructor(onSupprimer: () => void, onDiscuter?: () => void) {
         this.el = document.createElement('div');
         this.el.classList.add('agent-pied');
         this.el.hidden = true;
 
-        this.poubelleEl = boutonIcone(app, this.el, 'trash-2', "Supprimer l'annotation",
+        this.poubelleEl = boutonIcone(this.el, 'trash-2', "Supprimer l'annotation",
             () => this.confirmer(true), 'agent-pied-bouton', 'agent-pied-poubelle');
 
         this.confirmationEl = this.el.appendChild(document.createElement('div'));
@@ -62,18 +61,23 @@ export class PiedSupprimer {
         supprimerEl.addEventListener('click', () => onSupprimer());
 
         if (onDiscuter) {
-            this.discuterEl = boutonIcone(app, this.el, 'cat', 'Discuter de cette réponse',
+            this.discuterEl = boutonIcone(this.el, 'cat', 'Discuter de cette réponse',
                 () => onDiscuter(), 'agent-pied-bouton', 'agent-pied-discuter');
         }
 
-        // Échap renonce, comme « Annuler ». La carte arrête déjà les touches.
-        this.confirmationEl.addEventListener('keydown', (e) => {
-            if (e.key !== 'Escape') return;
-            this.confirmer(false);
-            this.poubelleEl.focus();
-        });
-
         this.confirmer(false);
+    }
+
+    /**
+     * Échap, relayé par la portée clavier de la carte ou du chat (clavier.ts) :
+     * pendant la confirmation, il renonce comme « Annuler ». Rend `true` s'il a
+     * servi.
+     */
+    echap(): boolean {
+        if (this.confirmationEl.hidden) return false;
+        this.confirmer(false);
+        this.poubelleEl.focus();
+        return true;
     }
 
     /** Montre ou masque la poubelle (réponse rouverte depuis la marge). */

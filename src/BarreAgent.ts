@@ -130,9 +130,6 @@ export class BarreAgent extends Component {
         this.hote.addEventListener('dblclick', (e) => {
             if (this.toolbar.handleEl.contains(e.target as Node)) e.stopPropagation();
         }, true);
-
-        // Comme dans la bulle : les touches ne partent pas vers les raccourcis de l'app.
-        this.toolbar.dom.addEventListener('keydown', (e) => e.stopPropagation());
     }
 
     estOuverte(): boolean {

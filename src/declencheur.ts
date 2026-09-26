@@ -1,4 +1,4 @@
-import type { Editor } from 'fragment';
+import type { TextSurface } from 'fragment';
 import type { Annotation, Stroke } from './annotation';
 import type { Repere } from './repere';
 import type { ContexteQuestion } from './repondre';
@@ -25,7 +25,7 @@ import { plageDuTrait, type Mesure } from './zoneDuTrait';
 export const SELECTION = 'selection-';
 
 export function brancherDeclencheurs(
-    editor: Editor,
+    editor: TextSurface,
     repere: Repere,
     annotation: Annotation,
     chemin: () => string,

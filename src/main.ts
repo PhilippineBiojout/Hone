@@ -1,4 +1,5 @@
 import { Plugin } from 'fragment';
+import * as path from 'path';
 import { createAgentLayer } from './agentLayer';
 import { ouvrirLien } from './lienAgent';
 
@@ -16,7 +17,6 @@ export default class AgentPlugin extends Plugin {
         // Le processus de l'agent (lienAgent.ts) : lancé au premier appel, arrêté au déchargement.
         const racine = racineDuVault();
         if (racine) {
-            const path = (window as unknown as { require(id: string): typeof import('node:path') }).require('path');
             this.register(ouvrirLien(racine, path.join(racine, '.fragment', 'plugins', this.manifest.id)));
         }
         this.registerLayer({

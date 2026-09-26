@@ -1,4 +1,4 @@
-import { setIcon, type App, type Editor, type WidgetHandle } from 'fragment';
+import { setIcon, type TextSurface, type WidgetHandle } from 'fragment';
 import { OUTILS } from './ActionAgent';
 import type { Stroke } from './annotation';
 import type { Cadre } from './fenetre';
@@ -82,20 +82,17 @@ export class CarnetTraces {
      */
     private ouverte: number | null = null;
 
-    private readonly app: App;
-    private readonly editor: Editor;
+    private readonly editor: TextSurface;
     private readonly repere: Repere;
     private readonly chemin: () => string;
     private readonly onOuvrir: (trace: Trace, depuis: HTMLElement) => void;
 
     constructor(
-        app: App,
-        editor: Editor,
+        editor: TextSurface,
         repere: Repere,
         chemin: () => string,
         onOuvrir: (trace: Trace, depuis: HTMLElement) => void,
     ) {
-        this.app = app;
         this.editor = editor;
         this.repere = repere;
         this.chemin = chemin;
@@ -241,7 +238,7 @@ export class CarnetTraces {
         const extrait = t.zone.texte.replace(/\s+/g, ' ').trim();
         el.setAttribute('aria-label', `${libelle} : ${extrait}`);
         el.title = `${libelle} : « ${extrait.length > 60 ? `${extrait.slice(0, 60)}…` : extrait} »`;
-        setIcon(this.app, el, icone);
+        setIcon(el, icone);
         el.addEventListener('click', () => {
             // D'abord onOuvrir : il referme ce qui était ouvert, qui range sa
             // propre trace (fermer()) en lisant `ouverte`. Ce n'est qu'ensuite
@@ -271,7 +268,7 @@ export class CarnetTraces {
 }
 
 /** Le texte d'une plage, reconstruit ligne à ligne : la façade n'a pas de getRange. */
-export function texteEntre(editor: Editor, from: number, to: number): string {
+export function texteEntre(editor: TextSurface, from: number, to: number): string {
     const debut = editor.offsetToPos(from);
     const fin = editor.offsetToPos(to);
     if (debut.line === fin.line) return editor.getLine(debut.line).slice(debut.ch, fin.ch);

@@ -1,4 +1,6 @@
-import type { ChildProcess } from 'node:child_process';
+import { fork, type ChildProcess } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { Demande, Requete, Retour, Sortie } from './protocole';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -7,17 +9,15 @@ import type { Demande, Requete, Retour, Sortie } from './protocole';
 //  et rend à chacune sa réponse. La clé n'arrive jamais ici : ce fichier ne
 //  lit pas le .env, il ne voit passer que du texte.
 //
-//  ★ COMMENT on lance : `child_process.fork`, par le Node de la page
-//    (`window.require` : le chargeur de plugins ne sert que 'fragment'). Le
-//    binaire est celui d'Electron lui-même, en mode Node
-//    (ELECTRON_RUN_AS_NODE) : aucun Node à installer à côté.
+//  ★ COMMENT on lance : `child_process.fork`, par le Node de la page (le
+//    chargeur de plugins passe tout nom autre que `fragment` au require de
+//    Node, et esbuild les laisse external). Le binaire est celui d'Electron
+//    lui-même, en mode Node (ELECTRON_RUN_AS_NODE) : aucun Node à installer
+//    à côté.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Au-delà, la demande est abandonnée : un réseau qui pend ne laisse pas un rond tourner sans fin. */
 const DELAI_MAX = 90_000;
-
-type NodeRequire = (id: string) => unknown;
-const nodeRequire = (): NodeRequire => (window as unknown as { require: NodeRequire }).require;
 
 interface EnAttente {
     resoudre(sortie: Sortie): void;
@@ -48,8 +48,6 @@ export class LienAgent {
      * (la clé) n'est lu que par le processus de l'agent.
      */
     configure(): boolean {
-        const fs = nodeRequire()('fs') as typeof import('node:fs');
-        const path = nodeRequire()('path') as typeof import('node:path');
         return fs.existsSync(path.join(this.dossierPlugin, '.env'));
     }
 
@@ -76,8 +74,6 @@ export class LienAgent {
 
     private lancer(): ChildProcess {
         if (this.enfant && this.enfant.connected) return this.enfant;
-        const { fork } = nodeRequire()('child_process') as typeof import('node:child_process');
-        const path = nodeRequire()('path') as typeof import('node:path');
         const enfant = fork(path.join(this.dossierPlugin, 'agent-serveur.js'), [
             `--vault=${this.racineVault}`,
             `--plugin=${this.dossierPlugin}`,
