@@ -41,7 +41,7 @@ describe('Registre', () => {
 		const r = registre();
 		r.supprimer('reMarkable/Cours/A.pdf', 1000);
 		r.supprimer('reMarkable/C.pdf', 1000);
-		// même taille : deux candidats, l'empreinte départage (dans synchro)
+		// même taille : deux candidats, l'empreinte départage (dans deplacements)
 		expect(r.candidats(100, 500).sort()).toEqual(['a', 'c']);
 		expect(r.candidats(100, 2000)).toEqual([]);
 		r.rattacher('a', 'Ailleurs/A.pdf');

@@ -1,13 +1,13 @@
-import { createHash } from 'crypto';
 import { FileView, type App, type TFile } from 'fragment';
-import type { Entree, Registre } from './registre';
+import { empreinte, type Entree, type Registre } from './registre';
 import type { ElementTablette, Tablette } from './tablette';
 
 /** Le dossier du vault où arrivent les carnets la première fois. */
 const DOSSIER = 'reMarkable';
 
-export function empreinte(octets: ArrayBuffer): string {
-	return createHash('sha1').update(new Uint8Array(octets)).digest('hex');
+/** Dans la console : de quoi mesurer le rythme de la tablette. */
+export function log(msg: string): void {
+	console.log(`[remarkable] ${msg}`);
 }
 
 /**
@@ -26,15 +26,10 @@ export class Synchro {
 		private readonly changer: () => Promise<void>,
 	) {}
 
-	/** Dans la console : de quoi mesurer le rythme de la tablette. */
-	log(msg: string): void {
-		console.log(`[remarkable] ${msg}`);
-	}
-
 	private async etreConnectee(valeur: boolean): Promise<void> {
 		if (this.connectee === valeur) return;
 		this.connectee = valeur;
-		this.log(valeur ? 'tablette connectée' : 'tablette injoignable (branchée ? interface web USB activée ?)');
+		log(valeur ? 'tablette connectée' : 'tablette injoignable (branchée ? interface web USB activée ?)');
 		await this.changer();
 	}
 
@@ -61,7 +56,7 @@ export class Synchro {
 		if (e.ignore || e.modifie === el.modifie) return;
 
 		const avant = e.modifie;
-		this.log(`${el.chemin} : ${avant ? 'modifié' : 'nouveau'}, téléchargement…`);
+		log(`${el.chemin} : ${avant ? 'modifié' : 'nouveau'}, téléchargement…`);
 		// On retient la version tout de suite : un export qui échoue n'est
 		// retenté qu'à la prochaine modification du carnet. Le réessayer à
 		// chaque tour bloquerait toute la boucle (un carnet dont l'export ne
@@ -72,16 +67,16 @@ export class Synchro {
 		try {
 			octets = await this.tablette.telecharger(el.id, el.carnet);
 		} catch (err) {
-			this.log(`${el.chemin} : export impossible (${(err as Error).message}), réessai à sa prochaine modification`);
+			log(`${el.chemin} : export impossible (${(err as Error).message}), réessai à sa prochaine modification`);
 			await this.changer();
 			return;
 		}
 		try {
 			await this.ecrire(e, el, octets);
-			this.log(`${e.chemin} : ${(octets.byteLength / 1024).toFixed(0)} Ko en ${Date.now() - t0} ms`);
+			log(`${e.chemin} : ${(octets.byteLength / 1024).toFixed(0)} Ko en ${Date.now() - t0} ms`);
 		} catch (err) {
 			e.modifie = avant;
-			this.log(`${el.chemin} : écriture impossible dans le vault (${(err as Error).message})`);
+			log(`${el.chemin} : écriture impossible dans le vault (${(err as Error).message})`);
 		}
 		await this.changer();
 	}
@@ -144,23 +139,5 @@ export class Synchro {
 		let chemin = `${base}.pdf`;
 		for (let n = 2; this.app.vault.getAbstractFileByPath(chemin); n++) chemin = `${base} (${n}).pdf`;
 		return chemin;
-	}
-
-	/**
-	 * Reconnaît, parmi ces fichiers, le PDF d'un carnet supprimé après `depuis` :
-	 * même taille, puis même empreinte. C'est ainsi qu'un déplacement fait hors
-	 * de l'app (delete puis create) garde son suivi.
-	 */
-	async retrouver(fichiers: TFile[], depuis: number): Promise<void> {
-		for (const f of fichiers) {
-			if (f.extension !== 'pdf' || this.registre.suivi(f.path)) continue;
-			const ids = this.registre.candidats(f.stat.size, depuis);
-			if (ids.length === 0) continue;
-			const h = empreinte(await this.app.vault.readBinary(f));
-			const id = ids.find((i) => this.registre.carnets[i].empreinte === h);
-			if (!id) continue;
-			this.registre.rattacher(id, f.path);
-			this.log(`${f.path} : retrouvé, toujours suivi`);
-		}
 	}
 }

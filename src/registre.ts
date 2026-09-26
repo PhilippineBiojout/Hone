@@ -6,6 +6,8 @@
  * suivi quand on le range ailleurs dans le vault. Logique pure, testée seule.
  */
 
+import { createHash } from 'crypto';
+
 export interface Entree {
 	/** Chemin du PDF dans le vault, null quand il n'y est pas (ou plus). */
 	chemin: string | null;
@@ -20,12 +22,9 @@ export interface Entree {
 	supprimeLe?: number;
 }
 
-/** Délai dans lequel un delete et un create forment un déplacement. */
-export const FENETRE_DEPLACEMENT_MS = 10_000;
-
-/** `chemin` est `dossier` lui-même ou quelque chose dedans. */
-function sous(chemin: string, dossier: string): boolean {
-	return chemin === dossier || chemin.startsWith(dossier + '/');
+/** Le sha1 d'un PDF : ce qui le reconnaît après un déplacement hors de l'app. */
+export function empreinte(octets: ArrayBuffer): string {
+	return createHash('sha1').update(new Uint8Array(octets)).digest('hex');
 }
 
 export class Registre {
@@ -46,26 +45,21 @@ export class Registre {
 	 * n'émet qu'un événement : tous les chemins dessous suivent ici.
 	 */
 	renommer(ancien: string, nouveau: string): boolean {
-		let change = false;
-		for (const e of Object.values(this.carnets)) {
-			if (e.chemin !== null && sous(e.chemin, ancien)) {
-				e.chemin = nouveau + e.chemin.slice(ancien.length);
-				change = true;
-			}
-		}
-		return change;
+		const entrees = this.sous(ancien);
+		for (const e of entrees) e.chemin = nouveau + e.chemin!.slice(ancien.length);
+		return entrees.length > 0;
 	}
 
 	/** Un fichier, ou tout un dossier, retiré du vault : ses carnets ne sont plus suivis. */
 	supprimer(chemin: string, maintenant: number): boolean {
-		let change = false;
-		for (const e of Object.values(this.carnets)) {
-			if (e.chemin !== null && sous(e.chemin, chemin)) {
-				Object.assign(e, { chemin: null, ignore: true, supprimeLe: maintenant });
-				change = true;
-			}
-		}
-		return change;
+		const entrees = this.sous(chemin);
+		for (const e of entrees) Object.assign(e, { chemin: null, ignore: true, supprimeLe: maintenant });
+		return entrees.length > 0;
+	}
+
+	/** Les carnets dont le PDF est `chemin` lui-même, ou dans le dossier `chemin`. */
+	private sous(chemin: string): Entree[] {
+		return Object.values(this.carnets).filter((e) => e.chemin === chemin || e.chemin?.startsWith(chemin + '/'));
 	}
 
 	/** Les carnets supprimés après `depuis` dont le PDF avait cette taille. */

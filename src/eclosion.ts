@@ -5,19 +5,13 @@
 // Les gestes de l'agent, repris de Skiper sans React ni Motion : l'API Web
 // Animations et un ressort calculé ici.
 
+import { creer } from './dom';
+
 export interface Eclosion {
 	/** Résolue quand tout est posé et nettoyé. */
 	fini: Promise<void>;
 	/** Arrête tout et laisse l'élément dans son état final. */
 	annuler(): void;
-}
-
-/** Un élément `tag` portant `classes`, ajouté à `parent` s'il y en a un. */
-export function creer<K extends keyof HTMLElementTagNameMap>(parent: Element | null, tag: K, ...classes: string[]): HTMLElementTagNameMap[K] {
-	const el = document.createElement(tag);
-	el.classList.add(...classes);
-	parent?.appendChild(el);
-	return el;
 }
 
 let compteur = 0;

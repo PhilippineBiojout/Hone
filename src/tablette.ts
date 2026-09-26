@@ -7,7 +7,6 @@ export const HOTE_PAR_DEFAUT = 'http://10.11.99.1';
 /** Un carnet ou un dossier de la tablette. */
 export interface ElementTablette {
 	id: string;
-	nom: string;
 	/** « Cours/Maths/Algèbre », sans extension. */
 	chemin: string;
 	dossier: boolean;
@@ -54,7 +53,6 @@ export class Tablette {
 		for (const item of items) {
 			const el: ElementTablette = {
 				id: item.ID,
-				nom: item.VissibleName,
 				chemin: prefixe + segment(item.VissibleName),
 				dossier: item.Type === 'CollectionType',
 				modifie: item.ModifiedClient,

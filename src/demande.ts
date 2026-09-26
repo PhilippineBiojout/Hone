@@ -1,13 +1,6 @@
 import { Modal, type App } from 'fragment';
+import { creer } from './dom';
 import { eclore, type Eclosion } from './eclosion';
-
-function el<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls: string, texte = ''): HTMLElementTagNameMap[K] {
-	const e = document.createElement(tag);
-	e.className = cls;
-	e.textContent = texte;
-	parent.append(e);
-	return e;
-}
 
 /**
  * La demande, au clic sur l'icône de la tablette tant qu'on n'a pas accepté.
@@ -30,11 +23,11 @@ export class DemandeAutorisation extends Modal {
 	}
 
 	onOpen(): void {
-		if (this.refusee) el(this.contentEl, 'p', 'remarkable-refus', 'Tu n’as pas accepté que Fragment télécharge les dossiers et documents de la reMarkable.');
-		el(this.contentEl, 'p', '', 'Autoriser Fragment à télécharger les dossiers et documents de la reMarkable, en PDF, dans reMarkable/ ?');
-		const boutons = el(this.contentEl, 'div', 'remarkable-boutons');
+		if (this.refusee) creer(this.contentEl, 'p', 'remarkable-refus', 'Tu n’as pas accepté que Fragment télécharge les dossiers et documents de la reMarkable.');
+		creer(this.contentEl, 'p', '', 'Autoriser Fragment à télécharger les dossiers et documents de la reMarkable, en PDF, dans reMarkable/ ?');
+		const boutons = creer(this.contentEl, 'div', 'remarkable-boutons');
 		for (const [texte, oui] of [['Refuser', false], ['Autoriser', true]] as const) {
-			const b = el(boutons, 'button', oui ? 'mod-cta' : '', texte);
+			const b = creer(boutons, 'button', oui ? 'mod-cta' : '', texte);
 			b.addEventListener('click', () => {
 				this.close();
 				this.repondre(oui);

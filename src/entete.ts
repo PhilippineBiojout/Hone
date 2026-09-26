@@ -1,4 +1,5 @@
 import { FileView, Menu, setIcon, type View } from 'fragment';
+import { creer } from './dom';
 import { eclore } from './eclosion';
 import type RemarkablePlugin from './main';
 
@@ -44,20 +45,13 @@ export function majEntetes(plugin: RemarkablePlugin): void {
 export function bulle(bouton: HTMLElement, live: boolean, aDroite = false): void {
 	const menu = new Menu();
 	menu.dom.classList.add('remarkable-bulle');
-	const el = (tag: string, texte: string) => {
-		const e = document.createElement(tag);
-		e.textContent = texte;
-		return e;
-	};
 	if (live) {
-		menu.dom.append(el('p', 'Tout ce que tu écris sur la tablette apparaît sur ce PDF.'));
+		creer(menu.dom, 'p', '', 'Tout ce que tu écris sur la tablette apparaît sur ce PDF.');
 	} else {
-		const etapes = document.createElement('ol');
-		etapes.append(
-			el('li', 'Branche la tablette en USB-C.'),
-			el('li', 'Active l’interface web USB (Paramètres > Stockage).'),
-		);
-		menu.dom.append(el('strong', 'Tablette non connectée'), etapes);
+		creer(menu.dom, 'strong', '', 'Tablette non connectée');
+		const etapes = creer(menu.dom, 'ol');
+		creer(etapes, 'li', '', 'Branche la tablette en USB-C.');
+		creer(etapes, 'li', '', 'Active l’interface web USB (Paramètres > Stockage).');
 	}
 	// Sous le bouton, bord droit aligné sur le sien, ou à sa droite, haut aligné
 	// (le menu reste dans l'écran).
