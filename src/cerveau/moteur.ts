@@ -114,7 +114,7 @@ export class Moteur {
         this.acces = accesVault(app);
         this.compteur = new Compteur(reglages.plafond);
         setTracingDisabled(true);
-        this.atelier = reglages.atelier ? atelier : undefined;
+        this.atelier = reglages.atelierActif ? atelier : undefined;
         this.memoire = memoire;
         const cle = reglages.cle.trim();
         if (cle && !reglages.factice) {

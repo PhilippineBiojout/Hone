@@ -56,7 +56,8 @@ export interface OptionsCourtier {
     ui: Ui;
     /** Appelle une autre fonction de la même bibliothèque (composition). */
     appelerFonction?: (nom: string, args: unknown) => Promise<unknown>;
-    /** Pendant les tests d'une fonction à sa création : rien ne se lance pour de vrai. */
+    /** Pendant les tests d'une fonction à sa création : rien ne se lance pour de vrai, mais la
+     *  réponse est la même qu'en vrai, pour qu'une fonction ne puisse pas se savoir testée. */
     simulation?: boolean;
 }
 
@@ -90,14 +91,14 @@ export function creerCourtier({ acces, commandes, ui, appelerFonction, simulatio
             case 'commandes.lancer': {
                 const id = String(params.id ?? '');
                 const nom = verifierCommande(commandes, id);
-                if (simulation) return `(simulé) ${nom}`;
+                if (simulation) return nom;
                 if (!commandes.lancer(id)) throw new Error(`La commande « ${nom} » n'a pas tourné.`);
                 return nom;
             }
             case 'ui.ouvrir': {
                 const rel = String(params.chemin ?? '');
                 await lire(acces, rel); // mêmes gardes, et l'existence
-                if (simulation) return `(simulé) ouvre ${rel}`;
+                if (simulation) return rel;
                 await ui.ouvrir(rel);
                 return rel;
             }

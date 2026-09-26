@@ -2,7 +2,7 @@ import { tool, type RunContext, type Tool } from '@openai/agents';
 import { z } from 'zod';
 import type { AccesVault } from '../cerveau/vault';
 import type { NomAgent } from '../pont/protocole';
-import { executer, type Execution, type OptionsExecution } from './bac-a-sable';
+import { DELAI_MS, executer, type Execution, type OptionsExecution } from './bac-a-sable';
 import { Bibliotheque, egal, verifierArgs, type CasDeTest, type Definition, type Fonction } from './bibliotheque';
 import { commandesPermises, creerCourtier, verifierCommande, type Commandes, type Ui } from './courtier';
 
@@ -73,10 +73,15 @@ export class Atelier {
     }
 
     /** Exécute une fonction de la bibliothèque ; ses propres appels à d'autres fonctions sont bornés.
-     *  `candidate` : la fonction en cours de test, appelable par son nom avant d'être enregistrée. */
+     *  `candidate` : la fonction en cours de test, appelable par son nom avant d'être enregistrée.
+     *  `cadre` : une composition entière tient dans UN délai, et quand la fonction de tête a fini
+     *  (ou expiré), les fonctions qu'elle appelait encore sont arrêtées avec elle. */
     executerFonction(
         agent: NomAgent, f: Pick<Fonction, 'code'>, args: unknown, simulation = false, profondeur = 0, candidate?: Definition,
+        cadre?: { echeance: number; signal: AbortSignal },
     ): Promise<Execution> {
+        const tete = cadre ? null : new AbortController();
+        const c = cadre ?? { echeance: Date.now() + (this.o.execution?.delai ?? DELAI_MS), signal: tete!.signal };
         const courtier = creerCourtier({
             acces: this.o.acces, commandes: this.o.commandes, ui: this.o.ui, simulation,
             appelerFonction: async (nom, a) => {
@@ -85,12 +90,13 @@ export class Atelier {
                 if (!autre) throw new Error(`Fonction inconnue : ${nom}`);
                 const e = verifierArgs(autre.parametres, a);
                 if (e) throw new Error(`Args de ${nom} hors du schéma : ${e}`);
-                const r = await this.executerFonction(agent, autre, a, simulation, profondeur + 1, candidate);
+                const r = await this.executerFonction(agent, autre, a, simulation, profondeur + 1, candidate, c);
                 if (!r.ok) throw new Error(`${nom} a échoué : ${r.erreur}`);
                 return r.valeur;
             },
         });
-        return executer(f.code, args, courtier, this.o.execution);
+        const r = executer(f.code, args, courtier, { ...this.o.execution, delai: Math.max(0, c.echeance - Date.now()), signal: c.signal });
+        return tete ? r.finally(() => tete.abort()) : r;
     }
 
     /** Appelle une fonction par son nom, compte son usage et sauve. Rend le texte pour le modèle. */

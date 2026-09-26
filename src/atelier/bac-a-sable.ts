@@ -34,6 +34,7 @@ export const DELAI_MS = 5_000;
 export const CODE_MAX = 6_000;
 export const RESULTAT_MAX = 20_000;
 export const APPELS_MAX = 50;
+export const PARAMS_MAX = 10_000;
 
 /** Ce que le code garde de la portée globale : le langage, rien qui touche au monde. */
 const GARDER = [
@@ -85,12 +86,18 @@ export function prelude(verifierImport = true): string {
         ? `import('data:text/javascript,export default 1').then(() => 'bac à sable non étanche (import)', () => null)`
         : 'Promise.resolve(null)'};
 
+    // Les plafonds se tiennent ICI, avant tout envoi : un code qui boucle sur hone.* sans
+    // await, ou qui rend une valeur énorme, ne doit rien empiler sur le fil de la page.
     let suivant = 0;
     const attentes = new Map();
     const appel = (op, params) => new Promise((res, rej) => {
+        if (suivant >= ${APPELS_MAX}) { rej(new Error("Trop d'appels à hone (${APPELS_MAX} au plus par exécution).")); return; }
+        let texte;
+        try { texte = JSON.stringify(params || {}); } catch (e) { rej(new Error('Paramètres non sérialisables.')); return; }
+        if (texte.length > ${PARAMS_MAX}) { rej(new Error('Paramètres trop gros (${PARAMS_MAX} caractères au plus).')); return; }
         const id = ++suivant;
         attentes.set(id, { res, rej });
-        envoyer({ t: 'appel', id, op, params: params || {} });
+        envoyer({ t: 'appel', id, op, params: JSON.parse(texte) });
     });
     const gel = (o) => Object.freeze(o);
 
@@ -123,7 +130,10 @@ export function prelude(verifierImport = true): string {
         try {
             const f = new AsyncFunction('args', 'hone', '"use strict";\\n' + m.code);
             const valeur = await f(m.args, hone);
-            envoyer({ t: 'fin', ok: true, valeur: valeur === undefined ? null : JSON.parse(JSON.stringify(valeur)), journal });
+            const texte = JSON.stringify(valeur === undefined ? null : valeur);
+            envoyer(texte.length > ${RESULTAT_MAX}
+                ? { t: 'fin', ok: true, valeur: texte.slice(0, ${RESULTAT_MAX}) + '… [résultat tronqué à ${RESULTAT_MAX} caractères]', journal }
+                : { t: 'fin', ok: true, valeur: JSON.parse(texte), journal });
         } catch (err) {
             envoyer({ t: 'fin', ok: false, erreur: String((err && err.message) || err).slice(0, 1000), journal });
         }
@@ -143,9 +153,11 @@ export interface OptionsExecution {
     delai?: number;
     fabrique?: Fabrique;
     verifierImport?: boolean;
+    /** Arrête l'exécution de l'extérieur (une fonction appelante qui a fini ou expiré). */
+    signal?: AbortSignal;
 }
 
-/** Tronque un résultat trop gros pour le rendre au modèle. */
+/** Tronque un résultat trop gros (défense : le prélude tronque déjà avant d'envoyer). */
 function borner(valeur: unknown): unknown {
     const texte = JSON.stringify(valeur) ?? 'null';
     return texte.length > RESULTAT_MAX ? `${texte.slice(0, RESULTAT_MAX)}… [résultat tronqué à ${RESULTAT_MAX} caractères]` : valeur;
@@ -159,7 +171,8 @@ export function executer(
     if (code.length > CODE_MAX) {
         return Promise.resolve({ ok: false, erreur: `Code trop long (${code.length} caractères, ${CODE_MAX} au plus).`, journal: [] });
     }
-    const { delai = DELAI_MS, fabrique = fabriqueNavigateur, verifierImport = true } = options;
+    const { delai = DELAI_MS, fabrique = fabriqueNavigateur, verifierImport = true, signal } = options;
+    if (signal?.aborted) return Promise.resolve({ ok: false, erreur: 'Exécution annulée.', journal: [] });
     return new Promise((resoudre) => {
         let fini = false;
         let appels = 0;
@@ -168,11 +181,14 @@ export function executer(
             if (fini) return;
             fini = true;
             clearTimeout(minuteur);
+            signal?.removeEventListener('abort', annuler);
             worker?.terminate();
             resoudre(r);
         };
+        const annuler = () => finir({ ok: false, erreur: 'Exécution annulée.', journal: [] });
+        signal?.addEventListener('abort', annuler);
         const minuteur = setTimeout(
-            () => finir({ ok: false, erreur: `Temps dépassé (${delai / 1000} s) : la fonction a été arrêtée.`, journal: [] }),
+            () => finir({ ok: false, erreur: `Temps dépassé (${DELAI_MS / 1000} s au plus) : la fonction a été arrêtée.`, journal: [] }),
             delai,
         );
         try {

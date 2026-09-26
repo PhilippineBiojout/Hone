@@ -74,6 +74,25 @@ describe('bac à sable', () => {
         expect(r.valeur).toBe('Refusé : non');
     });
 
+    it('plafonne les appels à hone dans le worker, avant tout envoi', async () => {
+        let recus = 0;
+        const courtier: Courtier = async () => {
+            recus++;
+            return 'x';
+        };
+        const r = await lancer(`const p = []; for (let i = 0; i < 1000; i++) p.push(hone.vault.lire('a.md').catch((e) => e.message));
+            const rs = await Promise.all(p); return rs.filter((x) => x !== 'x')[0];`, {}, courtier);
+        expect(r.valeur).toMatch(/Trop d'appels/);
+        expect(recus).toBeLessThanOrEqual(50);
+    });
+
+    it('arrête l\'exécution quand on l\'annule de l\'extérieur', async () => {
+        const ctrl = new AbortController();
+        const p = executer('while (true) {}', {}, aucun, { fabrique: fabriqueNode, verifierImport: false, signal: ctrl.signal });
+        setTimeout(() => ctrl.abort(), 100);
+        expect((await p).erreur).toMatch(/annulée/);
+    });
+
     it('refuse un code vide ou trop long', async () => {
         expect((await lancer('  ')).ok).toBe(false);
         expect((await lancer('x'.repeat(7000))).erreur).toMatch(/trop long/);

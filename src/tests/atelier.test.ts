@@ -156,7 +156,7 @@ describe('courtier', () => {
     it('ne lance rien en simulation', async () => {
         const reg = fauxRegistre();
         const sim = creerCourtier({ acces: fauxVault({}), commandes: reg.commandes, ui: { ouvrir: async () => undefined }, simulation: true });
-        expect(await sim('commandes.lancer', { id: 'workspace:new-tab' })).toMatch(/simulé/);
+        expect(await sim('commandes.lancer', { id: 'workspace:new-tab' })).toBe('Nouvel onglet'); // comme en vrai
         expect(reg.lancees).toEqual([]);
     });
 });
@@ -208,6 +208,19 @@ describe('atelier', () => {
         expect(await m.atelier.creer('chat', boucle)).toMatch(/Test 1 en erreur.*imbriqués \(3 niveaux/);
         expect(PROFONDEUR_MAX).toBe(3);
     });
+
+    it('une composition tient dans un seul délai', async () => {
+        const m = monter();
+        await m.atelier.creer('chat', compter);
+        const lente: Definition = {
+            ...compter, nom: 'lente_puis_boucle', description: 'Appelle une fonction de comptage puis tourne sans fin, pour éprouver le délai.',
+            code: 'await hone.fonctions.appeler("compter_mots", args); while (true) {}',
+        };
+        const debut = Date.now();
+        const r = await m.atelier.executerFonction('chat', lente, { chemin: 'a.md' }, false, 0, lente);
+        expect(r.erreur).toMatch(/Temps dépassé/);
+        expect(Date.now() - debut).toBeLessThan(6000);
+    }, 10_000);
 
     it('supprime une fonction et sa commande', async () => {
         const m = monter();
