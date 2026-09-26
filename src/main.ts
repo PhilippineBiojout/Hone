@@ -1,218 +1,132 @@
-import {
-	App,
-	Editor,
-	ItemView,
-	Modal,
-	Notice,
-	Plugin,
-	WorkspaceLeaf,
-	setIcon,
-} from "fragment";
+import { Plugin, TFile, type TAbstractFile } from 'fragment';
+import { FENETRE_DEPLACEMENT_MS, Registre, type Carnets } from './registre';
+import { Synchro } from './synchro';
+import { HOTE_PAR_DEFAUT, Tablette } from './tablette';
+import { VUE_REMARKABLE, VueRemarkable } from './vue';
 
-/**
- * The shape of the data this plugin persists via `loadData()` / `saveData()`.
- *
- * Fragment 0.1.0 does not yet ship a `Setting` / `PluginSettingTab` UI (the type
- * contract marks it as "future"), so this sample demonstrates persistence only.
- * The values below are edited programmatically; a settings tab can be added once
- * the host exposes one.
- */
-interface FragmentSampleSettings {
-	greeting: string;
-	clickCount: number;
+/** Ce que le plugin garde dans `.fragment/plugins/remarkable/data.json`. */
+interface Donnees {
+	/** Adresse de la tablette ; un faux serveur pour tester sans elle. */
+	hote: string;
+	/** L'index : id du carnet sur la tablette → où est son PDF dans le vault. */
+	carnets: Carnets;
 }
 
-const DEFAULT_SETTINGS: FragmentSampleSettings = {
-	greeting: "Hello, Fragment!",
-	clickCount: 0,
-};
+const INTERVALLE_MS = 2000;
 
-/** The view type id used to register and to look the sample view up again. */
-const VIEW_TYPE_SAMPLE = "fragment-sample-view";
-
-/**
- * A sample Fragment plugin.
- *
- * Every `registerX()` / `addX()` call below schedules its own teardown, so
- * `onunload()` stays empty: disabling the plugin replays the teardown stack in
- * reverse. That is the whole point of the `Component` base class — the author
- * never has to remember to clean up.
- */
-export default class FragmentSamplePlugin extends Plugin {
-	settings: FragmentSampleSettings = DEFAULT_SETTINGS;
+export default class RemarkablePlugin extends Plugin {
+	registre = new Registre();
+	synchro!: Synchro;
+	private hote = HOTE_PAR_DEFAUT;
+	/** PDF apparus récemment sans être suivis : un delete qui arrive après eux peut être un déplacement. */
+	private apparus = new Map<string, number>();
 
 	async onload(): Promise<void> {
-		await this.loadSettings();
+		const lu = (await this.loadData()) as Partial<Donnees> | null;
+		this.hote = lu?.hote ?? HOTE_PAR_DEFAUT;
+		this.registre = new Registre(lu?.carnets ?? {});
+		this.synchro = new Synchro(this.app, this.registre, new Tablette(this.hote), () => this.sauver(), () => this.redessiner());
 
-		// 1) A ribbon icon. `addRibbonIcon` returns the live button element, so we
-		//    can style it. The icon name is a Lucide id (see `setIcon`).
-		// Icon names are Lucide ids. Note: it is "dices" (plural) in Lucide — a
-		// bare "dice" does not exist and renders as an almost invisible dot.
-		const ribbonEl = this.addRibbonIcon(
-			"dices",
-			"Fragment sample: say hello",
-			async () => {
-				this.settings.clickCount += 1;
-				await this.saveSettings();
-				new Notice(
-					`${this.settings.greeting} (clicked ${this.settings.clickCount}×)`,
-				);
-			},
-		);
-		ribbonEl.classList.add("fragment-sample-ribbon");
+		this.registerView(VUE_REMARKABLE, (leaf) => new VueRemarkable(leaf, this));
+		this.addRibbonIcon('tablet', 'reMarkable', () => void this.ouvrirVue());
+		this.addCommand({ id: 'ouvrir-vue', name: 'Ouvrir la vue reMarkable', callback: () => void this.ouvrirVue() });
+		this.addCommand({ id: 'tout-retelecharger', name: 'Retélécharger tous les carnets suivis', callback: () => void this.toutRetelecharger() });
 
-		// 2) A simple command, available everywhere, that opens a modal.
-		this.addCommand({
-			id: "open-sample-modal",
-			name: "Open sample modal",
-			icon: "info",
-			callback: () => new SampleModal(this.app, this.settings.greeting).open(),
+		this.registerEvent(this.app.vault.on('rename', (f, ancien) => void this.surRenommage(f, ancien)));
+		this.registerEvent(this.app.vault.on('delete', (f) => void this.surSuppression(f)));
+		this.registerEvent(this.app.vault.on('create', (f) => void this.surCreation(f)));
+
+		// Le vault est chargé sans émettre d'événement : ce qui a bougé pendant
+		// que Fragment était fermé se rattrape ici, avant la première synchro.
+		this.app.workspace.onLayoutReady(async () => {
+			await this.reconcilier();
+			void this.synchro.tour();
+			this.registerInterval(window.setInterval(() => void this.synchro.tour(), INTERVALLE_MS));
 		});
-
-		// 3) An editor command. It is only offered when a text editor has focus,
-		//    and receives that editor. Offsets are absolute document positions.
-		this.addCommand({
-			id: "wrap-selection-bold",
-			name: "Wrap selection in **bold**",
-			editorCallback: (editor: Editor) => {
-				const { from, to } = editor.getSelection();
-				const selected = editor.getRange(from, to) || "bold text";
-				editor.replaceRange(from, to, `**${selected}**`);
-			},
-		});
-
-		// 4) A conditional command using `checkCallback`: it hides itself from the
-		//    palette when the view is already open. `checking === true` must be a
-		//    cheap, side-effect-free availability test.
-		this.addCommand({
-			id: "open-sample-view",
-			name: "Open sample view",
-			checkCallback: (checking: boolean): boolean => {
-				const alreadyOpen =
-					this.app.workspace.getLeavesOfType(VIEW_TYPE_SAMPLE).length > 0;
-				if (!alreadyOpen && !checking) {
-					void this.activateView();
-				}
-				return !alreadyOpen;
-			},
-		});
-
-		// 5) A custom view, registered by type. The factory runs lazily, the first
-		//    time a leaf of this type is materialised (§8.4 deferred views).
-		this.registerView(
-			VIEW_TYPE_SAMPLE,
-			(leaf) => new SampleView(leaf, this),
-		);
-
-		// 6) A global DOM event. Unregistered automatically on unload.
-		this.registerDomEvent(document, "click", () => {
-			console.debug("[fragment-sample] document click");
-		});
-
-		// 7) A repeating interval. Cleared automatically on unload.
-		this.registerInterval(
-			window.setInterval(
-				() => console.debug("[fragment-sample] tick"),
-				5 * 60 * 1000,
-			),
-		);
 	}
 
-	onunload(): void {
-		// Intentionally empty — see the class comment. Fragment tears down every
-		// registration for us. Detaching leaves here is optional and left out so
-		// the teardown discipline stays visible.
+	async sauver(): Promise<void> {
+		const donnees: Donnees = { hote: this.hote, carnets: this.registre.carnets };
+		await this.saveData(donnees);
 	}
 
-	/** Open the sample view, reusing an existing leaf of that type if present. */
-	async activateView(): Promise<void> {
+	redessiner(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VUE_REMARKABLE)) {
+			if (leaf.view instanceof VueRemarkable) leaf.view.dessiner();
+		}
+	}
+
+	async ouvrirVue(): Promise<void> {
 		const { workspace } = this.app;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_SAMPLE)[0];
+		let leaf = workspace.getLeavesOfType(VUE_REMARKABLE)[0];
 		if (!leaf) {
-			leaf = workspace.getLeaf("tab");
-			await leaf.setViewState({ type: VIEW_TYPE_SAMPLE, active: true });
+			leaf = workspace.getLeftLeaf();
+			await leaf.setViewState({ type: VUE_REMARKABLE, active: true });
 		}
 		workspace.setActiveLeaf(leaf);
 	}
 
-	async loadSettings(): Promise<void> {
-		const stored = (await this.loadData()) as
-			| Partial<FragmentSampleSettings>
-			| null;
-		this.settings = { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
+	/** Dans l'app, un dossier renommé n'émet qu'un événement : le registre fait suivre les chemins dessous. */
+	private async surRenommage(f: TAbstractFile, ancien: string): Promise<void> {
+		if (this.registre.renommer(ancien, f.path)) await this.changer();
 	}
 
-	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
-	}
-}
-
-/** A minimal modal that greets the user with the configured message. */
-class SampleModal extends Modal {
-	private readonly greeting: string;
-
-	constructor(app: App, greeting: string) {
-		super(app);
-		this.greeting = greeting;
+	private async surSuppression(f: TAbstractFile): Promise<void> {
+		const maintenant = Date.now();
+		if (!this.registre.supprimer(f.path, maintenant)) return;
+		// Hors de l'app, un déplacement arrive en delete + create, parfois create d'abord.
+		const recents = [...this.apparus]
+			.filter(([, t]) => maintenant - t < FENETRE_DEPLACEMENT_MS)
+			.map(([p]) => this.app.vault.getFileByPath(p))
+			.filter((x): x is TFile => x !== null);
+		await this.synchro.retrouver(recents, maintenant - FENETRE_DEPLACEMENT_MS);
+		await this.changer();
 	}
 
-	onOpen(): void {
-		this.setTitle("Fragment sample");
-		this.setContent(this.greeting);
+	private async surCreation(f: TAbstractFile): Promise<void> {
+		if (!(f instanceof TFile) || f.extension !== 'pdf') return;
+		if (this.synchro.enEcriture.has(f.path) || this.registre.parChemin(f.path)) return;
+		const maintenant = Date.now();
+		for (const [p, t] of this.apparus) if (maintenant - t >= FENETRE_DEPLACEMENT_MS) this.apparus.delete(p);
+		this.apparus.set(f.path, maintenant);
+		if (await this.synchro.retrouver([f], maintenant - FENETRE_DEPLACEMENT_MS)) await this.changer();
 	}
 
-	onClose(): void {
-		this.contentEl.replaceChildren();
-	}
-}
-
-/**
- * A custom side view. `ItemView` gives us a `contentEl` to draw into; the base
- * class handles the header, the `⋯` menu and view lifecycle.
- */
-class SampleView extends ItemView {
-	private readonly plugin: FragmentSamplePlugin;
-
-	constructor(leaf: WorkspaceLeaf, plugin: FragmentSamplePlugin) {
-		super(leaf);
-		this.plugin = plugin;
-		this.icon = "dices";
+	/** Au démarrage : un PDF suivi introuvable est cherché ailleurs dans le vault, sinon il n'est plus suivi. */
+	private async reconcilier(): Promise<void> {
+		const debut = Date.now();
+		let change = false;
+		for (const e of Object.values(this.registre.carnets)) {
+			if (e.chemin && !this.app.vault.getFileByPath(e.chemin)) change = this.registre.supprimer(e.chemin, debut) || change;
+		}
+		if (change) {
+			await this.synchro.retrouver(this.app.vault.getFiles(), debut);
+			await this.changer();
+		}
 	}
 
-	getViewType(): string {
-		return VIEW_TYPE_SAMPLE;
+	/** Les carnets non suivis sous ce dossier de la tablette. */
+	ignoresSous(dossierTablette: string): string[] {
+		return this.synchro.elements
+			.filter((el) => !el.dossier && el.chemin.startsWith(dossierTablette + '/'))
+			.filter((el) => this.registre.get(el.id)?.ignore)
+			.map((el) => el.id);
 	}
 
-	getDisplayText(): string {
-		return "Fragment sample";
+	async recuperer(ids: string[]): Promise<void> {
+		this.registre.recuperer(ids);
+		await this.changer();
+		void this.synchro.tour();
 	}
 
-	protected async onOpen(): Promise<void> {
-		const root = this.contentEl;
-		root.replaceChildren();
-		root.classList.add("fragment-sample-view");
-
-		const header = document.createElement("div");
-		header.classList.add("fragment-sample-view__header");
-
-		const iconEl = document.createElement("span");
-		setIcon(iconEl, "sparkles");
-		header.append(iconEl);
-
-		const heading = document.createElement("h2");
-		heading.textContent = "Fragment sample view";
-		header.append(heading);
-
-		const greeting = document.createElement("p");
-		greeting.textContent = `Greeting: ${this.plugin.settings.greeting}`;
-
-		const clicks = document.createElement("p");
-		clicks.textContent = `Ribbon clicks so far: ${this.plugin.settings.clickCount}`;
-
-		root.append(header, greeting, clicks);
+	async toutRetelecharger(): Promise<void> {
+		this.synchro.toutRetelecharger();
+		await this.changer();
+		void this.synchro.tour();
 	}
 
-	protected async onClose(): Promise<void> {
-		this.contentEl.replaceChildren();
+	private async changer(): Promise<void> {
+		await this.sauver();
+		this.redessiner();
 	}
 }

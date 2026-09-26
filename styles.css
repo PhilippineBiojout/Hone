@@ -1,22 +1,74 @@
-/*
- * Styles for the Fragment sample plugin.
- *
- * Fragment loads this file alongside the plugin. Prefer theme CSS variables
- * (the same ones Obsidian exposes) over hard-coded colours so the plugin
- * follows the active theme.
- */
+/* Vue reMarkable : l'état de la synchro, les carnets de la tablette et le journal. */
 
-.fragment-sample-view {
-	padding: var(--size-4-4, 16px);
+.remarkable-vue {
+	padding: var(--size-4-3, 12px);
+	font-size: var(--font-ui-small, 13px);
 }
 
-.fragment-sample-view__header {
+.remarkable-etat {
+	margin-bottom: var(--size-4-3, 12px);
+	color: var(--text-muted);
+}
+
+.remarkable-etat[data-connectee="false"] {
+	color: var(--text-error, #d04040);
+}
+
+.remarkable-ligne {
 	display: flex;
 	align-items: center;
 	gap: var(--size-4-2, 8px);
-	margin-bottom: var(--size-4-3, 12px);
+	min-height: 26px;
 }
 
-.fragment-sample-view__header h2 {
-	margin: 0;
+.remarkable-icone {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+
+.remarkable-icone svg {
+	width: 16px;
+	height: 16px;
+}
+
+.remarkable-nom {
+	flex: 0 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.remarkable-ou {
+	flex: 1 1 0;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-faint);
+	text-align: right;
+}
+
+.remarkable-lien {
+	cursor: pointer;
+}
+
+.remarkable-lien:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.remarkable-ignore .remarkable-nom {
+	color: var(--text-faint);
+}
+
+.remarkable-recuperer {
+	flex: none;
+	margin-left: auto;
+}
+
+.remarkable-journal {
+	margin-top: var(--size-4-4, 16px);
+	font-size: 11px;
+	white-space: pre-wrap;
+	color: var(--text-muted);
 }
