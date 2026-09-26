@@ -120,7 +120,14 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 
 	const v = (p: string) => path.join(vault, p);
 	const contient = async (p: string, texte: string) => existsSync(v(p)) && (await readFile(v(p), 'latin1')).includes(texte);
-	const donnees = async () => JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).carnets;
+	// data.json peut être lu pendant que le plugin l'écrit : on relira au tour suivant.
+	const donnees = async () => {
+		try {
+			return JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).carnets;
+		} catch {
+			return {};
+		}
+	};
 
 	let { electronApp, page } = await lancer(vault, userData);
 	try {
@@ -130,14 +137,22 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await attendre(() => contient('reMarkable/C.pdf', 'c version 1'), 'C importé');
 
 		// 2. On écrit sur la tablette : le PDF se met à jour sur place.
+		// Et un onglet déjà ouvert sur ce PDF montre la nouvelle version, sans le rouvrir.
+		await page.evaluate(() => {
+			const app = (window as any).app;
+			return app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('reMarkable/Cours/A.pdf'));
+		});
+		const couche = page.locator('.pdf-text-layer').first();
+		await expect(couche).toContainText('a version 1', { timeout: 15_000 });
 		tablette.ecrire('a');
 		await attendre(() => contient('reMarkable/Cours/A.pdf', 'a version 2'), 'A mis à jour');
+		await expect(couche).toContainText('a version 2', { timeout: 15_000 });
 
 		// 3. Rangé ailleurs depuis le Finder (delete + create) : toujours suivi.
 		await mkdir(v('Rangement'));
 		await attendre(() => page.evaluate(() => !!(window as any).app.vault.getFolderByPath('Rangement')), 'dossier vu');
 		await rename(v('reMarkable/Cours/A.pdf'), v('Rangement/A.pdf'));
-		await attendre(async () => (await donnees()).a.chemin === 'Rangement/A.pdf', 'A retrouvé après déplacement');
+		await attendre(async () => (await donnees()).a?.chemin === 'Rangement/A.pdf', 'A retrouvé après déplacement');
 		tablette.ecrire('a');
 		await attendre(() => contient('Rangement/A.pdf', 'a version 3'), 'A mis à jour à son nouvel endroit');
 		expect(existsSync(v('reMarkable/Cours/A.pdf'))).toBe(false);
@@ -147,7 +162,7 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 			const app = (window as any).app;
 			return app.vault.rename(app.vault.getFolderByPath('reMarkable/Cours'), 'reMarkable/Classe');
 		});
-		await attendre(async () => (await donnees()).b.chemin === 'reMarkable/Classe/B.pdf', 'B suit le dossier');
+		await attendre(async () => (await donnees()).b?.chemin === 'reMarkable/Classe/B.pdf', 'B suit le dossier');
 		tablette.ecrire('b');
 		await attendre(() => contient('reMarkable/Classe/B.pdf', 'b version 2'), 'B mis à jour dans le dossier renommé');
 
@@ -156,7 +171,7 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 			const app = (window as any).app;
 			return app.vault.trash(app.vault.getFileByPath('reMarkable/C.pdf'), false);
 		});
-		await attendre(async () => (await donnees()).c.ignore === true, 'C ignoré');
+		await attendre(async () => (await donnees()).c?.ignore === true, 'C ignoré');
 		tablette.ecrire('c');
 		await new Promise((r) => setTimeout(r, 5000));
 		expect(existsSync(v('reMarkable/C.pdf'))).toBe(false);
@@ -171,7 +186,7 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 			const app = (window as any).app;
 			return app.vault.trash(app.vault.getFolderByPath('reMarkable/Classe'), false);
 		});
-		await attendre(async () => (await donnees()).b.ignore === true, 'B ignoré avec son dossier');
+		await attendre(async () => (await donnees()).b?.ignore === true, 'B ignoré avec son dossier');
 		await page.locator('.remarkable-recuperer[aria-label^="Récupérer le dossier"]').click();
 		await attendre(() => contient('reMarkable/Cours/B.pdf', 'b version 2'), 'dossier récupéré');
 
@@ -186,7 +201,7 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await mkdir(v('Archive'));
 		await rename(v('Rangement/A.pdf'), v('Archive/A.pdf'));
 		({ electronApp, page } = await lancer(vault, userData));
-		await attendre(async () => (await donnees()).a.chemin === 'Archive/A.pdf', 'A retrouvé au démarrage');
+		await attendre(async () => (await donnees()).a?.chemin === 'Archive/A.pdf', 'A retrouvé au démarrage');
 		tablette.ecrire('a');
 		await attendre(() => contient('Archive/A.pdf', 'a version 5'), 'A mis à jour après redémarrage');
 	} finally {

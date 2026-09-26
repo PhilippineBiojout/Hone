@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import type { App, TFile } from 'fragment';
+import { FileView, type App, type TFile } from 'fragment';
 import type { Registre } from './registre';
 import { ExportRefuse, type ElementTablette, type Tablette } from './tablette';
 
@@ -107,6 +107,7 @@ export class Synchro {
 		const fichier = actuel ? vault.getFileByPath(actuel) : null;
 		if (fichier) {
 			await vault.modifyBinary(fichier, octets);
+			await this.recharger(fichier);
 			return fichier.path;
 		}
 		const nom = el.chemin.toLowerCase().endsWith('.pdf') ? el.chemin.slice(0, -4) : el.chemin;
@@ -119,6 +120,25 @@ export class Synchro {
 			this.enEcriture.delete(chemin);
 		}
 		return chemin;
+	}
+
+	/**
+	 * La vue PDF du cœur n'écoute pas `modify` : un onglet ouvert garderait
+	 * l'ancienne version. On la recharge nous-mêmes (l'URL du fichier porte son
+	 * mtime, donc pas de cache), en gardant le zoom et l'endroit où on lisait.
+	 */
+	private async recharger(fichier: TFile): Promise<void> {
+		for (const leaf of this.app.workspace.getLeavesOfFile(fichier)) {
+			const vue = leaf.view;
+			if (!(vue instanceof FileView) || vue.getViewType() !== 'pdf') continue;
+			const etat = vue.getEphemeralState();
+			const defilement = vue.contentEl.querySelector('.pdf-scroll');
+			const haut = defilement?.scrollTop ?? 0;
+			await vue.onUnloadFile(fichier);
+			await vue.onLoadFile(fichier);
+			vue.setEphemeralState(etat);
+			if (defilement) defilement.scrollTop = haut;
+		}
 	}
 
 	/** Le cœur ne crée aucun parent : on crée chaque niveau, un par un. */
