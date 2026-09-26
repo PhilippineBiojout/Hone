@@ -1,7 +1,7 @@
-import fs from 'node:fs';
 import { tool } from '@openai/agents';
 import { z } from 'zod';
-import { cheminSur, fichiersLisibles, RefusChemin } from './garde';
+import { RefusChemin, TAILLE_MAX, verifierChemin } from './garde';
+import type { AccesVault } from './vault';
 
 // Deux outils de lecture, aucun d'écriture. Un refus est RENDU au modèle, pas levé.
 
@@ -9,19 +9,14 @@ export const CARACTERES_MAX = 20_000;
 
 /** Minuscules et sans accents. */
 const plier = (texte: string) => texte.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-const lire = (racine: string, rel: string) => fs.readFileSync(cheminSur(racine, rel), 'utf-8');
 
-export function chercherDansLeVault(racine: string, requete: string): string {
+export async function chercherDansLeVault(acces: AccesVault, requete: string): Promise<string> {
     const q = plier(requete.trim());
     if (!q) return 'Requête vide.';
     const trouves: { chemin: string; extrait: string }[] = [];
-    for (const rel of fichiersLisibles(racine)) {
-        let texte: string;
-        try {
-            texte = lire(racine, rel);
-        } catch {
-            continue;
-        }
+    for (const rel of acces.fichiers()) {
+        const texte = await acces.lire(rel);
+        if (texte == null) continue;
         const plie = plier(texte);
         const i = plie.indexOf(q);
         if (i === -1 && !plier(rel).includes(q)) continue;
@@ -33,18 +28,22 @@ export function chercherDansLeVault(racine: string, requete: string): string {
     return trouves.length > 0 ? JSON.stringify(trouves) : 'Aucun résultat dans le vault.';
 }
 
-export function lireDocument(racine: string, rel: string): string {
+export async function lireDocument(acces: AccesVault, rel: string): Promise<string> {
     try {
-        const texte = lire(racine, rel);
-        return texte.length > CARACTERES_MAX
-            ? `${texte.slice(0, CARACTERES_MAX)}\n[… document tronqué à ${CARACTERES_MAX} caractères]`
-            : texte;
+        verifierChemin(rel);
     } catch (err) {
         return err instanceof RefusChemin ? `Refusé : ${err.message}` : 'Lecture impossible.';
     }
+    const taille = acces.taille(rel);
+    if (taille != null && taille > TAILLE_MAX) return 'Refusé : fichier trop gros pour être lu.';
+    const texte = await acces.lire(rel);
+    if (texte == null) return `Aucun fichier à ce chemin : ${rel}`;
+    return texte.length > CARACTERES_MAX
+        ? `${texte.slice(0, CARACTERES_MAX)}\n[… document tronqué à ${CARACTERES_MAX} caractères]`
+        : texte;
 }
 
-export function outilsVault(racine: string) {
+export function outilsVault(acces: AccesVault) {
     return [
         tool({
             name: 'search_vault',
@@ -52,7 +51,7 @@ export function outilsVault(racine: string) {
                 'Cherche un mot ou une expression dans les notes du vault (.md, .txt) et renvoie jusqu\'à 8 extraits '
                 + 'avec leur chemin. À utiliser AVANT toute recherche web.',
             parameters: z.object({ requete: z.string().describe('Le mot ou l\'expression à chercher.') }),
-            execute: async ({ requete }) => chercherDansLeVault(racine, requete),
+            execute: async ({ requete }) => chercherDansLeVault(acces, requete),
         }),
         tool({
             name: 'read_document',
@@ -60,7 +59,7 @@ export function outilsVault(racine: string) {
                 'Lit le texte d\'une note du vault. Le chemin est relatif à la racine du vault, tel que search_vault '
                 + 'le donne. Les dossiers cachés et tout ce qui est hors du vault sont refusés.',
             parameters: z.object({ chemin: z.string().describe('Chemin relatif à la racine du vault.') }),
-            execute: async ({ chemin }) => lireDocument(racine, chemin),
+            execute: async ({ chemin }) => lireDocument(acces, chemin),
         }),
     ];
 }

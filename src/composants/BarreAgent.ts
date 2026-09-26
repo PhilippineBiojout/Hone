@@ -61,8 +61,8 @@ export class BarreAgent extends Component {
             return cree;
         };
         item('x', 'Fermer', () => this.fermer(), 'agent-barre-fermer');
-        this.chatEl = item('cat', "Discuter avec l'agent", () => this.actions.onChat()).dom;
-        item('mic', "Parler à l'agent", () => this.actions.onVoix());
+        this.chatEl = item('cat', "Discuter avec Hone", () => this.actions.onChat()).dom;
+        item('mic', "Parler à Hone", () => this.actions.onVoix());
         for (const id of ['definir', 'visualiser', 'aider', 'traduire', 'resumer'] as const) {
             const outil = item(OUTILS[id].icone, OUTILS[id].libelle, () => this.actions.onOutil(id));
             if (id === 'definir' || id === 'visualiser') continue;

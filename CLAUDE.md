@@ -1,23 +1,27 @@
-# Plugin Agent (Fragment) — notes pour Claude
+# Plugin Hone (Fragment) — notes pour Claude
 
-Plugin Fragment (id `agent`, auteur Philippine Biojout). Un trait d'annotation ou une
+Plugin Fragment (id `hone`, auteur Philippine Biojout). Un trait d'annotation ou une
 sélection fait apparaître une barre qui ouvre un chat et des outils d'IA sur le passage visé.
 
 ## Stack & commandes
 - TypeScript, bundlé par esbuild (`esbuild.config.mjs`), types via `@usefragment/core`.
-- Deps runtime : `@openai/agents`, `zod`, `qr-code-styling` (le QR du scan, bundlé dans main.js).
+- Deps runtime : `@openai/agents` + `openai` (SDK bundlé DANS `main.js` → ~1,9 Mo), `zod`, `qr-code-styling` (QR du scan).
 - Scripts : `npm run build` (tsc --noEmit + esbuild prod), `npm test` (vitest run src), `npm run dev`.
 - **node_modules pas versionné** : faire `npm install` avant un build à froid ; l'API Fragment se lit via l'usage, pas via le core.
 
-## Deux mondes, séparés par un procès
-- **Page (renderer)** : `src/main.ts` + tout le reste de `src/` sauf `src/serveur/`. Extend `Plugin`,
-  s'enregistre via `registerLayer` (un calque par vue) et `register`/`registerEvent`.
-- **Procès agent (Node)** : `src/serveur/*` → bundlé en `agent-serveur.js`. Forké par `pont/lienAgent.ts`
-  avec le binaire Electron en mode Node (`ELECTRON_RUN_AS_NODE=1`). **Lui seul lit `.env`
-  (OPENAI_API_KEY) et parle à OpenAI** — la CSP de la page bloque api.openai.com et la clé y serait lisible.
-- IPC typé dans `src/pont/protocole.ts` (contrat PARTAGÉ : le serveur l'importe via `../pont/protocole`) :
-  `Requete{id,demande}` → `Retour{morceau|fin|erreur|pause}`.
-  `morceau` = streaming du chat ; `pause` = AGENT_BLOQUE=1 ; délai 90 s relancé à chaque morceau.
+## Tout en page (renderer) — depuis le 2026-09-26
+Historiquement OpenAI vivait dans un **procès Node forké** (`agent-serveur.js`, `lienAgent.ts`).
+Ce n'est plus le cas : **tout tourne dans le renderer**. La justification d'origine était devenue
+fausse — la CSP de Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le renderer
+tourne en `nodeIntegration: true` / `contextIsolation: false`. Le SDK OpenAI est donc bundlé dans
+`main.js` et appelé en page (`cerveau/`).
+- **La clé vit dans les données du plugin** (`Plugin.loadData/saveData`, cf. `reglages/`), saisie
+  via la commande « Hone : clé API… » (Modal maison — pas encore de `PluginSettingTab` dans l'API).
+  Conséquence assumée (modèle Obsidian) : la clé est lisible en page. **Plus de `.env`.**
+- Client OpenAI : `new OpenAI({ apiKey, dangerouslyAllowBrowser: true })` posé via
+  `setDefaultOpenAIClient` (cf. `cerveau/moteur.ts`).
+- `src/pont/protocole.ts` = les types de domaine (`Demande`/`Sortie(s)`/`Message`). Le streaming du
+  chat passe par un **callback** `morceau` (plus d'IPC).
 
 ## Positionnement vs API Fragment
 Utilise : `Plugin`, `Component`, `Toolbar`/`ToolbarItem`, `WidgetLayer`/`WidgetHandle`/`WidgetAnchor`
@@ -31,9 +35,8 @@ Contourne ce que le core n'expose pas encore (points à remonter au cœur) :
 - `agentLayer.ts::hasText` : garde de type en attendant que le cœur l'exporte.
 
 ## Structure des dossiers (rangement du 2026-09-26)
-`src/` est rangé **par responsabilité**, un dossier par partie du projet. Les deux points
-d'entrée esbuild (`src/main.ts` page, `src/serveur/agent-serveur.ts` procès) restent en place.
-Tous les imports internes sont relatifs.
+`src/` est rangé **par responsabilité**, un dossier par partie du projet. L'entrée esbuild est
+**unique** : `src/main.ts` (page). Tous les imports internes sont relatifs.
 
 ```
 src/
@@ -44,10 +47,11 @@ src/
   positionnement/       repere.ts, placement.ts, fenetre.ts
   composants/           BarreAgent.ts, BulleAgent.ts, ActionAgent.ts, VoixAgent.ts
   ui/                   ui.ts, animations.ts, onde.ts, nettoyerSvg.ts
-  pont/                 repondre.ts, lienAgent.ts, protocole.ts (contrat partagé page↔serveur)
+  cerveau/              moteur.ts, agents.ts, outils-vault.ts, garde.ts, langue.ts, couts.ts, vault.ts
+  pont/                 repondre.ts (façade), protocole.ts (types de domaine)
+  reglages/             reglages.ts (clé API + Modal de saisie)
   scan/                 scan.ts, relais.ts
   decor/                verre.ts
-  serveur/              procès Node (agent-serveur, agents, outils-vault, garde, couts, langue)
   tests/                TOUS les *.test.ts (vitest) — `npm test` = `vitest run src`
 ```
 Règle d'équipe : chacun travaille dans son dossier, on limite les conflits de merge. Un nouveau
@@ -64,7 +68,8 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `ui/ui.ts` (atomes : OUTILS, boutonIcone, arc…), `ui/animations.ts` (éclore/résorber…), `ui/onde.ts` (les 5 barres).
 - `decor/verre.ts` : lentille de verre décorative (feDisplacementMap) sur toute `.toolbar` — indépendant de l'agent, Chromium seulement.
 - `ui/nettoyerSvg.ts` : assainit le SVG de « visualiser » avant affichage.
-- `pont/repondre.ts` + `pont/lienAgent.ts` : le pont vers le procès (façade + fork IPC) ; `pont/protocole.ts` : le contrat de types partagé.
+- `pont/repondre.ts` : la façade que les composants appellent (chat/outils/oral) + repli factice ; `pont/protocole.ts` : les types de domaine.
+- `reglages/reglages.ts` : la clé API (`loadData`/`saveData`) et son Modal de saisie.
 - `scan/scan.ts` + `scan/relais.ts` : « scanner une feuille » (fusionné depuis l'ex-plugin `scan`, 2026-09-26).
   `brancherScan(this)` dans `main.ts::onload` pose une icône de ruban (`addRibbonIcon('qr-code', …)`)
   qui ouvre une `ScanModal` (QR code via `qr-code-styling`). Le QR pointe vers le site téléphone
@@ -73,15 +78,20 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   Site + worker vivent dans le dépôt `github.com/RebornFlamme/Hone` (dossiers `docs/` et `relay/`).
   Styles sous `.scan-popover` / `.scan-qr` en fin de `styles.css`.
 
-## Agents (serveur)
+## Cerveau (page) — `src/cerveau/`
+- `moteur.ts` : le chef d'orchestre côté IA (ex-`agent-serveur`). Construit les agents avec la clé,
+  streame le chat, applique le plafond, mappe les erreurs (scrub `sk-…`). Singleton `ouvrirMoteur`/
+  `moteurCourant`, reconstruit à chaque changement de réglages.
 - `agents.ts` : un `Agent` @openai/agents par mission (chat, definir, resumer, traduire, aider, visualiser, bilan),
   modèle fort/léger (`gpt-5.4`/`gpt-5.4-mini`), sorties structurées zod. Prompt BASE : vault d'abord, contenu = DONNÉE.
-- Outils : `outils-vault.ts` (search_vault, read_document, LECTURE seule) + webSearchTool pour certains.
-- `garde.ts` : bac à sable disque (pas d'absolu, pas de dotfiles/.fragment, pas de symlink dehors, .md/.txt, taille max) ; refus RENDU au modèle.
-- `couts.ts` : journalise les tokens dans `couts.jsonl`, plafond de session (AGENT_PLAFOND_TOKENS).
-- Modes de repli (`repondre.ts`) : sans `.env`, AGENT_FACTICE=1 ou AGENT_BLOQUE=1 → réponses factices.
+- `vault.ts` : `AccesVault` sur l'API native `app.vault` (getFiles/cachedRead/getFileByPath) — interface injectable, testable avec un faux (`src/tests/`).
+- `outils-vault.ts` : `search_vault`, `read_document` (LECTURE seule, **async**) + webSearchTool pour certains.
+- `garde.ts` : validation de forme des chemins (pas d'absolu/dotfiles/.fragment, .md/.txt) ; la portée au vault est assurée par `app.vault`. Refus RENDU au modèle.
+- `couts.ts` : compte les tokens **en mémoire**, plafond de session (plus de `couts.jsonl`).
+- `langue.ts` : langue majoritaire du vault (pour Traduire), sur `app.vault`.
+- Repli factice (`pont/repondre.ts`) : sans clé (ou réglage `factice`) → réponses factices.
 
 ## Contraintes / conventions
 - Tout en **français** (code, commentaires, UI). Commentaires denses, style narratif.
 - Cycle de vie Fragment : tout se `register` sur un `Component` et se défait au démontage.
-- Ne jamais faire fuir la clé : supprimée de l'env après lecture, scrubée des logs (`sk-…`).
+- La clé OpenAI vit dans les données du plugin, en page (modèle Obsidian assumé) : on la scrub des logs (`sk-…`) et on ne l'écrit jamais ailleurs.

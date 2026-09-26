@@ -1,6 +1,7 @@
 import { Agent, webSearchTool, type AgentOutputType, type ModelSettings } from '@openai/agents';
 import { z } from 'zod';
 import { outilsVault } from './outils-vault';
+import type { AccesVault } from './vault';
 
 const BASE = `Tu es l'assistant intégré à Fragment, une app où l'on annote ses notes de cours.
 Tu réponds en français, sauf consigne contraire de ta mission.
@@ -14,8 +15,8 @@ const COURT: ModelSettings = { reasoning: { effort: 'low' }, text: { verbosity: 
 const texte = z.object({ texte: z.string() });
 
 /** Un agent par mission ; le modèle léger pour les tâches courtes, le fort pour raisonner ou dessiner. */
-export function creerAgents(racine: string, modeles: { fort: string; leger: string }) {
-    const vault = outilsVault(racine);
+export function creerAgents(acces: AccesVault, modeles: { fort: string; leger: string }) {
+    const vault = outilsVault(acces);
     const avecWeb = [...vault, webSearchTool()];
     const agent = <T extends AgentOutputType = 'text'>(
         name: string, fort: boolean, mission: string, tools: typeof avecWeb, modelSettings: ModelSettings, outputType?: T,

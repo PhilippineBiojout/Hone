@@ -44,7 +44,7 @@ async function lancer(): Promise<{ electronApp: ElectronApplication; page: Page 
     await mkdir(vault, { recursive: true });
     await mkdir(userData, { recursive: true });
     await writeFile(path.join(vault, 'note.md'), '# Verre\n\nDu texte.', 'utf8');
-    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/agent', path.join(vault, '.fragment/plugins/agent'), { recursive: true,
+    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone', path.join(vault, '.fragment/plugins/hone'), { recursive: true,
         filter: (src) => !src.includes('node_modules') && !/[\\/](\.env|couts\.jsonl)$/.test(src) });
     await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
 

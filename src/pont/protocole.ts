@@ -1,4 +1,5 @@
-// Ce qui passe entre la page (lienAgent.ts) et le processus de l'agent (serveur/). Des types seulement.
+// Les types de domaine de Hone, partagés entre les composants (page) et le cerveau
+// (cerveau/). Des types seulement.
 
 export type Outil = 'definir' | 'visualiser' | 'aider' | 'traduire' | 'resumer';
 export type NomAgent = 'chat' | 'bilan' | Outil;
@@ -24,11 +25,3 @@ export interface Sorties {
     visualiser: { possible: boolean; svg: string | null; raison: string | null };
 }
 export type Sortie = Sorties[NomAgent];
-
-export interface Requete { id: number; demande: Demande }
-/** `morceau` : le chat s'écrit en direct ; `pause` : AGENT_BLOQUE=1, la page répond en factice. */
-export type Retour =
-    | { id: number; type: 'morceau'; texte: string }
-    | { id: number; type: 'fin'; sortie: Sortie }
-    | { id: number; type: 'erreur'; message: string }
-    | { id: number; type: 'pause' };

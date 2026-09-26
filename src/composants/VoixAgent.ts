@@ -21,7 +21,7 @@ type Etat = 'rond' | 'ecoute' | 'reflechit' | 'repond' | 'refuse';
 const LIBELLES: Partial<Record<Etat, string>> = {
     ecoute: 'Finir de parler',
     reflechit: "L'agent réfléchit",
-    repond: "Couper la parole à l'agent",
+    repond: "Couper la parole à Hone",
 };
 
 /**

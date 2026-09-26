@@ -49,7 +49,7 @@ export class BulleAgent extends Component {
         super();
         // Non modale : on peut continuer d'éditer la note.
         this.dom.setAttribute('role', 'dialog');
-        this.dom.setAttribute('aria-label', "Question à l'agent");
+        this.dom.setAttribute('aria-label', "Question à Hone");
 
         const tete = creer(this.dom, 'div', 'agent-bulle-tete');
         this.extraitEl = creer(tete, 'div', 'agent-bulle-extrait');

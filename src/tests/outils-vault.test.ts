@@ -1,45 +1,57 @@
-// @vitest-environment node
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CARACTERES_MAX, chercherDansLeVault, lireDocument } from '../serveur/outils-vault';
+import { describe, expect, it } from 'vitest';
+import { CARACTERES_MAX, chercherDansLeVault, lireDocument } from '../cerveau/outils-vault';
+import type { AccesVault } from '../cerveau/vault';
 
-let vault: string;
+/** Un faux vault en mémoire : chemin relatif → contenu. */
+function fauxVault(fichiers: Record<string, string>): AccesVault {
+    return {
+        fichiers: () => Object.keys(fichiers).sort(),
+        lire: async (rel) => (rel in fichiers ? fichiers[rel] : null),
+        taille: (rel) => (rel in fichiers ? fichiers[rel].length : null),
+    };
+}
 
-beforeAll(() => {
-    vault = fs.mkdtempSync(path.join(os.tmpdir(), 'outils-'));
-    fs.mkdirSync(path.join(vault, 'cours'));
-    fs.mkdirSync(path.join(vault, '.fragment'));
-    fs.writeFileSync(path.join(vault, 'cours/thermo.md'), 'La notion d\'Entropie mesure le désordre.');
-    fs.writeFileSync(path.join(vault, 'long.md'), 'x'.repeat(CARACTERES_MAX + 10));
-    fs.writeFileSync(path.join(vault, '.fragment/.env'), 'OPENAI_API_KEY=sk-secret entropie');
+describe('chercherDansLeVault', () => {
+    const v = fauxVault({
+        'a.md': 'Le chat dort sur le tapis.',
+        'b.md': 'Rien à voir ici.',
+        'c.txt': 'Un CHÂT accentué.',
+    });
+
+    it('trouve sans tenir compte des accents ni de la casse', async () => {
+        const chemins = (JSON.parse(await chercherDansLeVault(v, 'chat')) as { chemin: string }[]).map((x) => x.chemin);
+        expect(chemins).toContain('a.md');
+        expect(chemins).toContain('c.txt'); // « CHÂT » plié → chat
+        expect(chemins).not.toContain('b.md');
+    });
+    it('rend un message pour une requête vide', async () => {
+        expect(await chercherDansLeVault(v, '   ')).toBe('Requête vide.');
+    });
+    it('rend un message quand rien ne correspond', async () => {
+        expect(await chercherDansLeVault(v, 'zzz')).toBe('Aucun résultat dans le vault.');
+    });
+    it('trouve aussi par le nom du fichier', async () => {
+        const r = JSON.parse(await chercherDansLeVault(fauxVault({ 'physique.md': 'x' }), 'physique')) as { chemin: string }[];
+        expect(r[0].chemin).toBe('physique.md');
+    });
 });
 
-afterAll(() => fs.rmSync(vault, { recursive: true, force: true }));
-
-describe('search_vault', () => {
-    it('trouve sans tenir compte des majuscules ni des accents, et garde les accents de l\'extrait', () => {
-        const trouves = JSON.parse(chercherDansLeVault(vault, 'entropie'));
-        expect(trouves).toHaveLength(1);
-        expect(trouves[0].chemin).toBe(path.join('cours', 'thermo.md'));
-        expect(trouves[0].extrait).toContain('désordre');
+describe('lireDocument', () => {
+    it('lit une note existante', async () => {
+        expect(await lireDocument(fauxVault({ 'a.md': 'bonjour' }), 'a.md')).toBe('bonjour');
     });
-
-    it('ne cherche jamais dans les dossiers cachés', () => {
-        expect(chercherDansLeVault(vault, 'sk-secret')).toBe('Aucun résultat dans le vault.');
+    it('refuse un chemin caché ou hors du vault', async () => {
+        expect(await lireDocument(fauxVault({}), '.fragment/x.md')).toMatch(/^Refusé/);
+        expect(await lireDocument(fauxVault({}), '../x.md')).toMatch(/^Refusé/);
     });
-});
-
-describe('read_document', () => {
-    it('rend un refus lisible au lieu de lever', () => {
-        expect(lireDocument(vault, '.fragment/.env')).toMatch(/^Refusé : /);
-        expect(lireDocument(vault, '../../etc/hosts')).toMatch(/^Refusé : /);
+    it('refuse une extension non lue', async () => {
+        expect(await lireDocument(fauxVault({}), 'a.png')).toMatch(/^Refusé/);
     });
-
-    it('tronque un document trop long', () => {
-        const texte = lireDocument(vault, 'long.md');
-        expect(texte.length).toBeLessThan(CARACTERES_MAX + 100);
-        expect(texte).toContain('document tronqué');
+    it('signale un fichier absent', async () => {
+        expect(await lireDocument(fauxVault({}), 'absent.md')).toMatch(/^Aucun fichier/);
+    });
+    it('tronque au-delà du maximum', async () => {
+        const gros = 'a'.repeat(CARACTERES_MAX + 100);
+        expect(await lireDocument(fauxVault({ 'g.md': gros }), 'g.md')).toContain('tronqué');
     });
 });

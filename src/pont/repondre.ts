@@ -1,10 +1,10 @@
-import { AgentEnPause, lienCourant, type LienAgent } from './lienAgent';
+import { AgentEnPause, moteurCourant, type Moteur } from '../cerveau/moteur';
 import type { Message, Outil, Passage, Source, Sorties } from './protocole';
 
 export type { Outil, Source } from './protocole';
 
-// Tout passe par le processus de l'agent (lienAgent.ts). Sans .env, avec
-// AGENT_FACTICE=1 ou l'agent en pause (AGENT_BLOQUE=1), on répond en factice.
+// La façade que les composants appellent. Tout passe par le cerveau EN PAGE
+// (cerveau/moteur.ts). Sans clé (ou réglage factice), on répond en factice.
 
 export interface ContexteQuestion {
     texte: string;
@@ -33,12 +33,12 @@ export interface ReponseOrale {
 
 export const INDICE_STOP = 'Je ne peux plus t\'aider sans te donner la solution. Pose ta question dans le chat si tu es bloqué.';
 
-/** Par l'agent si on peut, en factice sinon. Toute autre erreur remonte. */
-async function parAgent<T>(appel: (lien: LienAgent) => Promise<T>, factice: () => Promise<T>): Promise<T> {
-    const lien = process.env.AGENT_FACTICE === '1' ? null : lienCourant();
-    if (!lien?.configure()) return factice();
+/** Par le cerveau si une clé est là, en factice sinon. Toute autre erreur remonte. */
+async function parAgent<T>(appel: (moteur: Moteur) => Promise<T>, factice: () => Promise<T>): Promise<T> {
+    const moteur = moteurCourant();
+    if (!moteur?.pret()) return factice();
     try {
-        return await appel(lien);
+        return await appel(moteur);
     } catch (err) {
         if (err instanceof AgentEnPause) return factice();
         throw err;
@@ -54,14 +54,14 @@ export async function repondre(
     question: string, contexte: ContexteQuestion, historique: Message[] = [], morceau?: (texte: string) => void,
 ): Promise<string> {
     return parAgent(
-        async (lien) => (await lien.demander(
+        async (moteur) => (await moteur.demander(
             { agent: 'chat', passage: passage(contexte), question, historique }, morceau,
         ) as Sorties['chat']).texte,
         async () => {
             await attendre(700);
             const n = historique.length;
             const suite = n > 0 ? ` (après ${n} message${n > 1 ? 's' : ''})` : '';
-            return `Réponse factice : l'agent n'est pas branché ou est en pause. `
+            return `Réponse factice : Hone n'a pas de clé API. `
                 + `Question reçue : « ${question} »${suite}, sur « ${extrait(contexte, 60)} ».`;
         },
     );
@@ -70,15 +70,15 @@ export async function repondre(
 /** `precedents` : les réponses du même outil déjà données sur ce passage (Aider). */
 export async function agir(outil: Outil, contexte: ContexteQuestion, precedents: ReponseOutil[] = []): Promise<ReponseOutil> {
     if (outil === 'aider' && precedents.some((p) => p.stop)) return { texte: INDICE_STOP, stop: true };
-    return parAgent(async (lien) => {
-        const sortie = await lien.demander(outil === 'aider'
+    return parAgent(async (moteur) => {
+        const sortie = await moteur.demander(outil === 'aider'
             ? { agent: outil, passage: passage(contexte), indices: precedents.map((p) => p.texte) }
             : { agent: outil, passage: passage(contexte) });
         switch (outil) {
             case 'visualiser': {
                 const v = sortie as Sorties['visualiser'];
                 return v.possible && v.svg
-                    ? { texte: 'Visuel dessiné par l\'agent.', svg: v.svg }
+                    ? { texte: 'Visuel dessiné par Hone.', svg: v.svg }
                     : { texte: v.raison ?? 'Ce passage ne se prête pas à un visuel.' };
             }
             case 'aider': {
@@ -94,11 +94,11 @@ export async function agir(outil: Outil, contexte: ContexteQuestion, precedents:
 }
 
 const FACTICE: Record<Outil, string> = {
-    definir: 'Définition factice : l\'agent n\'est pas branché.',
+    definir: 'Définition factice : Hone n\'a pas de clé.',
     visualiser: 'Visualisation factice.',
     aider: 'Indice factice',
-    traduire: 'Traduction factice : l\'agent traduira vers la langue du vault.',
-    resumer: 'Résumé factice : l\'agent donnera les points clés de la sélection.',
+    traduire: 'Traduction factice : Hone traduira vers la langue du vault.',
+    resumer: 'Résumé factice : Hone donnera les points clés de la sélection.',
 };
 
 const SVG_FACTICE = '<svg viewBox="0 0 320 90" font-family="inherit" font-size="12">'
@@ -141,13 +141,13 @@ export async function parler(audio: Blob, contexte: ContexteQuestion, historique
 /** Le bilan écrit d'une discussion orale, à sa fermeture. */
 export async function resumerOral(historique: Message[], contexte: ContexteQuestion): Promise<string> {
     return parAgent(
-        async (lien) => (await lien.demander({ agent: 'bilan', passage: passage(contexte), historique }) as Sorties['bilan']).texte,
+        async (moteur) => (await moteur.demander({ agent: 'bilan', passage: passage(contexte), historique }) as Sorties['bilan']).texte,
         async () => {
             await attendre(1200);
             const tours = historique.filter((m) => m.auteur === 'moi').length;
-            return `• Bilan factice : l'agent n'est pas branché ou est en pause.\n`
+            return `• Bilan factice : Hone n'a pas de clé API.\n`
                 + `• ${tours} tour${tours > 1 ? 's' : ''} de parole sur « ${extrait(contexte, 40)} ».\n`
-                + `• L'agent donnera ici les points clés de la discussion.`;
+                + `• Hone donnera ici les points clés de la discussion.`;
         },
     );
 }
