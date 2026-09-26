@@ -390,7 +390,8 @@ test('le chat se déplace et s\'agrandit, garde sa saisie en bas, et revient à 
     await expect(page.locator('.agent-message.mod-agent')).toHaveCount(2, { timeout: 5_000 });
 
     await page.locator('.agent-bulle [aria-label="Fermer"]').click();
-    await barre(page).locator('[aria-label="Fermer"]').click();
+    await page.keyboard.press('Escape');
+    await expect(barre(page)).toHaveCount(0);
     await traces(page).click();
     await expect.poll(() => bulle(page).evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
     await page.waitForTimeout(300);

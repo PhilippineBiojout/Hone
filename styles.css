@@ -72,13 +72,13 @@
 .agent-pied[hidden], .agent-pied [hidden] { display: none; }
 
 /* La barre horizontale au-dessus du passage (la Toolbar du cœur, dans un hôte 0×0
-   ancré au document) : une rangée d'icônes plates, sans cercle, que des filets séparent. */
+   ancré au document) : une rangée d'icônes plates, sans cercle, que des filets séparent. Pas de croix :
+   Échap ou un clic à côté la ferment. */
 .agent-barre-hote { z-index: 940; }
 .agent-barre.toolbar { z-index: auto; gap: 2px; }
 .agent-barre .toolbar-section { gap: 2px; }
 .agent-barre .toolbar-separator { margin: 6px 4px; }
-.agent-barre .toolbar-item.agent-barre-bouton, .agent-barre .toolbar-item.agent-barre-fermer,
-.agent-barre .toolbar-item.agent-barre-plus {
+.agent-barre .toolbar-item.agent-barre-bouton, .agent-barre .toolbar-item.agent-barre-plus {
     justify-content: center;
     box-sizing: border-box;
     width: 28px; height: 28px;
@@ -88,9 +88,8 @@
     cursor: pointer;
 }
 .agent-barre .toolbar-item.agent-barre-bouton { color: var(--text-normal); }
-.agent-barre .toolbar-item.agent-barre-fermer, .agent-barre .toolbar-item.agent-barre-plus { color: var(--text-muted); }
-.agent-barre .toolbar-item.agent-barre-bouton:hover, .agent-barre .toolbar-item.agent-barre-fermer:hover,
-.agent-barre .toolbar-item.agent-barre-plus:hover { background: rgba(128, 128, 128, 0.18); color: var(--text-normal); }
+.agent-barre .toolbar-item.agent-barre-plus { color: var(--text-muted); }
+.agent-barre .toolbar-item.agent-barre-bouton:hover, .agent-barre .toolbar-item.agent-barre-plus:hover { background: rgba(128, 128, 128, 0.18); color: var(--text-normal); }
 .agent-barre .toolbar-item .toolbar-item-icon { opacity: 1; }
 .agent-barre .toolbar-item svg { width: 16px; height: 16px; }
 

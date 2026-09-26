@@ -287,6 +287,31 @@ test('« … » élargit la barre vers la droite, sans la faire sortir du pane',
     expect(apres.x).toBeGreaterThanOrEqual(pane.x);
 });
 
+test('la barre n\'a pas de croix : un clic à côté la ferme, un clic sur la barre d\'annotation non', async () => {
+    const { page } = h;
+    await selectionner(page, 'Ligne 3 :', 'Révolution française');
+    await expect(barre(page)).toBeVisible();
+    await expect(barre(page).locator('[aria-label="Fermer"]')).toHaveCount(0);
+
+    // Une couleur de la barre d'annotation : la barre de l'agent reste.
+    await page.locator('.toolbar:not(.agent-barre) .toolbar-item').first().click();
+    await expect(barre(page)).toBeVisible();
+
+    const mot = await boiteDuMot(page, 'Ligne 12 :', 'commence');
+    await page.mouse.click(mot.x + 2, mot.y + mot.height / 2);
+    await expect(barre(page)).toHaveCount(0);
+});
+
+test('chat ouvert, un clic à côté ne ferme ni la barre ni le chat', async () => {
+    const { page } = h;
+    await selectionner(page, 'Ligne 3 :', 'Révolution française');
+    await ouvrirChat(page);
+    const mot = await boiteDuMot(page, 'Ligne 12 :', 'commence');
+    await page.mouse.click(mot.x + 2, mot.y + mot.height / 2);
+    await expect(barre(page)).toBeVisible();
+    await expect(bulle(page)).toBeVisible();
+});
+
 test('un simple clic dans le texte ne montre rien', async () => {
     const { page } = h;
     await desarmer(page);
@@ -310,7 +335,8 @@ test('la barre d\'une sélection ouvre le chat, qui laisse sa trace ; la poubell
     const { page } = h;
     // Un vrai trait ailleurs : la poubelle ne doit pas le toucher.
     await surligner(page, 'Ligne 8 :', 'commence');
-    await barre(page).locator('[aria-label="Fermer"]').click();
+    await page.keyboard.press('Escape');
+    await expect(barre(page)).toHaveCount(0);
     expect(await nbTraits(page)).toBe(1);
 
     await selectionner(page, 'Ligne 3 :', 'Révolution française');

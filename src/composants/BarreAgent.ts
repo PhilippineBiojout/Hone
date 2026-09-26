@@ -9,8 +9,10 @@ import { OUTILS } from '../ui/ui';
 /** Ce que la barre fait faire au calque : elle ne connaît ni le chat ni la zone. */
 export interface ActionsBarre {
     onChat(): void;
-    /** La croix (ou Échap) : le calque ferme le chat avec elle. */
+    /** Échap ou un clic à côté : le calque ferme le chat avec elle. */
     onFermer(): void;
+    /** Un clic à côté ne ferme la barre que si rien ne se tient à côté d'elle (le chat). */
+    seule(): boolean;
     /** Un outil : la barre va se résorber dans le rond de l'outil. */
     onOutil(outil: Outil): void;
     /** Le micro : la barre va se résorber dans le rond du micro. */
@@ -60,8 +62,6 @@ export class BarreAgent extends Component {
             });
             return cree;
         };
-        item('x', 'Fermer', () => this.fermer(), 'agent-barre-fermer');
-        this.toolbar.addSeparator();
         this.chatEl = item('cat', "Discuter avec Hone", () => this.actions.onChat()).dom;
         item('mic', "Parler à Hone", () => this.actions.onVoix());
         this.toolbar.addSeparator();
@@ -96,7 +96,17 @@ export class BarreAgent extends Component {
         return this._loaded;
     }
 
-    /** Montre la barre à côté du trait courant. */
+    onload(): void {
+        // Un clic à côté la ferme, comme Échap. Les barres et menus de l'app n'en sont pas :
+        // choisir une couleur d'annotation ne doit pas la faire partir.
+        this.registerDomEvent(document, 'pointerdown', (e) => {
+            const cible = e.target as Element | null;
+            if (!cible || this.hote.contains(cible) || cible.closest('.toolbar, .menu')) return;
+            if (this.actions.seule()) this.fermer();
+        }, true);
+    }
+
+    /** Montre la barre au-dessus du trait courant. */
     montrer(): void {
         if (this._loaded) this.retirerHote();
         this.load();

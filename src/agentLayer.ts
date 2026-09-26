@@ -51,12 +51,13 @@ export function createAgentLayer(ctx: LayerContext): () => void {
             if (zone) bulle.ouvrir(zone);
             majOccupe();
         },
-        // La croix de la barre ferme tout : le chat n'aurait plus rien à côté de quoi se tenir.
+        // Fermer la barre ferme tout : le chat n'aurait plus rien à côté de quoi se tenir.
         onFermer: () => {
             zone = null;
             bulle.fermer();
             editor.requestUpdate();
         },
+        seule: () => !bulle.estOuverte(),
         onOutil: (outil) => {
             if (!zone) return;
             const depuis = barre.dom.getBoundingClientRect();
