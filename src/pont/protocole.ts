@@ -8,6 +8,9 @@ export type Source = 'vault' | 'web' | 'modele';
 
 export interface Passage { texte: string; chemin: string }
 export interface Message { auteur: 'moi' | 'agent'; texte: string }
+/** Un outil que l'agent vient d'appeler (son nom, et la requête, le chemin ou la fonction visée).
+ *  Montré pendant l'attente puis replié au pied de la carte : c'est ce qui rend la boucle visible. */
+export interface Etape { outil: string; detail: string }
 
 export type Demande =
     | { agent: 'chat'; passage: Passage; question: string; historique: Message[] }

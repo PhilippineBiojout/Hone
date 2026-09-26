@@ -1,5 +1,5 @@
 import { AgentEnPause, moteurCourant, type Moteur } from '../cerveau/moteur';
-import type { Message, Outil, Passage, Source, Sorties } from './protocole';
+import type { Etape, Message, Outil, Passage, Source, Sorties } from './protocole';
 
 export type { Outil, Source } from './protocole';
 
@@ -22,6 +22,8 @@ export interface ReponseOutil {
     svg?: string;
     /** Aider : le prochain indice donnerait la solution. */
     stop?: boolean;
+    /** Les outils appelés par l'agent pour y arriver, dans l'ordre. */
+    etapes?: Etape[];
 }
 
 export interface ReponseOrale {
@@ -67,13 +69,23 @@ export async function repondre(
     );
 }
 
-/** `precedents` : les réponses du même outil déjà données sur ce passage (Aider). */
-export async function agir(outil: Outil, contexte: ContexteQuestion, precedents: ReponseOutil[] = []): Promise<ReponseOutil> {
+/**
+ * `precedents` : les réponses du même outil déjà données sur ce passage (Aider).
+ * `surEtape` reçoit chaque outil appelé pendant l'attente ; la réponse les garde toutes.
+ */
+export async function agir(
+    outil: Outil, contexte: ContexteQuestion, precedents: ReponseOutil[] = [], surEtape?: (etape: Etape) => void,
+): Promise<ReponseOutil> {
     if (outil === 'aider' && precedents.some((p) => p.stop)) return { texte: INDICE_STOP, stop: true };
-    return parAgent(async (moteur) => {
+    const etapes: Etape[] = [];
+    const noter = (etape: Etape): void => {
+        etapes.push(etape);
+        surEtape?.(etape);
+    };
+    const reponse = await parAgent(async (moteur): Promise<ReponseOutil> => {
         const sortie = await moteur.demander(outil === 'aider'
             ? { agent: outil, passage: passage(contexte), indices: precedents.map((p) => p.texte) }
-            : { agent: outil, passage: passage(contexte) });
+            : { agent: outil, passage: passage(contexte) }, undefined, noter);
         switch (outil) {
             case 'visualiser': {
                 const v = sortie as Sorties['visualiser'];
@@ -90,7 +102,8 @@ export async function agir(outil: Outil, contexte: ContexteQuestion, precedents:
             default:
                 return sortie as Sorties['definir'];
         }
-    }, () => agirFactice(outil, contexte, precedents));
+    }, () => agirFactice(outil, contexte, precedents, noter));
+    return etapes.length > 0 ? { ...reponse, etapes } : reponse;
 }
 
 const FACTICE: Record<Outil, string> = {
@@ -110,9 +123,20 @@ const SVG_FACTICE = '<svg viewBox="0 0 320 90" font-family="inherit" font-size="
     + '<circle cx="280" cy="45" r="6" fill="var(--color-accent)"/><text x="280" y="28" text-anchor="middle" fill="currentColor">1945</text>'
     + '<text x="280" y="72" text-anchor="middle" fill="var(--text-muted)">ENIAC</text></svg>';
 
-async function agirFactice(outil: Outil, contexte: ContexteQuestion, precedents: ReponseOutil[]): Promise<ReponseOutil> {
-    await attendre(1500);
+async function agirFactice(
+    outil: Outil, contexte: ContexteQuestion, precedents: ReponseOutil[], noter: (etape: Etape) => void,
+): Promise<ReponseOutil> {
     const e = extrait(contexte, 60);
+    // Deux étapes factices, comme un agent qui cherche puis lit : la boucle se voit aussi sans clé.
+    if (outil !== 'traduire') {
+        await attendre(500);
+        noter({ outil: 'search_vault', detail: extrait(contexte, 24) });
+        await attendre(500);
+        noter({ outil: 'read_document', detail: contexte.chemin || 'note.md' });
+        await attendre(500);
+    } else {
+        await attendre(1500);
+    }
     switch (outil) {
         case 'visualiser':
             return { texte: FACTICE.visualiser, svg: SVG_FACTICE };

@@ -5,6 +5,7 @@ import { nettoyerSvg } from '../ui/nettoyerSvg';
 import type { Message } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import { agir, resumerOral, type ContexteQuestion, type Outil, type ReponseOutil } from '../pont/repondre';
+import { decrireEtape, resumerEtapes } from '../ui/etapes';
 import { arc, boutonIcone, OUTILS, PiedSupprimer, proteger } from '../ui/ui';
 
 /** Ce que montre la carte : la réponse d'un outil, ou le bilan d'une discussion orale. */
@@ -27,6 +28,12 @@ export class ActionAgent extends Component {
     private readonly titreEl: HTMLElement;
     private readonly sourceEl: HTMLElement;
     private readonly corpsEl: HTMLElement;
+    /** À côté du rond : l'outil que l'agent vient d'appeler. */
+    private readonly etapeEl: HTMLElement;
+    /** Au pied de la carte : les outils appelés, repliés. */
+    private readonly parcoursEl = document.createElement('details');
+    private readonly parcoursTitreEl: HTMLElement;
+    private readonly parcoursListeEl: HTMLElement;
     private readonly pied: PiedSupprimer;
     private readonly fenetre: Fenetre;
     private readonly lacherClavier: () => void;
@@ -48,6 +55,8 @@ export class ActionAgent extends Component {
         this.cercleEl.setAttribute('role', 'status');
         this.iconeCercleEl = span(this.cercleEl, 'agent-action-icone');
         arc(this.cercleEl);
+        this.etapeEl = span(this.cercleEl, 'agent-action-etape');
+        this.etapeEl.setAttribute('aria-live', 'polite');
 
         this.carteEl.classList.add('agent-action-carte');
         this.carteEl.setAttribute('role', 'dialog');
@@ -65,6 +74,11 @@ export class ActionAgent extends Component {
         this.corpsEl = this.carteEl.appendChild(document.createElement('div'));
         this.corpsEl.classList.add('agent-action-corps');
         this.corpsEl.setAttribute('aria-live', 'polite');
+
+        this.parcoursEl.classList.add('agent-action-parcours');
+        this.parcoursTitreEl = this.parcoursEl.appendChild(document.createElement('summary'));
+        this.parcoursListeEl = this.parcoursEl.appendChild(document.createElement('ol'));
+        this.carteEl.appendChild(this.parcoursEl);
 
         this.pied = new PiedSupprimer(onSupprimer, onDiscuter);
         this.carteEl.appendChild(this.pied.el);
@@ -92,7 +106,10 @@ export class ActionAgent extends Component {
 
     /** `depuis` : la boîte client de la barre, juste avant son retrait. */
     lancer(outil: Outil, contexte: ContexteQuestion, depuis: DOMRect, precedents: ReponseOutil[] = []): void {
-        this.attendre(OUTILS[outil], depuis, agir(outil, contexte, precedents),
+        this.attendre(OUTILS[outil], depuis, agir(outil, contexte, precedents, (etape) => {
+            this.etapeEl.textContent = `${decrireEtape(etape, false)}…`;
+            this.etapeEl.hidden = false;
+        }),
             (reponse) => ({ type: 'outil', outil, ...reponse }));
     }
 
@@ -164,6 +181,8 @@ export class ActionAgent extends Component {
         this.carteEl.setAttribute('aria-label', libelle);
         this.corpsEl.textContent = '';
         this.corpsEl.classList.remove('is-error', 'is-visuel', 'is-stop');
+        this.etapeEl.textContent = '';
+        this.etapeEl.hidden = true;
         this.sourceEl.hidden = true;
         this.pied.montrer(false);
         this.pied.montrerDiscuter(false);
@@ -172,6 +191,7 @@ export class ActionAgent extends Component {
 
     /** Le dessin de Visualiser, toujours nettoyé, sinon le texte. */
     private afficher(reponse: ReponseOutil): void {
+        this.afficherParcours(reponse);
         this.corpsEl.textContent = '';
         this.sourceEl.hidden = reponse.source !== 'web';
         this.corpsEl.classList.toggle('is-stop', reponse.stop === true);
@@ -188,6 +208,17 @@ export class ActionAgent extends Component {
         }
         svg.setAttribute('aria-label', 'Visuel du passage');
         this.corpsEl.appendChild(svg);
+    }
+
+    private afficherParcours({ etapes = [] }: ReponseOutil): void {
+        this.parcoursEl.hidden = etapes.length === 0;
+        this.parcoursEl.open = false;
+        this.parcoursTitreEl.textContent = `Parcours de l'agent : ${resumerEtapes(etapes)}`;
+        this.parcoursListeEl.replaceChildren(...etapes.map((etape) => {
+            const li = document.createElement('li');
+            li.textContent = decrireEtape(etape, true);
+            return li;
+        }));
     }
 
     onunload(): void {

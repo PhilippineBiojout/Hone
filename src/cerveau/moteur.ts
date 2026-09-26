@@ -6,7 +6,7 @@ import {
 import type { App } from 'fragment';
 import type { Atelier, ContexteAtelier } from '../atelier/outils-atelier';
 import type { ContexteMemoire, Memoire } from '../memoire/outils-memoire';
-import type { Demande, Sortie, Source } from '../pont/protocole';
+import type { Demande, Etape, Sortie, Source } from '../pont/protocole';
 import type { Reglages } from '../reglages/reglages';
 import { creerAgents, type Agents } from './agents';
 import { Compteur } from './couts';
@@ -48,6 +48,30 @@ async function entree(acces: AccesVault, demande: Demande, avant = ''): Promise<
         default:
             return citer(demande, avant);
     }
+}
+
+/** Ce qu'on montre d'un appel d'outil : le champ qui dit ce qu'il vise. */
+const DETAIL: Record<string, string[]> = {
+    search_vault: ['requete'], read_document: ['chemin'], create_function: ['nom'], call_function: ['nom'],
+    delete_function: ['nom'], run_command: ['id'], remember: ['recherche', 'semaine'], note_preference: ['preference'],
+};
+
+/** Un appel d'outil vu dans le flux, en étape montrable ; null si ce n'en est pas un. */
+export function etapeDe(item: RunItem): Etape | null {
+    if (item.type !== 'tool_call_item') return null;
+    const brut = item.rawItem as { type: string; name?: string; arguments?: string; providerData?: { action?: { query?: string } } };
+    if (brut.type === 'hosted_tool_call' && brut.name === 'web_search_call') {
+        return { outil: 'web', detail: brut.providerData?.action?.query ?? '' };
+    }
+    if (brut.type !== 'function_call' || !brut.name) return null;
+    let args: Record<string, unknown> = {};
+    try {
+        args = JSON.parse(brut.arguments ?? '{}');
+    } catch {
+        // des arguments illisibles : l'étape se montre sans détail
+    }
+    const champ = (DETAIL[brut.name] ?? []).map((c) => args[c]).find((v) => typeof v === 'string' && v);
+    return { outil: brut.name, detail: typeof champ === 'string' ? champ : '' };
 }
 
 /** Les noms des outils que l'agent a appelés, pour la mémoire. */
@@ -107,8 +131,9 @@ export class Moteur {
         return this.agents !== null;
     }
 
-    /** `morceau` reçoit le texte du chat en direct. Lève ErreurAgent en cas d'échec, AgentEnPause si pas prêt. */
-    async demander(demande: Demande, morceau?: (texte: string) => void): Promise<Sortie> {
+    /** `morceau` reçoit le texte du chat en direct, `surEtape` chaque outil appelé. Toutes les missions
+     *  sont streamées pour ça. Lève ErreurAgent en cas d'échec, AgentEnPause si pas prêt. */
+    async demander(demande: Demande, morceau?: (texte: string) => void, surEtape?: (etape: Etape) => void): Promise<Sortie> {
         if (!this.agents) throw new AgentEnPause('Hone sans clé.');
         const refus = this.compteur.refus();
         if (refus) throw new ErreurAgent(refus);
@@ -129,6 +154,9 @@ export class Moteur {
                 for await (const ev of flux) {
                     if (ev.type === 'raw_model_stream_event' && ev.data.type === 'output_text_delta') {
                         morceau?.(ev.data.delta);
+                    } else if (ev.type === 'run_item_stream_event' && ev.name === 'tool_called') {
+                        const etape = etapeDe(ev.item);
+                        if (etape) surEtape?.(etape);
                     }
                 }
                 await flux.completed;
@@ -137,7 +165,14 @@ export class Moteur {
                 void this.memoire?.noter(demande, sortie, outilsAppeles(flux.newItems));
                 return sortie;
             }
-            const resultat = await run(agent, items, { maxTurns: tours.autres, context });
+            const resultat = await run(agent, items, { stream: true, maxTurns: tours.autres, context });
+            for await (const ev of resultat) {
+                if (ev.type === 'run_item_stream_event' && ev.name === 'tool_called') {
+                    const etape = etapeDe(ev.item);
+                    if (etape) surEtape?.(etape);
+                }
+            }
+            await resultat.completed;
             this.compteur.noter(resultat.state.usage);
             const final = resultat.finalOutput as Record<string, unknown> | string | undefined;
             const sortie = demande.agent === 'bilan'
