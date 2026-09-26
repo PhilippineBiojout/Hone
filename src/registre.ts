@@ -1,66 +1,49 @@
 /**
  * L'index : où est, dans le vault, le PDF de chaque carnet de la tablette.
  *
- * On suit un carnet par son id sur la tablette, jamais par son nom : le vault
- * ne bouge pas quand on renomme ou déplace le carnet sur la tablette, et le PDF
- * reste suivi quand on le range ailleurs dans le vault. Logique pure, sans
- * Fragment, pour être testée seule.
+ * Un carnet est suivi par son id sur la tablette, jamais par son nom : le vault
+ * ne bouge pas quand on renomme le carnet sur la tablette, et le PDF reste
+ * suivi quand on le range ailleurs dans le vault. Logique pure, testée seule.
  */
 
 export interface Entree {
-	/** Chemin du PDF dans le vault, null quand il n'y est plus. */
+	/** Chemin du PDF dans le vault, null quand il n'y est pas (ou plus). */
 	chemin: string | null;
-	/** Chemin du carnet sur la tablette au dernier passage (pour la vue et la récupération). */
-	cheminTablette: string;
-	/** `ModifiedClient` de la version écrite dans le vault, null pour forcer un téléchargement. */
+	/** `ModifiedClient` de la version déjà écrite ; null force un téléchargement. */
 	modifie: string | null;
-	/** sha1 et taille du dernier PDF écrit : ce qui permet de le reconnaître après un déplacement hors de l'app. */
+	/** sha1 et taille du dernier PDF écrit : de quoi le reconnaître après un déplacement hors de l'app. */
 	empreinte: string | null;
 	taille: number;
-	/** Supprimé du vault : on ne le recrée plus, sauf récupération. */
+	/** Supprimé du vault : plus recréé, sauf si on le récupère. */
 	ignore: boolean;
-	/** Heure de la suppression, pour reconnaître un déplacement (delete puis create). */
+	/** Heure de la suppression : un déplacement hors de l'app arrive en delete puis create. */
 	supprimeLe?: number;
 }
 
-export type Carnets = Record<string, Entree>;
-
-/** Un déplacement hors de l'app arrive en delete + create : on accepte le create pendant ce délai. */
+/** Délai dans lequel un delete et un create forment un déplacement. */
 export const FENETRE_DEPLACEMENT_MS = 10_000;
 
+/** `chemin` est `dossier` lui-même ou quelque chose dedans. */
 function sous(chemin: string, dossier: string): boolean {
 	return chemin === dossier || chemin.startsWith(dossier + '/');
 }
 
 export class Registre {
-	constructor(public carnets: Carnets = {}) {}
+	constructor(public carnets: Record<string, Entree> = {}) {}
 
-	get(id: string): Entree | undefined {
+	/** L'entrée du carnet, créée vide la première fois qu'on le voit. */
+	entree(id: string): Entree {
+		this.carnets[id] ??= { chemin: null, modifie: null, empreinte: null, taille: 0, ignore: false };
 		return this.carnets[id];
 	}
 
-	parChemin(chemin: string): string | null {
-		for (const [id, e] of Object.entries(this.carnets)) if (e.chemin === chemin) return id;
-		return null;
-	}
-
-	/** Un nouveau carnet, à télécharger à l'emplacement que choisira la synchro. */
-	ajouter(id: string, cheminTablette: string): Entree {
-		const e: Entree = { chemin: null, cheminTablette, modifie: null, empreinte: null, taille: 0, ignore: false };
-		this.carnets[id] = e;
-		return e;
-	}
-
-	/** Ce qu'on vient d'écrire dans le vault. */
-	ecrit(id: string, chemin: string, modifie: string, empreinte: string, taille: number): void {
-		const e = this.carnets[id];
-		Object.assign(e, { chemin, modifie, empreinte, taille, ignore: false });
-		delete e.supprimeLe;
+	suivi(chemin: string): boolean {
+		return Object.values(this.carnets).some((e) => e.chemin === chemin);
 	}
 
 	/**
-	 * Un fichier ou un dossier renommé ou déplacé dans l'app. Pour un dossier,
-	 * le cœur n'émet qu'un événement : tous les chemins dessous suivent ici.
+	 * Un fichier ou un dossier renommé dans l'app. Pour un dossier, le cœur
+	 * n'émet qu'un événement : tous les chemins dessous suivent ici.
 	 */
 	renommer(ancien: string, nouveau: string): boolean {
 		let change = false;
@@ -78,42 +61,30 @@ export class Registre {
 		let change = false;
 		for (const e of Object.values(this.carnets)) {
 			if (e.chemin !== null && sous(e.chemin, chemin)) {
-				e.chemin = null;
-				e.ignore = true;
-				e.supprimeLe = maintenant;
+				Object.assign(e, { chemin: null, ignore: true, supprimeLe: maintenant });
 				change = true;
 			}
 		}
 		return change;
 	}
 
-	/**
-	 * Les carnets qu'un PDF apparu de cette taille pourrait être. `depuis` :
-	 * seulement ceux supprimés après cet instant (déplacement en direct) ;
-	 * absent, tous ceux qui n'ont plus de chemin (réconciliation au démarrage).
-	 */
-	candidats(taille: number, depuis?: number): string[] {
-		return Object.entries(this.carnets)
-			.filter(([, e]) => e.chemin === null && e.empreinte !== null && e.taille === taille)
-			.filter(([, e]) => depuis === undefined || (e.supprimeLe ?? 0) >= depuis)
-			.map(([id]) => id);
+	/** Les carnets supprimés après `depuis` dont le PDF avait cette taille. */
+	candidats(taille: number, depuis: number): string[] {
+		return Object.keys(this.carnets).filter((id) => {
+			const e = this.carnets[id];
+			return e.chemin === null && e.taille === taille && (e.supprimeLe ?? 0) >= depuis;
+		});
 	}
 
-	/** Le PDF d'un carnet retrouvé ailleurs : il est de nouveau suivi, à ce chemin. */
+	/** Le PDF d'un carnet retrouvé ailleurs : de nouveau suivi, à ce chemin. */
 	rattacher(id: string, chemin: string): void {
-		const e = this.carnets[id];
-		e.chemin = chemin;
-		e.ignore = false;
-		delete e.supprimeLe;
+		Object.assign(this.carnets[id], { chemin, ignore: false, supprimeLe: undefined });
 	}
 
 	/** Récupérer : le carnet sera retéléchargé au prochain tour, dans reMarkable/. */
 	recuperer(ids: string[]): void {
 		for (const id of ids) {
-			const e = this.carnets[id];
-			if (!e || !e.ignore) continue;
-			Object.assign(e, { ignore: false, chemin: null, modifie: null });
-			delete e.supprimeLe;
+			Object.assign(this.carnets[id], { chemin: null, modifie: null, ignore: false, supprimeLe: undefined });
 		}
 	}
 }

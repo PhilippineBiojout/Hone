@@ -48,18 +48,6 @@
 	text-align: right;
 }
 
-.remarkable-lien {
-	cursor: pointer;
-}
-
-.remarkable-lien:hover {
-	color: var(--text-accent);
-	text-decoration: underline;
-}
-
-.remarkable-ignore .remarkable-nom {
-	color: var(--text-faint);
-}
 
 .remarkable-recuperer {
 	flex: none;

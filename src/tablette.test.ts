@@ -37,10 +37,10 @@ afterAll(() => serveur.close());
 describe('Tablette', () => {
 	it('parcourt les dossiers malgré la réponse Content-Length + chunked', async () => {
 		const elements = await tablette.lister();
-		expect(elements.map((e) => [e.id, e.chemin, e.dossier, e.parent])).toEqual([
-			['d1', 'Cours', true, ''],
-			['c2', 'Cours/Maths-Algèbre', false, 'd1'],
-			['c1', 'Brouillon', false, ''],
+		expect(elements.map((e) => [e.id, e.chemin, e.dossier])).toEqual([
+			['d1', 'Cours', true],
+			['c2', 'Cours/Maths-Algèbre', false],
+			['c1', 'Brouillon', false],
 		]);
 	});
 
