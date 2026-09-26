@@ -1,8 +1,8 @@
 {
-    "id": "agent",
-    "name": "Agent",
+    "id": "hone",
+    "name": "Hone",
     "version": "0.1.0",
     "minAppVersion": "0.1.0",
-    "description": "Un trait d'annotation fait apparaître une barre qui ouvre le chat et les outils de l'agent.",
+    "description": "Un trait d'annotation fait apparaître une barre qui ouvre le chat et les outils de Hone.",
     "author": "Philippine Biojout"
 }

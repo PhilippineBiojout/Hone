@@ -48,7 +48,7 @@ async function lancer(): Promise<Harnais> {
     await mkdir(vault, { recursive: true });
     await mkdir(userData, { recursive: true });
     await writeFile(path.join(vault, 'note.md'), CONTENU, 'utf8');
-    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/agent', path.join(vault, '.fragment/plugins/agent'), { recursive: true, // Ni node_modules, ni le .env (la clé ne sort pas du plugin : sans lui, l'agent répond en factice), ni le journal des coûts.
+    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone', path.join(vault, '.fragment/plugins/hone'), { recursive: true, // Ni node_modules, ni le .env (la clé ne sort pas du plugin : sans lui, l'agent répond en factice), ni le journal des coûts.
         filter: (src) => !src.includes('node_modules') && !/[\\/](\.env|couts\.jsonl)$/.test(src) });
     await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
 
@@ -145,7 +145,7 @@ async function entourer(page: Page, ligneTexte: string, mot: string): Promise<vo
 
 const barre = (page: Page) => page.locator('.agent-barre');
 const voix = (page: Page) => page.locator('.agent-voix');
-const micro = (page: Page) => barre(page).locator('[aria-label="Parler à l\'agent"]');
+const micro = (page: Page) => barre(page).locator('[aria-label="Parler à Hone"]');
 const stop = (page: Page) => voix(page).locator('.agent-voix-stop');
 
 const nbTraits = (page: Page) => page.evaluate(() => {
@@ -222,7 +222,7 @@ test('le micro est dans la barre courte, juste sous la tête de chat', async () 
     await expect(barre(page)).toBeVisible();
     // La barre est une Toolbar du cœur : ses items sont des .toolbar-item.
     const libelles = await barre(page).locator('.toolbar-item:visible').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
-    expect(libelles).toEqual(['Fermer', "Discuter avec l'agent", "Parler à l'agent", 'Définir', 'Visualiser', "Plus d'outils"]);
+    expect(libelles).toEqual(['Fermer', "Discuter avec Hone", "Parler à Hone", 'Définir', 'Visualiser', "Plus d'outils"]);
 });
 
 test('le micro fait fondre la barre dans un rond, qui s\'étire en pilule de 196 px', async () => {

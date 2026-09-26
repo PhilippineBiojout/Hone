@@ -2,5 +2,7 @@ node_modules/
 .DS_Store
 .env
 .env.*
-!.env.example
 couts.jsonl
+
+# Bundle généré par esbuild (npm run build) — régénéré, non versionné
+main.js

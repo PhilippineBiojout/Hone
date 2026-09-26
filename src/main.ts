@@ -1,25 +1,47 @@
-import { Plugin } from 'fragment';
-import * as path from 'path';
+import { Notice, Plugin } from 'fragment';
 import { createAgentLayer } from './agentLayer';
-import { ouvrirLien } from './lienAgent';
-import { brancherScan } from './scan';
-import { poserLeVerre } from './verre';
+import { ouvrirMoteur } from './cerveau/moteur';
+import { poserLeVerre } from './decor/verre';
+import { fusionner, ModalCle, type Reglages } from './reglages/reglages';
+import { brancherScan } from './scan/scan';
 
-/** Le plugin Agent : un calque par vue, et le processus de l'agent lancé au premier appel. */
-export default class AgentPlugin extends Plugin {
-    onload(): void {
-        // La racine du vault, que le main du cœur passe à la fenêtre.
-        const racine = process.argv.find((a) => a.startsWith('--vault-root='))?.slice('--vault-root='.length);
-        if (racine) this.register(ouvrirLien(racine, path.join(racine, '.fragment', 'plugins', this.manifest.id)));
+/** Le plugin Hone : un calque par vue. OpenAI tourne EN PAGE (plus de procès forké) ;
+ *  la clé vit dans les données du plugin (réglages), saisie via la commande dédiée. */
+export default class HonePlugin extends Plugin {
+    private reglages: Reglages = fusionner(null);
+
+    async onload(): Promise<void> {
+        this.reglages = fusionner(await this.loadData());
+        this.register(ouvrirMoteur(this.app, this.reglages));
+
         this.registerLayer({
-            id: 'agent',
-            name: 'Agent',
+            id: 'hone',
+            name: 'Hone',
             icon: 'message-circle',
             defaultEnabled: true,
             appliesTo: (view) => view.leaf.parent !== null,
             create: (ctx) => createAgentLayer(ctx),
         });
+
+        this.addCommand({
+            id: 'cle-api',
+            name: 'Hone : clé API…',
+            callback: () => new ModalCle(this.app, this.reglages, (r) => void this.majReglages(r)).open(),
+        });
+
         poserLeVerre(this);
         brancherScan(this);
+
+        if (!this.reglages.cle) {
+            new Notice('Hone : ajoute ta clé OpenAI via la commande « Hone : clé API… ».', 8000);
+        }
+    }
+
+    /** Enregistre les réglages et reconstruit le cerveau (nouvelle clé / modèles). */
+    private async majReglages(r: Reglages): Promise<void> {
+        this.reglages = r;
+        await this.saveData(r);
+        this.register(ouvrirMoteur(this.app, r));
+        if (r.cle) new Notice('Clé Hone enregistrée.');
     }
 }
