@@ -5,7 +5,7 @@ sélection fait apparaître une barre qui ouvre un chat et des outils d'IA sur l
 
 ## Stack & commandes
 - TypeScript, bundlé par esbuild (`esbuild.config.mjs`), types via `@usefragment/core`.
-- Deps runtime : `@openai/agents` + `openai` (SDK bundlé DANS `main.js` → ~1,9 Mo), `zod`, `qr-code-styling` (QR du scan).
+- Deps runtime : `@openai/agents` + `openai` (SDK bundlé DANS `main.js` → ~1,9 Mo), `zod`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable).
 - Scripts : `npm run build` (tsc --noEmit + esbuild prod), `npm test` (vitest run src), `npm run dev`.
 - **node_modules pas versionné** : faire `npm install` avant un build à froid ; l'API Fragment se lit via l'usage, pas via le core.
 
@@ -51,6 +51,7 @@ src/
   pont/                 repondre.ts (façade), protocole.ts (types de domaine)
   reglages/             reglages.ts (clé API + Modal de saisie)
   scan/                 scan.ts, relais.ts
+  remarkable/           remarkable.ts (brancherRemarkable), tablette.ts, rmdoc.ts, synchro.ts, registre.ts, …
   decor/                verre.ts
   tests/                TOUS les *.test.ts (vitest) — `npm test` = `vitest run src`
 ```
