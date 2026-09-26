@@ -51,7 +51,7 @@
 .agent-bulle-fermer:hover, .agent-pied-bouton:hover, .agent-voix-fermer:hover { color: var(--text-normal); }
 .agent-bulle-fermer:hover, .agent-pied-bouton:hover, .agent-pied-annuler:hover,
 .agent-voix-stop:hover:not(:disabled) { background: rgba(128, 128, 128, 0.18); }
-.agent-barre .toolbar-item.agent-barre-bouton, .agent-trace, .agent-voix-stop {
+.agent-trace, .agent-voix-stop {
     border: 1px solid var(--tab-outline-color);
     border-radius: 50%;
 }
@@ -61,7 +61,7 @@
     outline: 2px solid var(--color-accent);
     outline-offset: 1px;
 }
-.agent-barre .agent-barre-fermer svg, .agent-barre .agent-barre-plus svg, .agent-action-source svg,
+.agent-action-source svg,
 .agent-trace svg, .agent-voix-fermer svg { width: 14px; height: 14px; }
 .agent-bulle-fermer svg, .agent-pied-bouton svg { width: 15px; height: 15px; }
 .agent-bulle-micro svg, .agent-bulle-envoyer svg, .agent-action-tete .agent-action-icone svg { width: 16px; height: 16px; }
@@ -71,20 +71,28 @@
 .agent-barre .toolbar-item[hidden], .agent-bulle-micro[hidden], .agent-action-source[hidden],
 .agent-pied[hidden], .agent-pied [hidden] { display: none; }
 
-/* La barre verticale (la Toolbar du cœur, dans un hôte 0×0 ancré au document) */
+/* La barre horizontale au-dessus du passage (la Toolbar du cœur, dans un hôte 0×0
+   ancré au document) : une rangée d'icônes plates, sans cercle, que des filets séparent. */
 .agent-barre-hote { z-index: 940; }
-.agent-barre.toolbar { z-index: auto; gap: 4px; }
-.agent-barre .toolbar-section { gap: 4px; }
+.agent-barre.toolbar { z-index: auto; gap: 2px; }
+.agent-barre .toolbar-section { gap: 2px; }
+.agent-barre .toolbar-separator { margin: 6px 4px; }
 .agent-barre .toolbar-item.agent-barre-bouton, .agent-barre .toolbar-item.agent-barre-fermer,
 .agent-barre .toolbar-item.agent-barre-plus {
     justify-content: center;
     box-sizing: border-box;
+    width: 28px; height: 28px;
     padding: 0;
+    border: 0;
+    border-radius: 6px;
     cursor: pointer;
 }
-.agent-barre .toolbar-item.agent-barre-bouton { width: 28px; height: 28px; color: var(--text-normal); }
+.agent-barre .toolbar-item.agent-barre-bouton { color: var(--text-normal); }
+.agent-barre .toolbar-item.agent-barre-fermer, .agent-barre .toolbar-item.agent-barre-plus { color: var(--text-muted); }
+.agent-barre .toolbar-item.agent-barre-bouton:hover, .agent-barre .toolbar-item.agent-barre-fermer:hover,
+.agent-barre .toolbar-item.agent-barre-plus:hover { background: rgba(128, 128, 128, 0.18); color: var(--text-normal); }
 .agent-barre .toolbar-item .toolbar-item-icon { opacity: 1; }
-.agent-barre .toolbar-item.agent-barre-fermer, .agent-barre .toolbar-item.agent-barre-plus { width: 20px; height: 20px; }
+.agent-barre .toolbar-item svg { width: 16px; height: 16px; }
 
 /* La bulle du chat */
 .agent-bulle-tete, .agent-action-tete { display: flex; align-items: center; gap: 8px; }

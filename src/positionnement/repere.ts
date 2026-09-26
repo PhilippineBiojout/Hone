@@ -1,6 +1,6 @@
 import { WidgetLayer, type OverlayHost, type TextSurface, type WidgetAnchor, type WidgetHandle } from 'fragment';
 import type { Stroke } from '../interactions/annotation';
-import { aCote, type Boite } from './placement';
+import { aCote, auDessus, type Boite } from './placement';
 
 /**
  * Le repère de l'agent sur une vue : le WidgetLayer du cœur et le trait autour duquel
@@ -83,6 +83,18 @@ export class Repere {
             ref, largeur: taille.dx, hauteur: taille.dy, haut: options.haut ?? 'centre',
             ecart: options.ecart ?? 12, cadre, obstacles,
         });
+        return this.ancre(x, y);
+    }
+
+    /** L'ancre qui pose `el` (monté, on le mesure) au-dessus de `ref`, ou dessous, hors de la barre d'annotation. */
+    auDessus(el: HTMLElement, options: { ref?: Boite | null; ecart?: number } = {}): WidgetAnchor | null {
+        const ref = options.ref ?? this.boiteTrait();
+        const cadre = this.versDocument(this.paneClient());
+        if (!ref || !cadre) return null;
+        const annotation = this.barreAnnotation();
+        const obstacles = annotation ? [this.versDocument(annotation)].filter((b): b is Boite => !!b) : [];
+        const taille = this.ecartDocument(el.offsetWidth, el.offsetHeight);
+        const { x, y } = auDessus({ ref, largeur: taille.dx, hauteur: taille.dy, ecart: options.ecart ?? 8, cadre, obstacles });
         return this.ancre(x, y);
     }
 

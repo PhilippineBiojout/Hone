@@ -252,12 +252,39 @@ test('sélectionner à la souris fait apparaître la barre, sur le passage séle
     // Pas d'encre : la sélection n'est pas un trait d'annotation.
     expect(await nbTraits(page)).toBe(0);
 
-    // La barre se tient à droite du passage, à sa hauteur.
+    // La barre, horizontale, se tient au-dessus du passage, centrée sur lui.
     const mot = await boiteDuMot(page, 'Ligne 3 :', 'Révolution française');
     const b = (await barre(page).boundingBox())!;
-    expect(b.x).toBeGreaterThanOrEqual(mot.x + mot.width - 1);
-    expect(b.y).toBeLessThan(mot.y + mot.height);
-    expect(b.y + b.height).toBeGreaterThan(mot.y);
+    expect(b.width).toBeGreaterThan(b.height);
+    expect(b.y + b.height).toBeLessThanOrEqual(mot.y + 1);
+    expect(Math.abs(b.x + b.width / 2 - (mot.x + mot.width / 2))).toBeLessThan(2);
+});
+
+test('en haut du document, la barre reste dans le pane sans couvrir le passage', async () => {
+    const { page } = h;
+    await selectionner(page, 'Ligne 1 :', 'Révolution française');
+    await expect(barre(page)).toBeVisible();
+    const mot = await boiteDuMot(page, 'Ligne 1 :', 'Révolution française');
+    const b = (await barre(page).boundingBox())!;
+    const pane = (await page.locator('.view-content:has(.agent-barre)').boundingBox())!;
+    expect(b.y).toBeGreaterThanOrEqual(pane.y);
+    expect(b.y + b.height <= mot.y + 1 || b.y >= mot.y + mot.height - 1).toBe(true);
+});
+
+test('« … » élargit la barre vers la droite, sans la faire sortir du pane', async () => {
+    const { page } = h;
+    await selectionner(page, 'Ligne 3 :', 'Révolution française');
+    await expect(barre(page)).toBeVisible();
+    const avant = (await barre(page).boundingBox())!;
+    await plus(page).click();
+    await expect(plus(page)).toBeHidden();
+    await expect(barre(page).locator('[aria-label="Résumer"]')).toBeVisible();
+    await expect.poll(async () => (await barre(page).boundingBox())!.width).toBeGreaterThan(avant.width + 60);
+    const apres = (await barre(page).boundingBox())!;
+    const pane = (await page.locator('.view-content:has(.agent-barre)').boundingBox())!;
+    expect(apres.height).toBeCloseTo(avant.height, 0);
+    expect(apres.x + apres.width).toBeLessThanOrEqual(pane.x + pane.width);
+    expect(apres.x).toBeGreaterThanOrEqual(pane.x);
 });
 
 test('un simple clic dans le texte ne montre rien', async () => {

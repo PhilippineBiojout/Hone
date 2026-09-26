@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aCote, MARGE, type Boite, type Demande } from '../positionnement/placement';
+import { aCote, auDessus, MARGE, type Boite, type Demande } from '../positionnement/placement';
 
 const pane: Boite = { left: 0, top: 0, right: 1000, bottom: 800 };
 const trait: Boite = { left: 400, top: 300, right: 500, bottom: 340 };
@@ -38,5 +38,33 @@ describe('aCote', () => {
 
     it('respecte un haut imposé', () => {
         expect(aCote(demande({ haut: 310 })).y).toBe(310);
+    });
+});
+
+describe('auDessus', () => {
+    const barre = (d: Partial<Demande> = {}) => ({ ...demande({ largeur: 200, hauteur: 36, ...d }) });
+
+    it('pose au-dessus, centré sur la référence', () => {
+        expect(auDessus(barre())).toEqual({ x: 350, y: 300 - 12 - 36 });
+    });
+
+    it('passe en dessous en haut du pane', () => {
+        const ref = { left: 400, top: 30, right: 500, bottom: 60 };
+        expect(auDessus(barre({ ref }))).toEqual({ x: 350, y: 60 + 12 });
+    });
+
+    it('reste dans le pane à gauche et à droite', () => {
+        expect(auDessus(barre({ ref: { left: 0, top: 300, right: 40, bottom: 340 } })).x).toBe(MARGE);
+        expect(auDessus(barre({ ref: { left: 960, top: 300, right: 1000, bottom: 340 } })).x).toBe(1000 - MARGE - 200);
+    });
+
+    it("passe en dessous quand la barre d'annotation occupe le dessus", () => {
+        const obstacles = [{ left: 300, top: 200, right: 600, bottom: 290 }];
+        expect(auDessus(barre({ obstacles })).y).toBe(340 + 12);
+    });
+
+    it("s'écarte d'un obstacle qui occupe le dessus et le dessous", () => {
+        const obstacles = [{ left: 420, top: 0, right: 480, bottom: 800 }];
+        expect(auDessus(barre({ obstacles }))).toEqual({ x: 480 + MARGE, y: 252 });
     });
 });

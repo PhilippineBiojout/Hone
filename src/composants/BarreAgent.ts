@@ -1,6 +1,7 @@
 import { Component, Toolbar, type ToolbarItem, type WidgetHandle } from 'fragment';
 import { rallonger, type Rallonge } from '../ui/animations';
 import { deplacerParPoignee } from '../positionnement/fenetre';
+import { MARGE } from '../positionnement/placement';
 import type { Outil } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import { OUTILS } from '../ui/ui';
@@ -20,14 +21,14 @@ export interface ActionsBarre {
 const DECALAGE = 8;
 
 /**
- * La barre verticale à côté d'un passage : une Toolbar du cœur, montée dans un
+ * La barre horizontale au-dessus d'un passage : une Toolbar du cœur, montée dans un
  * hôte 0×0 qui est un widget ancré au document. Sa poignée déplace l'ancre de
  * l'hôte (la Toolbar se bornerait à lui) ; le double-clic, qui la ferait
- * pivoter, est ignoré : « … » n'allonge qu'une barre verticale.
+ * pivoter, est ignoré : « … » n'allonge qu'une barre horizontale.
  */
 export class BarreAgent extends Component {
 
-    /** La tête de chat : le chat s'aligne sur elle et en sort. */
+    /** La tête de chat : le chat en sort. */
     chatEl!: HTMLElement;
 
     private readonly toolbar: Toolbar;
@@ -48,9 +49,8 @@ export class BarreAgent extends Component {
         const dom = this.toolbar.dom;
         dom.classList.add('agent-barre');
         dom.setAttribute('role', 'toolbar');
-        dom.setAttribute('aria-orientation', 'vertical');
+        dom.setAttribute('aria-orientation', 'horizontal');
         dom.setAttribute('aria-label', 'Agent');
-        this.toolbar.setOrientation('vertical').setColumns(1);
 
         const item = (icone: string, libelle: string, onClick: () => void, classe = 'agent-barre-bouton'): ToolbarItem => {
             let cree!: ToolbarItem;
@@ -61,14 +61,17 @@ export class BarreAgent extends Component {
             return cree;
         };
         item('x', 'Fermer', () => this.fermer(), 'agent-barre-fermer');
+        this.toolbar.addSeparator();
         this.chatEl = item('cat', "Discuter avec Hone", () => this.actions.onChat()).dom;
         item('mic', "Parler à Hone", () => this.actions.onVoix());
+        this.toolbar.addSeparator();
         for (const id of ['definir', 'visualiser', 'aider', 'traduire', 'resumer'] as const) {
             const outil = item(OUTILS[id].icone, OUTILS[id].libelle, () => this.actions.onOutil(id));
             if (id === 'definir' || id === 'visualiser') continue;
             outil.dom.hidden = true;
             this.caches.push(outil);
         }
+        this.toolbar.addSeparator();
         this.plus = item('ellipsis', "Plus d'outils", () => this.allonger(), 'agent-barre-plus');
 
         // Échap, le seul geste de fermeture propre à la Toolbar, ferme aussi la barre de l'agent.
@@ -100,7 +103,7 @@ export class BarreAgent extends Component {
         this.handle = this.repere.monter(this.hote, () => {
             // La Toolbar doit être montrée pour se mesurer.
             this.toolbar.showAtPosition(0, 0);
-            const a = this.repere.aCote(this.toolbar.dom);
+            const a = this.repere.auDessus(this.toolbar.dom);
             return a?.mode === 'document' ? { ...a, dx: a.dx - DECALAGE, dy: a.dy - DECALAGE } : a;
         });
     }
@@ -136,10 +139,19 @@ export class BarreAgent extends Component {
         this.hote.remove();
     }
 
-    /** « … » : la barre s'allonge et montre les autres outils, puis « … » s'en va. */
+    /** Plus large, la barre peut sortir du pane : on la recentre alors sur le passage. */
+    private rentrer(): void {
+        const pane = this.repere.paneClient();
+        const r = this.toolbar.dom.getBoundingClientRect();
+        if (!this.handle || (r.right <= pane.right - MARGE && r.left >= pane.left + MARGE)) return;
+        const a = this.repere.auDessus(this.toolbar.dom);
+        if (a?.mode === 'document') this.handle.setAnchor({ ...a, dx: a.dx - DECALAGE, dy: a.dy - DECALAGE });
+    }
+
+    /** « … » : la barre s'élargit et montre les autres outils, puis « … » s'en va. */
     private allonger(): void {
         if (this.rallonge) return;
-        const rallonge = rallonger(this.toolbar.dom, this.plus.dom, this.caches.map((i) => i.dom));
+        const rallonge = rallonger(this.toolbar.dom, this.plus.dom, this.caches.map((i) => i.dom), () => this.rentrer());
         this.rallonge = rallonge;
         // Fermée pendant l'animation : onunload a déjà tout remis.
         void rallonge.fini.then(() => {

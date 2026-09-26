@@ -152,10 +152,13 @@ export class BulleAgent extends Component {
             this.fenetre.monter(seule?.cadre ?? null, (el) => {
                 const trait = this.repere.boiteTrait();
                 if (seule) return this.repere.aCote(el, { haut: trait?.top ?? 'centre', evites: [trait] });
-                const { dom, chatEl } = this.barre();
-                const barre = this.repere.boiteDe(dom);
-                const chat = this.repere.boiteDe(chatEl);
-                return this.repere.aCote(el, { ref: barre, haut: chat?.top ?? 'centre', ecart: 8, evites: [trait, barre] });
+                // La barre est au-dessus du passage : le chat se pose à côté des deux, calé sur son haut.
+                const barre = this.repere.boiteDe(this.barre().dom);
+                const ref = trait && barre ? {
+                    left: Math.min(trait.left, barre.left), top: Math.min(trait.top, barre.top),
+                    right: Math.max(trait.right, barre.right), bottom: Math.max(trait.bottom, barre.bottom),
+                } : trait ?? barre;
+                return this.repere.aCote(el, { ref, haut: ref?.top ?? 'centre', evites: [trait, barre] });
             });
             const eclosion = eclore(seule?.depuis ?? this.barre().chatEl, this.dom);
             this.register(() => eclosion.annuler());

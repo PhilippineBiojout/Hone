@@ -614,8 +614,8 @@ test('la barre se déplace par sa poignée, puis défile avec le texte', async (
     const b = (await barre(page).boundingBox())!;
     expect(Math.abs(b.x - a.x - 120)).toBeLessThan(2);
     expect(Math.abs(b.y - a.y - 80)).toBeLessThan(2);
-    // Toujours ouverte, toujours verticale.
-    await expect(barre(page)).toHaveClass(/mod-vertical/);
+    // Toujours ouverte, toujours horizontale.
+    await expect(barre(page)).not.toHaveClass(/mod-vertical/);
 
     // Ancrée au texte : elle défile avec lui.
     await page.locator('.doc-scroll').evaluate((el) => { el.scrollTop += 100; });

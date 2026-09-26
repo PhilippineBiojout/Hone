@@ -164,14 +164,16 @@ export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement): Eclos
 }
 
 /**
- * « … » : la barre s'allonge vers le bas (Dynamic Toggle de Skiper). Elle prend
- * sa taille finale, et on anime sa hauteur depuis l'ancienne.
+ * « … » : la barre s'élargit vers la droite (Dynamic Toggle de Skiper). Elle prend
+ * sa taille finale, et on anime sa largeur depuis l'ancienne.
  */
-export function rallonger(barre: HTMLElement, plus: HTMLElement, nouveaux: HTMLElement[]): Rallonge {
-    const avant = barre.offsetHeight;
+export function rallonger(barre: HTMLElement, plus: HTMLElement, nouveaux: HTMLElement[], allongee?: () => void): Rallonge {
+    const avant = barre.offsetWidth;
     plus.style.display = 'none';
     for (const el of nouveaux) el.hidden = false;
-    const apres = barre.offsetHeight;
+    const apres = barre.offsetWidth;
+    // À sa taille finale, avant que l'animation ne la rétrécisse : on peut encore la replacer.
+    allongee?.();
     if (sansMouvement() || apres <= avant) return fait();
 
     // Le `{ type: "spring", bounce: 0.16 }` de Motion.
@@ -179,7 +181,7 @@ export function rallonger(barre: HTMLElement, plus: HTMLElement, nouveaux: HTMLE
     barre.style.boxSizing = 'border-box';
     barre.style.overflow = 'hidden';
     return annulable([
-        barre.animate([{ height: px(avant) }, { height: px(apres) }], { duration: duree, easing }),
+        barre.animate([{ width: px(avant) }, { width: px(apres) }], { duration: duree, easing }),
         ...nouveaux.map((el, i) => el.animate(APPARITION,
             { duration: 220, delay: 70 + i * 35, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'backwards' })),
     ], () => {

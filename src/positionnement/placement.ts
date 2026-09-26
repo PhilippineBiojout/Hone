@@ -52,3 +52,36 @@ export function aCote(d: Demande): { x: number; y: number } {
     return candidats.find((c) => tient(c.x, c.y))
         ?? { x: Math.max(cadre.left + MARGE, Math.min(droite, cadre.right - MARGE - w)), y: y0 };
 }
+
+/** Ce que demande un widget posé au-dessus de `ref` : pas de haut, il est choisi. */
+export type DemandeAuDessus = Omit<Demande, 'haut'>;
+
+/**
+ * Le coin haut gauche d'un widget posé au-dessus de `ref`, centré sur lui, puis en
+ * dessous si le haut du pane ou un obstacle gêne. Un obstacle aux deux hauteurs
+ * pousse le widget à côté de lui. Si rien ne va, au-dessus, rentré dans le pane.
+ */
+export function auDessus(d: DemandeAuDessus): { x: number; y: number } {
+    const { ref, largeur: w, hauteur: h, cadre } = d;
+    const borneX = (x: number): number => Math.max(cadre.left + MARGE, Math.min(x, cadre.right - MARGE - w));
+    const borneY = (y: number): number => Math.max(cadre.top + MARGE, Math.min(y, cadre.bottom - MARGE - h));
+    const x0 = borneX((ref.left + ref.right) / 2 - w / 2);
+    const haut = ref.top - d.ecart - h;
+    const bas = ref.bottom + d.ecart;
+
+    const boite = (x: number, y: number): Boite => ({ left: x, top: y, right: x + w, bottom: y + h });
+    const tient = (x: number, y: number): boolean => {
+        const b = boite(x, y);
+        return b.left >= cadre.left + MARGE - 0.5 && b.right <= cadre.right - MARGE + 0.5
+            && b.top >= cadre.top + MARGE - 0.5 && b.bottom <= cadre.bottom - MARGE + 0.5
+            && !d.obstacles.some((o) => croise(b, o));
+    };
+
+    const candidats = [{ x: x0, y: haut }, { x: x0, y: bas }];
+    for (const y of [haut, bas]) {
+        for (const o of d.obstacles) {
+            if (croise(boite(x0, y), o)) candidats.push({ x: borneX(o.right + MARGE), y }, { x: borneX(o.left - MARGE - w), y });
+        }
+    }
+    return candidats.find((c) => tient(c.x, c.y)) ?? { x: x0, y: borneY(haut) };
+}
