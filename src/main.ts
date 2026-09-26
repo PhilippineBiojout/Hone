@@ -3,7 +3,7 @@ import { createAgentLayer } from './agentLayer';
 import { ouvrirMoteur } from './cerveau/moteur';
 import { poserLeVerre } from './decor/verre';
 import { fusionner, ModalCle, type Reglages } from './reglages/reglages';
-import { brancherScan } from './scan/scan';
+import { setupScan } from './scan/scan';
 
 /** Le plugin Hone : un calque par vue. OpenAI tourne EN PAGE (plus de procès forké) ;
  *  la clé vit dans les données du plugin (réglages), saisie via la commande dédiée. */
@@ -30,7 +30,7 @@ export default class HonePlugin extends Plugin {
         });
 
         poserLeVerre(this);
-        brancherScan(this);
+        setupScan(this, () => this.reglages.cle);
 
         if (!this.reglages.cle) {
             new Notice('Hone : ajoute ta clé OpenAI via la commande « Hone : clé API… ».', 8000);

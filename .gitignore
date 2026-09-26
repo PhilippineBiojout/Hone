@@ -6,3 +6,6 @@ couts.jsonl
 
 # Bundle généré par esbuild (npm run build) — régénéré, non versionné
 main.js
+
+# La clé OpenAI (Plugin.saveData) : jamais commitée
+data.json
