@@ -1,10 +1,10 @@
 import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
-import { resorber, ressort } from './animations';
-import { Onde, auHasard, niveaux } from './onde';
-import type { Message } from './protocole';
-import type { Repere } from './repere';
-import { parler, type ContexteQuestion, type ReponseOrale } from './repondre';
-import { arc, boutonIcone, proteger } from './ui';
+import { resorber, ressort } from '../ui/animations';
+import { Onde, auHasard, niveaux } from '../ui/onde';
+import type { Message } from '../pont/protocole';
+import type { Repere } from '../positionnement/repere';
+import { parler, type ContexteQuestion, type ReponseOrale } from '../pont/repondre';
+import { arc, boutonIcone, proteger } from '../ui/ui';
 
 const RAIDEUR = 520;                // l'étirement en pilule : spring bounce 0.16 de Motion (Skiper3)
 const AMORTISSEMENT = 38;

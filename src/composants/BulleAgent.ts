@@ -1,10 +1,10 @@
 import { Component, type App } from 'fragment';
-import { eclore } from './animations';
-import { Fenetre, type Cadre } from './fenetre';
-import type { Message, Outil } from './protocole';
-import type { Repere } from './repere';
-import { repondre, type ContexteQuestion } from './repondre';
-import { boutonIcone, creer, PiedSupprimer, proteger } from './ui';
+import { eclore } from '../ui/animations';
+import { Fenetre, type Cadre } from '../positionnement/fenetre';
+import type { Message, Outil } from '../pont/protocole';
+import type { Repere } from '../positionnement/repere';
+import { repondre, type ContexteQuestion } from '../pont/repondre';
+import { boutonIcone, creer, PiedSupprimer, proteger } from '../ui/ui';
 
 type SurFermeture = (messages: Message[], contexte: ContexteQuestion | null, cadre: Cadre | null, origine: Outil | null, bilan: string | null) => void;
 

@@ -1,11 +1,11 @@
 import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
-import { eclore, resorber } from './animations';
-import { Fenetre, type Cadre } from './fenetre';
-import { nettoyerSvg } from './nettoyerSvg';
-import type { Message } from './protocole';
-import type { Repere } from './repere';
-import { agir, resumerOral, type ContexteQuestion, type Outil, type ReponseOutil } from './repondre';
-import { arc, boutonIcone, OUTILS, PiedSupprimer, proteger } from './ui';
+import { eclore, resorber } from '../ui/animations';
+import { Fenetre, type Cadre } from '../positionnement/fenetre';
+import { nettoyerSvg } from '../ui/nettoyerSvg';
+import type { Message } from '../pont/protocole';
+import type { Repere } from '../positionnement/repere';
+import { agir, resumerOral, type ContexteQuestion, type Outil, type ReponseOutil } from '../pont/repondre';
+import { arc, boutonIcone, OUTILS, PiedSupprimer, proteger } from '../ui/ui';
 
 /** Ce que montre la carte : la réponse d'un outil, ou le bilan d'une discussion orale. */
 export type Resultat =

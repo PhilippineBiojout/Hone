@@ -1,9 +1,9 @@
 import { Component, Toolbar, type ToolbarItem, type WidgetHandle } from 'fragment';
-import { rallonger, type Rallonge } from './animations';
-import { deplacerParPoignee } from './fenetre';
-import type { Outil } from './protocole';
-import type { Repere } from './repere';
-import { OUTILS } from './ui';
+import { rallonger, type Rallonge } from '../ui/animations';
+import { deplacerParPoignee } from '../positionnement/fenetre';
+import type { Outil } from '../pont/protocole';
+import type { Repere } from '../positionnement/repere';
+import { OUTILS } from '../ui/ui';
 
 /** Ce que la barre fait faire au calque : elle ne connaît ni le chat ni la zone. */
 export interface ActionsBarre {

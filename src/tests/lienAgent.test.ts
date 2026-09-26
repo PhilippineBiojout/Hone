@@ -1,12 +1,12 @@
 import { EventEmitter } from 'events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Demande, Retour } from './protocole';
+import type { Demande, Retour } from '../pont/protocole';
 
 // Un faux processus de l'agent : on lui fait envoyer ce qu'on veut, quand on veut.
 const enfant = Object.assign(new EventEmitter(), { connected: true, send: vi.fn(), kill: vi.fn() });
 vi.mock('child_process', () => ({ fork: () => enfant }));
 
-const { LienAgent } = await import('./lienAgent');
+const { LienAgent } = await import('../pont/lienAgent');
 
 const demande: Demande = { agent: 'chat', passage: { texte: 'x', chemin: '' }, question: 'q', historique: [] };
 const retour = (r: Retour) => enfant.emit('message', r);

@@ -1,13 +1,13 @@
 import { Component, type DocumentSurface, type FileView, type ItemView, type LayerContext, type Marker, type Rect, type TextSurface } from 'fragment';
-import { ActionAgent } from './ActionAgent';
-import { brancherAnnotation, type Stroke } from './annotation';
-import { BarreAgent } from './BarreAgent';
-import { BulleAgent } from './BulleAgent';
-import { brancherDeclencheurs, SELECTION } from './declencheur';
-import { Repere } from './repere';
-import type { ContexteQuestion } from './repondre';
-import { CarnetTraces, texteEntre, type Trace } from './traces';
-import { VoixAgent } from './VoixAgent';
+import { ActionAgent } from './composants/ActionAgent';
+import { brancherAnnotation, type Stroke } from './interactions/annotation';
+import { BarreAgent } from './composants/BarreAgent';
+import { BulleAgent } from './composants/BulleAgent';
+import { brancherDeclencheurs, SELECTION } from './interactions/declencheur';
+import { Repere } from './positionnement/repere';
+import type { ContexteQuestion } from './pont/repondre';
+import { CarnetTraces, texteEntre, type Trace } from './interactions/traces';
+import { VoixAgent } from './composants/VoixAgent';
 
 // À importer de 'fragment' quand le cœur l'exportera (core/editor/Editor.ts).
 const hasText = (s: DocumentSurface): s is TextSurface => typeof (s as Partial<TextSurface>).getLine === 'function';

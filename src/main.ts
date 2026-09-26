@@ -1,9 +1,9 @@
 import { Plugin } from 'fragment';
 import * as path from 'path';
 import { createAgentLayer } from './agentLayer';
-import { ouvrirLien } from './lienAgent';
-import { brancherScan } from './scan';
-import { poserLeVerre } from './verre';
+import { ouvrirLien } from './pont/lienAgent';
+import { brancherScan } from './scan/scan';
+import { poserLeVerre } from './decor/verre';
 
 /** Le plugin Agent : un calque par vue, et le processus de l'agent lancé au premier appel. */
 export default class AgentPlugin extends Plugin {

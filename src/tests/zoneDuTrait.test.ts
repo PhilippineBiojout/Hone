@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dansPolygone, formeDuTrait, plageDuTrait, type Mesure, type Pt } from './zoneDuTrait';
+import { dansPolygone, formeDuTrait, plageDuTrait, type Mesure, type Pt } from '../interactions/zoneDuTrait';
 
 /**
  * Une grille de caractères : 8 px de large, 20 px de haut, comme une police

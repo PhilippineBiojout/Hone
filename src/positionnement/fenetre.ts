@@ -1,7 +1,7 @@
 import type { WidgetAnchor, WidgetHandle } from 'fragment';
 import { MARGE } from './placement';
 import type { Repere } from './repere';
-import { creer } from './ui';
+import { creer } from '../ui/ui';
 
 /** Où un widget a été posé (écart au glyphe du trait) et sa taille, en px document. */
 export interface Cadre {

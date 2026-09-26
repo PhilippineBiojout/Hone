@@ -3,7 +3,7 @@ import {
     assistant, MaxTurnsExceededError, run, setDefaultOpenAIKey, setTracingDisabled, user,
     type AgentInputItem, type RunItem,
 } from '@openai/agents';
-import type { Demande, Message, Requete, Retour, Sortie, Source } from '../protocole';
+import type { Demande, Message, Requete, Retour, Sortie, Source } from '../pont/protocole';
 import { creerAgents } from './agents';
 import { Compteur } from './couts';
 import { langueDuVault } from './langue';

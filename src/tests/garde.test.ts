@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cheminSur, fichiersLisibles, RefusChemin } from './garde';
+import { cheminSur, fichiersLisibles, RefusChemin } from '../serveur/garde';
 
 // Un faux vault, et un dossier « dehors » que les liens symboliques visent.
 let base: string;

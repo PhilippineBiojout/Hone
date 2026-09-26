@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aCote, MARGE, type Boite, type Demande } from './placement';
+import { aCote, MARGE, type Boite, type Demande } from '../positionnement/placement';
 
 const pane: Boite = { left: 0, top: 0, right: 1000, bottom: 800 };
 const trait: Boite = { left: 400, top: 300, right: 500, bottom: 340 };

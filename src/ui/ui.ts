@@ -1,6 +1,6 @@
 import { Scope, setIcon, type App } from 'fragment';
 import { creer } from './animations';
-import type { Outil } from './protocole';
+import type { Outil } from '../pont/protocole';
 
 export { creer };
 

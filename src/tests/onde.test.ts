@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { niveaux, TRAITS } from './onde';
+import { niveaux, TRAITS } from '../ui/onde';
 
 /** Un spectre de 512 cases à 48 kHz, fftSize 1024 : 46,875 Hz par case. */
 const HZ = 48000 / 1024;

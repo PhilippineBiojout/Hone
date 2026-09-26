@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { nettoyerSvg, SVG_TAILLE_MAX } from './nettoyerSvg';
+import { nettoyerSvg, SVG_TAILLE_MAX } from '../ui/nettoyerSvg';
 
 const sortie = (source: string): string => nettoyerSvg(source)?.outerHTML ?? 'null';
 

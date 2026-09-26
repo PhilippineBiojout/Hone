@@ -1,10 +1,10 @@
 import { setIcon, type TextSurface, type WidgetHandle } from 'fragment';
 import type { Stroke } from './annotation';
-import type { Cadre } from './fenetre';
-import type { Message } from './protocole';
-import type { Repere } from './repere';
-import type { ContexteQuestion, Outil, ReponseOutil } from './repondre';
-import { OUTILS } from './ui';
+import type { Cadre } from '../positionnement/fenetre';
+import type { Message } from '../pont/protocole';
+import type { Repere } from '../positionnement/repere';
+import type { ContexteQuestion, Outil, ReponseOutil } from '../pont/repondre';
+import { OUTILS } from '../ui/ui';
 
 /** Une réponse d'outil, une conversation (née d'un outil ou non), ou une discussion orale et son bilan. */
 export type Contenu =

@@ -1,7 +1,7 @@
 import type { Component, TextSurface } from 'fragment';
 import type { Annotation, Stroke } from './annotation';
-import type { Repere } from './repere';
-import type { ContexteQuestion } from './repondre';
+import type { Repere } from '../positionnement/repere';
+import type { ContexteQuestion } from '../pont/repondre';
 import { texteEntre } from './traces';
 import { plageDuTrait, type Mesure } from './zoneDuTrait';
 

@@ -1,5 +1,5 @@
 import { WidgetLayer, type OverlayHost, type TextSurface, type WidgetAnchor, type WidgetHandle } from 'fragment';
-import type { Stroke } from './annotation';
+import type { Stroke } from '../interactions/annotation';
 import { aCote, type Boite } from './placement';
 
 /**
