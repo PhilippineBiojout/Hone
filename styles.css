@@ -321,3 +321,115 @@
     .agent-onde-trait, .agent-voix { transition: none !important; }
     .toolbar-glass { transform: none; transition: opacity 120ms ease; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Scanner une feuille (scan.ts / relais.ts) : le QR code jaillit de l'icône du
+   ruban comme un widget. On garde la Modal de Fragment (Échap, clic à côté,
+   portée clavier) mais on la sort du centre. Tout est sous .scan-popover pour
+   ne toucher à aucune autre modale.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.scan-popover {
+    display: block;
+    padding: 0;
+}
+
+/* Pas de voile sombre : le reste de l'app reste visible, un clic à côté ferme. */
+.scan-popover .modal-bg {
+    background: transparent;
+}
+
+.scan-popover .modal {
+    position: absolute;
+    width: auto;
+    max-height: none;
+    padding: 10px;
+    overflow: visible;
+    border-radius: 18px;
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.2),
+        0 12px 40px rgba(0, 0, 0, 0.35);
+    transform-origin: 0 var(--scan-anchor-y, 50%);
+    animation: scan-pop-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* La petite pointe qui montre l'icône d'où sort le widget. */
+.scan-popover .modal::before {
+    content: "";
+    position: absolute;
+    left: -6px;
+    top: calc(var(--scan-anchor-y, 50%) - 6px);
+    width: 12px;
+    height: 12px;
+    background: var(--workspace-bg);
+    border-left: 1px solid var(--tab-outline-color);
+    border-bottom: 1px solid var(--tab-outline-color);
+    transform: rotate(45deg);
+}
+
+/* Pas de titre ni de croix : Échap ou un clic à côté suffisent. */
+.scan-popover .modal-close-button,
+.scan-popover .modal-title {
+    display: none;
+}
+
+.scan-popover .modal-content {
+    overflow: visible;
+}
+
+.scan-qr {
+    display: flex;
+    border-radius: 12px;
+    overflow: hidden;
+    animation: scan-qr-in 420ms 80ms ease-out both;
+}
+
+.scan-qr svg {
+    display: block;
+}
+
+/* Sortie : plus courte que l'entrée, sans rebond (CLOSE_MS dans scan.ts). */
+.scan-popover.is-closing .modal {
+    animation: scan-pop-out 140ms ease-in both;
+}
+
+/* L'icône du ruban reste allumée tant que le widget est ouvert. */
+.scan-ribbon-open {
+    color: var(--color-accent);
+}
+
+@keyframes scan-pop-in {
+    from {
+        opacity: 0;
+        transform: translateX(-10px) scale(0.6);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes scan-pop-out {
+    to {
+        opacity: 0;
+        transform: translateX(-6px) scale(0.85);
+    }
+}
+
+@keyframes scan-qr-in {
+    from {
+        opacity: 0;
+        transform: scale(0.94);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scan-popover .modal,
+    .scan-qr {
+        animation: none;
+    }
+}

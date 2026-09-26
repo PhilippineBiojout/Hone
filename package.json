@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@openai/agents": "^0.18.0",
+    "qr-code-styling": "^1.9.2",
     "zod": "^4.6.5"
   }
 }
