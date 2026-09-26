@@ -240,6 +240,9 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		const statut = page.locator('.remarkable-statut:visible');
 		await expect(statut).toHaveText('live');
 		await statut.click();
+		// La bulle sort du bouton, comme la demande de l'icône.
+		await expect(page.locator('.remarkable-eclosion')).toHaveCount(1);
+		await expect(page.locator('.remarkable-eclosion')).toHaveCount(0, { timeout: 3000 });
 		await expect(page.locator('.remarkable-bulle')).toHaveText('Tout ce que tu écris sur la tablette apparaît sur ce PDF.');
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.remarkable-bulle')).toHaveCount(0);
@@ -311,6 +314,8 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await expect(page.locator('.remarkable-statut:visible')).toHaveAttribute('aria-label', 'Tablette non connectée', { timeout: 15_000 });
 		await expect(page.locator('.remarkable-statut:visible svg')).toHaveCount(1);
 		await page.locator('.remarkable-statut:visible').click();
+		await expect(page.locator('.remarkable-eclosion')).toHaveCount(1);
+		await expect(page.locator('.remarkable-eclosion')).toHaveCount(0, { timeout: 3000 });
 		await expect(page.locator('.remarkable-bulle')).toContainText('Branche la tablette en USB-C.');
 		await expect(page.locator('.remarkable-bulle')).toContainText('Active l’interface web USB');
 		await page.screenshot({ path: path.join(os.tmpdir(), 'remarkable-debranchee.png') });

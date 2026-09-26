@@ -104,6 +104,7 @@
 
 .remarkable-bulle {
 	min-width: 0;
+	border-radius: 12px;
 	max-width: 260px;
 	padding: 10px 12px;
 	user-select: text;
@@ -149,6 +150,8 @@
 
 .remarkable-eclosion {
 	position: absolute;
+	/* Sous le menu (1000) : la goutte de la bulle passe devant les vues. */
+	z-index: 999;
 	pointer-events: none;
 }
 
