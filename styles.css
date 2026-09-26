@@ -982,3 +982,93 @@
         transition: none !important;
     }
 }
+
+
+/* ═══ La lentille de verre des barres d'outils (src/verre.ts) ═══
+   Une goutte posée AU-DESSUS des boutons, qui ne capte jamais rien : le clic
+   passe au travers, jusqu'au bouton qu'elle grossit. */
+
+
+.toolbar-glass {
+    /* Le verre : un voile à peine teinté, un liseré clair en haut qui accroche
+       la lumière, un liseré sombre en bas, une ombre courte qui le décolle. */
+    --toolbar-glass-teinte: rgba(255, 255, 255, 0.06);
+    --toolbar-glass-reflet: rgba(255, 255, 255, 0.42);
+    --toolbar-glass-arete: rgba(255, 255, 255, 0.14);
+    --toolbar-glass-creux: rgba(0, 0, 0, 0.35);
+    --toolbar-glass-ombre: rgba(0, 0, 0, 0.35);
+    --toolbar-glass-lumiere: 1.08;
+
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    border-radius: 8px;
+    pointer-events: none;
+    background: var(--toolbar-glass-teinte);
+    /* ★ L'ordre compte : la réfraction d'abord, sur l'image nette ; le flou
+       léger et la saturation ensuite, sur l'image déjà courbée. */
+    backdrop-filter: var(--toolbar-glass-filtre) blur(0.4px) saturate(1.5) brightness(var(--toolbar-glass-lumiere));
+    box-shadow:
+        inset 0 1px 0.5px var(--toolbar-glass-reflet),
+        inset 0 0 0 0.5px var(--toolbar-glass-arete),
+        inset 0 -1px 1px var(--toolbar-glass-creux),
+        0 2px 6px var(--toolbar-glass-ombre);
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 140ms ease, transform 160ms ease;
+}
+
+.toolbar-glass.is-visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+@media (prefers-color-scheme: light) {
+    .toolbar-glass {
+        /* Sur fond clair, le voile doit rester presque nul : à 0,35 il
+           délavait l'icône qu'il était censé grossir. */
+        --toolbar-glass-teinte: rgba(255, 255, 255, 0.1);
+        --toolbar-glass-reflet: rgba(255, 255, 255, 0.95);
+        --toolbar-glass-arete: rgba(0, 0, 0, 0.08);
+        --toolbar-glass-creux: rgba(0, 0, 0, 0.12);
+        --toolbar-glass-ombre: rgba(0, 0, 0, 0.16);
+        --toolbar-glass-lumiere: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toolbar-glass {
+        transform: none;
+        transition: opacity 120ms ease;
+    }
+}
+
+/* Le <svg> qui porte le filtre : présent dans le document (sinon url(#…) ne
+   trouve rien), mais sans taille ni rendu. */
+.toolbar-glass-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+/* ★ La lentille EST le survol : le fond gris d'origine, dessous, se verrait au
+   travers comme une seconde boîte décalée. La barre qui porte une lentille
+   (:has) l'éteint ; sans lentille, il revient tel quel. */
+.toolbar:has(> .toolbar-glass) .toolbar-item:hover,
+.toolbar:has(> .toolbar-glass) .toolbar-option:hover,
+.toolbar:has(> .toolbar-glass) .toolbar-handle:hover {
+    background: transparent;
+}
+
+/* L'état actif garde son fond : c'est l'information, pas le survol. */
+.toolbar:has(> .toolbar-glass) .toolbar-item.is-active:hover {
+    background: var(--color-accent);
+}
+
+.toolbar:has(> .toolbar-glass) .toolbar-option.is-active:hover {
+    background: rgba(128, 128, 128, 0.12);
+}

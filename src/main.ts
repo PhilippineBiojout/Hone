@@ -2,6 +2,7 @@ import { Plugin } from 'fragment';
 import * as path from 'path';
 import { createAgentLayer } from './agentLayer';
 import { ouvrirLien } from './lienAgent';
+import { poserLeVerre } from './verre';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Le plugin « Agent » : une barre qui s'ouvre sur un trait d'annotation, et
@@ -30,6 +31,8 @@ export default class AgentPlugin extends Plugin {
             appliesTo: (view) => view.leaf.parent !== null,
             create: (ctx) => createAgentLayer(ctx),
         });
+        // La lentille de verre qui suit le survol des barres d'outils (verre.ts).
+        poserLeVerre(this);
     }
 }
 
