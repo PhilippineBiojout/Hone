@@ -35,6 +35,10 @@ const page = await esbuild.context({
 		"@lezer/highlight",
 		"@lezer/lr",
 		...builtins,
+		// Les modules Node importés avec le préfixe `node:` (codex/ : node:child_process,
+		// node:readline, node:process) ne matchent pas la liste `builtin-modules` (noms
+		// nus). L'hôte les résout via son shim require à l'exécution → externes aussi.
+		...builtins.map((m) => `node:${m}`),
 	],
 	format: "cjs",
 	target: "es2022",
