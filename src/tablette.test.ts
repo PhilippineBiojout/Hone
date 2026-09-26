@@ -1,7 +1,7 @@
 // @vitest-environment node
 import * as net from 'net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ExportRefuse, Tablette } from './tablette';
+import { Tablette } from './tablette';
 
 // Une fausse tablette qui répond comme la vraie : Content-Length ET chunked.
 const reponses: Record<string, { statut: number; corps: string }> = {
@@ -49,8 +49,8 @@ describe('Tablette', () => {
 		expect(Buffer.from(octets).toString()).toBe('%PDF-1.7 faux');
 	});
 
-	it('distingue un export refusé d’une déconnexion', async () => {
-		await expect(tablette.telecharger('c2')).rejects.toBeInstanceOf(ExportRefuse);
-		await expect(new Tablette('http://127.0.0.1:1').lister()).rejects.not.toBeInstanceOf(ExportRefuse);
+	it('échoue sur un export refusé ou une tablette absente', async () => {
+		await expect(tablette.telecharger('c2')).rejects.toThrow('HTTP 500');
+		await expect(new Tablette('http://127.0.0.1:1').lister()).rejects.toThrow();
 	});
 });

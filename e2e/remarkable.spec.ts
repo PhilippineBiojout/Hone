@@ -24,10 +24,16 @@ interface Doc { nom: string; parent: string; dossier: boolean; modifie: number; 
 /** Répond comme la vraie : Content-Length ET Transfer-Encoding: chunked. */
 class FausseTablette {
 	docs = new Map<string, Doc>();
+	/** Carnets dont l'export ne répond jamais (comme phy430 sur la vraie), et combien de fois on l'a demandé. */
+	enPanne = new Set<string>();
+	demandes = new Map<string, number>();
 	private horloge = 1;
 	private serveur = net.createServer((s) => {
 		s.once('data', (d) => {
 			const chemin = d.toString().split(' ')[1];
+			const id = chemin.match(/^\/download\/(.+)\/pdf$/)?.[1];
+			if (id) this.demandes.set(id, (this.demandes.get(id) ?? 0) + 1);
+			if (id && this.enPanne.has(id)) return; // on garde la connexion ouverte sans rien envoyer
 			const corps = this.repondre(chemin);
 			const statut = corps ? 200 : 404;
 			const octets = corps ?? Buffer.alloc(0);
@@ -100,7 +106,7 @@ async function attendre(test: () => Promise<boolean> | boolean, message: string,
 }
 
 test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le range', async () => {
-	test.setTimeout(180_000);
+	test.setTimeout(300_000);
 	const base = await mkdtemp(path.join(os.tmpdir(), 'remarkable-'));
 	const vault = path.join(base, 'vault');
 	const userData = path.join(base, 'userdata');
@@ -112,10 +118,14 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 	await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
 
 	const tablette = new FausseTablette();
+	// Le plus ancien : la première synchro le prend en dernier.
+	tablette.ajouter('p', 'En panne');
+	tablette.enPanne.add('p');
 	tablette.ajouter('d1', 'Cours', '', true);
 	tablette.ajouter('a', 'A', 'd1');
 	tablette.ajouter('b', 'B', 'd1');
 	tablette.ajouter('c', 'C');
+	tablette.ajouter('e', 'E');
 	await writeFile(path.join(dossierPlugin, 'data.json'), JSON.stringify({ hote: await tablette.demarrer(), carnets: {} }), 'utf8');
 
 	const v = (p: string) => path.join(vault, p);
@@ -135,6 +145,14 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await attendre(() => contient('reMarkable/Cours/A.pdf', 'a version 1'), 'A importé');
 		await attendre(() => contient('reMarkable/Cours/B.pdf', 'b version 1'), 'B importé');
 		await attendre(() => contient('reMarkable/C.pdf', 'c version 1'), 'C importé');
+
+		// Un export qui ne répond jamais bloque la boucle une fois (délai de 60 s),
+		// puis n'est plus redemandé : le carnet où l'on écrit repasse en 2 s.
+		await attendre(() => tablette.demandes.get('p') === 1, 'export en panne demandé');
+		await new Promise((r) => setTimeout(r, 65_000));
+		tablette.ecrire('e');
+		await attendre(() => contient('reMarkable/E.pdf', 'e version 2'), 'E mis à jour malgré le carnet en panne', 8000);
+		expect(tablette.demandes.get('p')).toBe(1);
 
 		// 2. On écrit sur la tablette : le PDF se met à jour sur place.
 		// Et un onglet déjà ouvert sur ce PDF montre la nouvelle version, sans le rouvrir.

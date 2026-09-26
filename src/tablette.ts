@@ -14,9 +14,6 @@ export interface ElementTablette {
 	modifie: string;
 }
 
-/** La tablette répond mais refuse l'export : ce n'est pas une déconnexion. */
-export class ExportRefuse extends Error {}
-
 // La tablette envoie à la fois Content-Length et Transfer-Encoding: chunked.
 // Le parseur strict de Node refuse cette réponse, et le fetch de la page est
 // bloqué par la CSP de Fragment (pas de http:) : on passe par `http` avec le
@@ -68,7 +65,7 @@ export class Tablette {
 	/** Le PDF du carnet, écriture comprise : c'est la tablette qui le rend. */
 	async telecharger(id: string): Promise<ArrayBuffer> {
 		const { statut, corps } = await obtenir(`${this.hote}/download/${id}/pdf`, 60000);
-		if (statut !== 200) throw new ExportRefuse(`export refusé par la tablette (HTTP ${statut})`);
+		if (statut !== 200) throw new Error(`HTTP ${statut}`);
 		return new Uint8Array(corps).buffer;
 	}
 }

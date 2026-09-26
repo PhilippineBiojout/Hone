@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { FileView, type App, type TFile } from 'fragment';
 import type { Entree, Registre } from './registre';
-import { ExportRefuse, type ElementTablette, type Tablette } from './tablette';
+import type { ElementTablette, Tablette } from './tablette';
 
 /** Le dossier du vault où arrivent les carnets la première fois. */
 const DOSSIER = 'reMarkable';
@@ -47,9 +47,11 @@ export class Synchro {
 		try {
 			this.elements = await this.tablette.lister();
 			await this.etreConnectee(true);
-			for (const el of this.elements) {
-				if (!el.dossier) await this.suivre(el);
-			}
+			// Le plus récemment modifié d'abord : le carnet où l'on écrit passe
+			// devant la première synchro et devant un export lent. (Les dates
+			// ISO se trient comme des chaînes.)
+			const carnets = this.elements.filter((el) => !el.dossier).sort((a, b) => b.modifie.localeCompare(a.modifie));
+			for (const el of carnets) await this.suivre(el);
 		} catch {
 			await this.etreConnectee(false);
 		} finally {
@@ -63,20 +65,17 @@ export class Synchro {
 
 		const avant = e.modifie;
 		this.log(`${el.chemin} : ${avant ? 'modifié' : 'nouveau'}, téléchargement…`);
-		// On retient la version tout de suite : un export refusé n'est retenté
-		// qu'à la prochaine modification, pas toutes les 2 s.
+		// On retient la version tout de suite : un export qui échoue n'est
+		// retenté qu'à la prochaine modification du carnet. Le réessayer à
+		// chaque tour bloquerait toute la boucle (un carnet dont l'export ne
+		// finit jamais retenait tout le reste 60 s par tour).
 		e.modifie = el.modifie;
 		const t0 = Date.now();
 		let octets: ArrayBuffer;
 		try {
 			octets = await this.tablette.telecharger(el.id);
 		} catch (err) {
-			if (!(err instanceof ExportRefuse)) {
-				// Coupure en plein téléchargement : on retélécharge au retour.
-				e.modifie = avant;
-				throw err;
-			}
-			this.log(`${el.chemin} : ${err.message}`);
+			this.log(`${el.chemin} : export impossible (${(err as Error).message}), réessai à sa prochaine modification`);
 			await this.changer();
 			return;
 		}
