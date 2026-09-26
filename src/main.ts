@@ -1,6 +1,7 @@
 import { Notice, Plugin } from 'fragment';
 import { createAgentLayer } from './agentLayer';
 import { ouvrirMoteur } from './cerveau/moteur';
+import { brancherCodex } from './codex/codex';
 import { poserLeVerre } from './decor/verre';
 import { fusionner, ModalCle, type Reglages } from './reglages/reglages';
 import { brancherScan } from './scan/scan';
@@ -31,6 +32,7 @@ export default class HonePlugin extends Plugin {
 
         poserLeVerre(this);
         brancherScan(this);
+        brancherCodex(this, () => this.reglages.codex);
 
         if (!this.reglages.cle) {
             new Notice('Hone : ajoute ta clé OpenAI via la commande « Hone : clé API… ».', 8000);

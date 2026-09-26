@@ -4,10 +4,12 @@ Plugin Fragment (id **`hone`**). Un **trait d'annotation** (crayon / surligneur)
 **sélection souris** sur un passage fait apparaître une **barre** qui ouvre un **chat** et des
 **outils d'IA** posés sur ce passage (définir, résumer, traduire, aider, visualiser…). Le plugin
 embarque aussi une fonction **scan** : un QR code permet d'envoyer une photo depuis le téléphone
-vers le vault.
+vers le vault, et un panneau **Codex** : un chat dans le dock droit qui pilote le binaire
+`codex app-server` (fusionné depuis l'ex-plugin `codex-on-fragment`).
 
 > Note technique détaillée pour l'assistant : voir [`CLAUDE.md`](./CLAUDE.md).
-> Tout le code, les commentaires et l'UI sont en **français**.
+> Tout le code, les commentaires et l'UI sont en **français** — **exception** : le dossier
+> `src/codex/` est en anglais (repris tel quel de `codex-on-fragment`).
 
 ---
 
@@ -51,7 +53,7 @@ Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le render
 
 | Dossier / fichier | Rôle |
 |---|---|
-| `main.ts` | Point d'entrée. `onload()` charge les réglages, ouvre le cerveau, enregistre le calque `hone` (un par vue), ajoute la commande « clé API », pose la lentille de verre et branche le scan. |
+| `main.ts` | Point d'entrée. `onload()` charge les réglages, ouvre le cerveau, enregistre le calque `hone` (un par vue), ajoute la commande « clé API », pose la lentille de verre, branche le scan et le panneau Codex. |
 | `agentLayer.ts` | **L'orchestrateur** par vue : le seul fichier qui connaît toutes les pièces. Tient l'état `zone` (passage) + `trait`. |
 | `fragment-env.d.ts` | Shim de types pour l'import `fragment`. |
 | **`interactions/`** | Ce qui déclenche et ancre l'agent. |
@@ -89,6 +91,11 @@ Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le render
 | **`scan/`** | Fonction « scanner une feuille ». |
 | ├ `scan.ts` | Icône ruban + `ScanModal` (QR via `qr-code-styling`) ; range la photo dans `Scans/`. |
 | └ `relais.ts` | Client WebSocket vers le worker Cloudflare qui relaie le téléphone. |
+| **`codex/`** | Panneau de chat **Codex** (en **anglais**, repris de `codex-on-fragment`). Pilote `codex app-server` en JSON-RPC — pas d'OpenAI. |
+| ├ `transport.ts` | `spawn` du serveur (Windows : via `cmd.exe`, kill via `taskkill`) ; framing NDJSON stdin/stdout. |
+| ├ `rpc.ts` | `JsonRpcClient` : distingue requête serveur / réponse / notification. |
+| ├ `view.ts` | `CodexView` (ItemView) : transcript + composer + boutons d'approbation ; streaming des deltas. |
+| └ `codex.ts` | `brancherCodex` : ruban « Open Codex », commande, ouverture de vue dans le dock droit. |
 | **`decor/`** | |
 | └ `verre.ts` | Lentille de verre décorative sur les `.toolbar` (indépendant de l'agent, Chromium). |
 | **`tests/`** | Les tests unitaires vitest (`npm test` = `vitest run src`). |
@@ -147,6 +154,16 @@ Le site téléphone (`docs/`) et le worker (`relay/`) vivent dans le dépôt
 main.poserLeVerre ─► verre ─► lentille de verre (feDisplacementMap + backdrop-filter) sur les .toolbar
 ```
 
+### 8. Codex (chat pilotant `codex app-server`)
+```
+main.brancherCodex ─► ruban 'bot' / commande « Open Codex panel » ─► CodexView (dock droit)
+CodexView ─► transport (spawn `codex app-server`) ─► rpc (JSON-RPC NDJSON)
+   ▲  deltas streamés (agentMessage / reasoning / commandExecution)   │  initialize → thread/start → turn/start
+   └──────────────────── approbations (Approve / For session / Decline) ◄── requêtes serveur
+```
+Indépendant du cerveau OpenAI : c'est le binaire **Codex** (config dans `reglages.ts::CodexSettings`)
+qui tourne, avec la **racine du coffre** comme `cwd`.
+
 ---
 
 ## Tests & build
@@ -163,7 +180,8 @@ main.poserLeVerre ─► verre ─► lentille de verre (feDisplacementMap + bac
 
 ## Conventions
 
-- Français partout ; commentaires denses, style narratif.
+- Français partout ; commentaires denses, style narratif. **Exception** : `src/codex/` est en
+  anglais (repris tel quel de `codex-on-fragment`).
 - Cycle de vie Fragment : tout se `register` sur un `Component` et se défait au démontage.
 - La clé OpenAI vit dans les données du plugin (page), modèle Obsidian assumé ; scrubée des logs (`sk-…`).
 - Un nouveau fichier va dans le dossier de sa responsabilité, **jamais à plat** dans `src/`.
