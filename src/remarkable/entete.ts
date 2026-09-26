@@ -1,7 +1,7 @@
 import { FileView, Menu, setIcon, type View } from 'fragment';
 import { creer } from './dom';
 import { eclore } from './eclosion';
-import type RemarkablePlugin from './main';
+import type { Remarkable } from './remarkable';
 
 /**
  * En haut de chaque PDF qui vient de la tablette : une icône « débranchée »
@@ -13,7 +13,7 @@ import type RemarkablePlugin from './main';
  */
 const boutons = new WeakMap<View, HTMLElement>();
 
-export function majEntetes(plugin: RemarkablePlugin): void {
+export function majEntetes(plugin: Remarkable): void {
 	const { registre, synchro } = plugin;
 	for (const leaf of plugin.app.workspace.getLeavesOfType('pdf')) {
 		const vue = leaf.view;

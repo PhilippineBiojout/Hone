@@ -2,7 +2,7 @@
 import * as net from 'net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmdocDeTest } from './rmdocDeTest';
-import { Tablette } from './tablette';
+import { Tablette } from '../remarkable/tablette';
 
 // Une fausse tablette qui répond comme la vraie : Content-Length ET chunked.
 const reponses: Record<string, { statut: number; corps: string | Buffer }> = {

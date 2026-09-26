@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'zlib';
-import { rmdocEnPdf } from './rmdoc';
+import { rmdocEnPdf } from '../remarkable/rmdoc';
 import { rmdocDeTest } from './rmdocDeTest';
 
 /** Les tailles de page et le dessin (décompressé) de chaque page. */

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { Registre } from './registre';
+import { Registre } from '../remarkable/registre';
 
 function registre(): Registre {
 	const r = new Registre();

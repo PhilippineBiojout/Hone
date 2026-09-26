@@ -5,21 +5,21 @@ import * as net from 'net';
 import os from 'os';
 import path from 'path';
 import { pdfDeTest } from './pdfFixture';
-import { rmdocDeTest } from '/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/remarkable/src/rmdocDeTest';
+import { rmdocDeTest } from '/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone/src/tests/rmdocDeTest';
 
 /**
- * Le plugin reMarkable de bout en bout, contre une fausse tablette : première
+ * reMarkable (dans Hone) de bout en bout, contre une fausse tablette : première
  * synchro dans reMarkable/, mise à jour en direct, un carnet dont le plugin
  * fait lui-même le PDF, et le suivi d'un PDF qu'on range ailleurs ou qu'on
  * supprime.
  *
  * Se lance depuis Fragment, qui porte Playwright : copier ce fichier dans
- * `Fragment/app/e2e/`, `npm run build` dans le plugin, puis depuis `Fragment/app/`
+ * `Fragment/app/e2e/`, `npm run build` dans Hone, puis depuis `Fragment/app/`
  * (avec `npx vite` qui tourne) :
  *     npx playwright test e2e/remarkable.spec.ts --workers=1
  */
 
-const PLUGIN = '/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/remarkable';
+const PLUGIN = '/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone';
 
 interface Doc { nom: string; parent: string; dossier: boolean; modifie: number; version: number; carnet: boolean }
 
@@ -100,7 +100,7 @@ async function lancer(vault: string, userData: string): Promise<{ electronApp: E
 		env: { ...process.env, NODE_ENV: 'development' } as Record<string, string>,
 	});
 	const page = await fenetreApp(electronApp);
-	await page.waitForFunction(() => !!(window as any).app?.plugins?.plugins?.get('remarkable'), undefined, { timeout: 30_000 });
+	await page.waitForFunction(() => !!(window as any).app?.plugins?.plugins?.get('hone'), undefined, { timeout: 30_000 });
 	return { electronApp, page };
 }
 
@@ -119,11 +119,11 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 	const base = await mkdtemp(path.join(os.tmpdir(), 'remarkable-'));
 	const vault = path.join(base, 'vault');
 	const userData = path.join(base, 'userdata');
-	const dossierPlugin = path.join(vault, '.fragment/plugins/remarkable');
+	const dossierPlugin = path.join(vault, '.fragment/plugins/hone');
 	await mkdir(vault, { recursive: true });
 	await mkdir(userData, { recursive: true });
 	await writeFile(path.join(vault, 'note.md'), '# Note', 'utf8');
-	await cp(PLUGIN, dossierPlugin, { recursive: true, filter: (src) => !/node_modules|[\\/]data\.json$|[\\/]\.git$/.test(src) });
+	await cp(PLUGIN, dossierPlugin, { recursive: true, filter: (src) => !/node_modules|[\\/](data\.json|remarkable\.json|memoire\.jsonl)$|[\\/]\.git$/.test(src) });
 	await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
 
 	const tablette = new FausseTablette();
@@ -136,14 +136,14 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 	tablette.ajouter('c', 'C');
 	tablette.ajouter('e', 'E');
 	tablette.ajouter('n', 'Notes', '', false, true);
-	await writeFile(path.join(dossierPlugin, 'data.json'), JSON.stringify({ hote: await tablette.demarrer(), carnets: {} }), 'utf8');
+	await writeFile(path.join(dossierPlugin, 'remarkable.json'), JSON.stringify({ hote: await tablette.demarrer(), carnets: {} }), 'utf8');
 
 	const v = (p: string) => path.join(vault, p);
 	const contient = async (p: string, texte: string) => existsSync(v(p)) && (await readFile(v(p), 'latin1')).includes(texte);
-	// data.json peut être lu pendant que le plugin l'écrit : on relira au tour suivant.
+	// remarkable.json peut être lu pendant que le plugin l'écrit : on relira au tour suivant.
 	const donnees = async () => {
 		try {
-			return JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).carnets;
+			return JSON.parse(await readFile(path.join(dossierPlugin, 'remarkable.json'), 'utf8')).carnets;
 		} catch {
 			return {};
 		}
@@ -177,12 +177,12 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		// Échap : fermée sans réponse, la question revient au clic suivant.
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.modal')).toHaveCount(0);
-		expect(JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).autorise).toBeUndefined();
+		expect(JSON.parse(await readFile(path.join(dossierPlugin, 'remarkable.json'), 'utf8')).autorise).toBeUndefined();
 		await icone.click();
 		await expect(page.locator('.remarkable-refus')).toHaveCount(0);
 		await page.locator('.modal button', { hasText: 'Refuser' }).click();
 		await expect(page.locator('.modal')).toHaveCount(0);
-		await attendre(async () => JSON.parse(await readFile(path.join(dossierPlugin, 'data.json'), 'utf8')).autorise === false, 'refus retenu');
+		await attendre(async () => JSON.parse(await readFile(path.join(dossierPlugin, 'remarkable.json'), 'utf8')).autorise === false, 'refus retenu');
 		await new Promise((r) => setTimeout(r, 3000));
 		expect(existsSync(v('reMarkable'))).toBe(false);
 		await icone.click();

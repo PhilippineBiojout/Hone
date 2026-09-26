@@ -4,7 +4,8 @@ Plugin Fragment (id **`hone`**). Un **trait d'annotation** (crayon / surligneur)
 **sélection souris** sur un passage fait apparaître une **barre** qui ouvre un **chat** et des
 **outils d'IA** posés sur ce passage (définir, résumer, traduire, aider, visualiser…). Le plugin
 embarque aussi une fonction **scan** : un QR code permet d'envoyer une photo depuis le téléphone
-vers le vault.
+vers le vault, et une fonction **reMarkable** : les carnets de la tablette arrivent en direct
+dans le vault, en PDF.
 
 > Note technique détaillée pour l'assistant : voir [`CLAUDE.md`](./CLAUDE.md).
 > Tout le code, les commentaires et l'UI sont en **français**.
@@ -89,6 +90,13 @@ Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le render
 | **`scan/`** | Fonction « scanner une feuille ». |
 | ├ `scan.ts` | Icône ruban + `ScanModal` (QR via `qr-code-styling`) ; range la photo dans `Scans/`. |
 | └ `relais.ts` | Client WebSocket vers le worker Cloudflare qui relaie le téléphone. |
+| **`remarkable/`** | Les carnets de la reMarkable en direct dans le vault (flux 7). |
+| ├ `remarkable.ts` | `brancherRemarkable` : icône ruban, événements du vault, synchro toutes les 2 s ; l'index dans `remarkable.json`. |
+| ├ `tablette.ts` | Client HTTP de l'interface web USB (`http` de Node, parseur tolérant). |
+| ├ `rmdoc.ts` | Dessine le PDF d'un carnet écrit à la main depuis ses traits bruts. |
+| ├ `synchro.ts` | Un tour de synchro : liste de la tablette, carnets changés retéléchargés. |
+| ├ `registre.ts`, `deplacements.ts` | L'index id → chemin, et le suivi d'un PDF déplacé ou supprimé. |
+| └ `demande.ts`, `entete.ts`, `eclosion.ts`, `dom.ts` | La demande d'autorisation, l'état en haut des PDF, la carte qui sort de l'icône. |
 | **`decor/`** | |
 | └ `verre.ts` | Lentille de verre décorative sur les `.toolbar` (indépendant de l'agent, Chromium). |
 | **`tests/`** | Les tests unitaires vitest (`npm test` = `vitest run src`). |
@@ -142,7 +150,27 @@ téléphone (github.com/RebornFlamme/Hone) ─► worker Cloudflare (wss://hone-
 Le site téléphone (`docs/`) et le worker (`relay/`) vivent dans le dépôt
 [`github.com/RebornFlamme/Hone`](https://github.com/RebornFlamme/Hone), **hors de ce plugin**.
 
-### 7. Décor (indépendant de l'agent)
+### 7. reMarkable (tablette → PDF)
+```
+main.brancherRemarkable ─► icône ruban 'tablet' ─► DemandeAutorisation (rien avant d'avoir accepté)
+toutes les 2 s : remarkable/synchro ─► tablette (http://10.11.99.1) ─► PDF réécrit à sa place dans le vault
+```
+- **Première synchro** : tous les carnets arrivent dans `reMarkable/`, avec l'arborescence de la tablette.
+- **Carnets écrits à la main** : le plugin télécharge les traits bruts (`/download/{id}/rmdoc`, environ
+  0,5 s contre 10 s pour l'export PDF de la tablette) et dessine lui-même le PDF (`rmdoc.ts`), sans le
+  fond de modèle. Les PDF et EPUB importés passent par l'export PDF de la tablette.
+- **En haut d'un PDF de la tablette** (`entete.ts`) : « live » quand elle est branchée, une icône sinon
+  (au clic, les étapes pour la brancher).
+- **Ranger ailleurs** : un PDF déplacé ou renommé reste suivi (événement `rename` dans l'app ; hors de
+  l'app, `delete` puis `create` reconnus à la taille et à l'empreinte). Un PDF supprimé n'est plus recréé.
+- **Pourquoi `http` et pas `fetch`** : la CSP de Fragment refuse `http:` dans la page, et la tablette
+  envoie à la fois `Content-Length` et `Transfer-Encoding: chunked`, que le parseur strict de Node
+  refuse ; d'où `http.get` avec `insecureHTTPParser: true` (`tablette.ts`).
+- L'index (id du carnet → chemin dans le vault), `hote` et `autorise` sont dans
+  `.fragment/plugins/hone/remarkable.json`. Tester sans tablette : y mettre
+  `"hote": "http://localhost:<port>"`.
+
+### 8. Décor (indépendant de l'agent)
 ```
 main.poserLeVerre ─► verre ─► lentille de verre (feDisplacementMap + backdrop-filter) sur les .toolbar
 ```
