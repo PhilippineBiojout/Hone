@@ -1,10 +1,11 @@
-import { AgentEnPause, moteurCourant, type Moteur } from '../cerveau/moteur';
+import { AgentEnPause } from '../cerveau/moteur';
+import { moteurCodexCourant, type MoteurCodex } from '../cerveau/moteur-codex';
 import type { Etape, Message, Outil, Passage, Source, Sorties } from './protocole';
 
 export type { Outil, Source } from './protocole';
 
-// La façade que les composants appellent. Tout passe par le cerveau EN PAGE
-// (cerveau/moteur.ts). Sans clé (ou réglage factice), on répond en factice.
+// La façade que les composants appellent. Tout passe par Codex, avec le compte ChatGPT
+// (cerveau/moteur-codex.ts). Le factice ne sert plus qu'aux e2e (réglage `factice`).
 
 export interface ContexteQuestion {
     texte: string;
@@ -35,9 +36,10 @@ export interface ReponseOrale {
 
 export const INDICE_STOP = 'Je ne peux plus t\'aider sans te donner la solution. Pose ta question dans le chat si tu es bloqué.';
 
-/** Par le cerveau si une clé est là, en factice sinon. Toute autre erreur remonte. */
-async function parAgent<T>(appel: (moteur: Moteur) => Promise<T>, factice: () => Promise<T>): Promise<T> {
-    const moteur = moteurCourant();
+/** Par Codex, en factice seulement avec le réglage `factice` (ou hors du plugin chargé).
+ *  Toute autre erreur remonte, avec son message pour l'utilisateur. */
+async function parAgent<T>(appel: (moteur: MoteurCodex) => Promise<T>, factice: () => Promise<T>): Promise<T> {
+    const moteur = moteurCodexCourant();
     if (!moteur?.pret()) return factice();
     try {
         return await appel(moteur);
@@ -63,7 +65,7 @@ export async function repondre(
             await attendre(700);
             const n = historique.length;
             const suite = n > 0 ? ` (après ${n} message${n > 1 ? 's' : ''})` : '';
-            return `Réponse factice : Hone n'a pas de clé API. `
+            return `Réponse factice : Hone est en mode factice. `
                 + `Question reçue : « ${question} »${suite}, sur « ${extrait(contexte, 60)} ».`;
         },
     );
@@ -169,7 +171,7 @@ export async function resumerOral(historique: Message[], contexte: ContexteQuest
         async () => {
             await attendre(1200);
             const tours = historique.filter((m) => m.auteur === 'moi').length;
-            return `• Bilan factice : Hone n'a pas de clé API.\n`
+            return `• Bilan factice : Hone est en mode factice.\n`
                 + `• ${tours} tour${tours > 1 ? 's' : ''} de parole sur « ${extrait(contexte, 40)} ».\n`
                 + `• Hone donnera ici les points clés de la discussion.`;
         },

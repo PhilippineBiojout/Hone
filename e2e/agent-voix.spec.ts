@@ -50,6 +50,8 @@ async function lancer(): Promise<Harnais> {
     await writeFile(path.join(vault, 'note.md'), CONTENU, 'utf8');
     await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone', path.join(vault, '.fragment/plugins/hone'), { recursive: true, // Ni node_modules, ni le .env (la clé ne sort pas du plugin : sans lui, l'agent répond en factice), ni le journal des coûts.
         filter: (src) => !src.includes('node_modules') && !/[\\/](\.env|couts\.jsonl)$/.test(src) });
+    // Hone passe par Codex : en factice, ces tests n'appellent rien de réel.
+    await writeFile(path.join(vault, '.fragment/plugins/hone/data.json'), JSON.stringify({ factice: true }), 'utf8');
     // Depuis le cœur 3c4dbe4, un coffre sans community-plugins.json est en mode restreint : rien ne se charge.
     await writeFile(path.join(vault, '.fragment/community-plugins.json'), JSON.stringify(['hone']), 'utf8');
     await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');

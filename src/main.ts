@@ -3,6 +3,7 @@ import { createAgentLayer } from './agentLayer';
 import { AGENTS, Bibliotheque, lireAtelier } from './atelier/bibliotheque';
 import { Atelier } from './atelier/outils-atelier';
 import { ouvrirMoteur } from './cerveau/moteur';
+import { ouvrirMoteurCodex } from './cerveau/moteur-codex';
 import { Journal } from './memoire/journal';
 import { Memoire } from './memoire/outils-memoire';
 import { lirePreferences, Preferences } from './memoire/preferences';
@@ -22,6 +23,7 @@ export default class HonePlugin extends Plugin {
     private atelier: Atelier | null = null;
     private memoire: Memoire | null = null;
     private fermerMoteur: (() => void) | null = null;
+    private fermerCodex: (() => void) | null = null;
 
     async onload(): Promise<void> {
         const data = await this.loadData();
@@ -52,6 +54,7 @@ export default class HonePlugin extends Plugin {
 
         this.relancerMoteur();
         this.register(() => this.fermerMoteur?.());
+        this.register(() => this.fermerCodex?.());
 
         this.registerLayer({
             id: 'hone',
@@ -73,15 +76,15 @@ export default class HonePlugin extends Plugin {
         await brancherRemarkable(this);
         brancherCodex(this, () => this.reglages.codex);
 
-        if (!this.reglages.cle) {
-            new Notice('Hone : ajoute ta clé OpenAI via la commande « Hone : clé API… ».', 8000);
-        }
     }
 
-    /** Un seul moteur vivant : l'ancien est libéré avant d'en créer un neuf. */
+    /** Un seul moteur vivant de chaque sorte : l'ancien est libéré avant d'en créer un neuf.
+     *  La bulle et les outils passent par Codex ; le moteur OpenAI reste en place sans être appelé. */
     private relancerMoteur(): void {
         this.fermerMoteur?.();
         this.fermerMoteur = ouvrirMoteur(this.app, this.reglages, this.atelier ?? undefined, this.memoire ?? undefined);
+        this.fermerCodex?.();
+        this.fermerCodex = ouvrirMoteurCodex(this.app, this.reglages, this.memoire ?? undefined);
     }
 
     /** data.json porte les réglages, la bibliothèque et les préférences : on écrit toujours tout. */

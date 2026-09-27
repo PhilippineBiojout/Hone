@@ -99,6 +99,17 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   car `builtin-modules` ne liste que les noms nus — sans ça le bundle échoue sur `node:child_process`.
 
 ## Cerveau (page) — `src/cerveau/`
+**Depuis le 2026-09-27, la bulle et les outils passent par Codex** (compte ChatGPT, pas de clé) :
+- `moteur-codex.ts` : même contrat que `moteur.ts` (`demander(Demande) → Sortie`), singleton
+  `ouvrirMoteurCodex`/`moteurCodexCourant`, appelé par `pont/repondre.ts`. Le passage entouré est
+  recopié dans le texte de la demande (`citer`) : Codex ne voit ni l'écran ni le trait.
+- `codex/serveur.ts` : un seul `codex app-server` pour la page ; un fil éphémère par demande, borné
+  par le code : `environments: []` (ni shell ni fichiers), `approvalPolicy: never`, `web_search`
+  live/disabled, nos outils du vault en `dynamicTools` (exécutés par nous sur `item/tool/call`),
+  `outputSchema` par tour. Seule la réponse `final_answer` s'affiche (pas les « commentary »).
+- `codex/profils.ts` : par agent, vault oui/non, web oui/non, schéma, effort. Les consignes sont
+  `BASE` + `MISSIONS` de `agents.ts`, partagées avec le moteur OpenAI, qui reste en place sans être appelé.
+- Le factice ne sert plus qu'avec le réglage `factice: true` (e2e). E2e réel : `e2e/bulle-codex.spec.ts`.
 - `moteur.ts` : le chef d'orchestre côté IA (ex-`agent-serveur`). Construit les agents avec la clé,
   streame le chat, applique le plafond, mappe les erreurs (scrub `sk-…`). Singleton `ouvrirMoteur`/
   `moteurCourant`, reconstruit à chaque changement de réglages.
@@ -109,7 +120,7 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `garde.ts` : validation de forme des chemins (pas d'absolu/dotfiles/.fragment, .md/.txt) ; la portée au vault est assurée par `app.vault`. Refus RENDU au modèle.
 - `couts.ts` : compte les tokens **en mémoire**, plafond de session (plus de `couts.jsonl`).
 - `langue.ts` : langue majoritaire du vault (pour Traduire), sur `app.vault`.
-- Repli factice (`pont/repondre.ts`) : sans clé (ou réglage `factice`) → réponses factices.
+- Repli factice (`pont/repondre.ts`) : seulement avec le réglage `factice` → réponses factices.
 
 ## Contraintes / conventions
 - Tout en **français** (code, commentaires, UI). Commentaires denses, style narratif.

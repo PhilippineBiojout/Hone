@@ -15,29 +15,12 @@ import {
 	type WorkspaceLeaf,
 	setIcon,
 } from "fragment";
-import process from "node:process";
+import { vaultRoot } from "./racine";
 import { AppServerTransport } from "./transport";
 import { JsonRpcClient, type Json } from "./rpc";
 import type { CodexSettings } from "../reglages/reglages";
 
 export const VIEW_TYPE_CODEX = "codex-on-fragment-view";
-
-/** Resolve the vault's absolute path — the `cwd` Codex runs in. */
-function vaultRoot(app: App): string {
-	// The documented mechanism: the window is launched with `--vault-root=<abs>`,
-	// which the host's racineDuCoffre() reads from argv. We read the same arg.
-	const flag = "--vault-root=";
-	const arg = process.argv.find((a) => a.startsWith(flag));
-	if (arg) return arg.slice(flag.length);
-	// Fallbacks: a public field if the host adds one, else the private adapter root.
-	const anyApp = app as unknown as { vaultPath?: string };
-	if (typeof anyApp.vaultPath === "string") return anyApp.vaultPath;
-	const adapter = app.vault.adapter as unknown as {
-		racine?: string;
-		basePath?: string;
-	};
-	return adapter.racine ?? adapter.basePath ?? process.cwd();
-}
 
 export class CodexView extends ItemView {
 	private transport: AppServerTransport | null = null;
