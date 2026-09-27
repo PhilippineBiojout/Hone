@@ -836,3 +836,21 @@
 	opacity: 0.5;
 	cursor: default;
 }
+
+/* La couche de texte des PDF du cœur (pdf-view.css) mesure sa largeur et sa hauteur avec
+   round(down, …, var(--scale-round-x)) sans définir ces deux variables, que pdf.js pose
+   d'ordinaire sur `.pdfViewer .page`. Sans elles, la couche prend la taille de son contenu
+   (1097 × 3448 px pour une page de 595 × 842) : les mots invisibles ne sont plus sous les
+   mots affichés, et un trait de surligneur ne trouve pas le passage qu'il couvre.
+   Et la couche se place en `inset: 0` sur la page, qui n'est pas positionnée : elle se
+   calait sur tout le conteneur des pages (251 px trop à gauche, 16 px trop haut). Le plan
+   des calques (.pdf-overlay-space) est un voisin du conteneur, pas un enfant de la page :
+   il ne bouge pas. À retirer quand le cœur fera les deux. */
+.pdf-text-layer {
+	--scale-round-x: 1px;
+	--scale-round-y: 1px;
+}
+
+.pdf-page {
+	position: relative;
+}

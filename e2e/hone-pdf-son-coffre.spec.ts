@@ -65,6 +65,15 @@ for (const [nom, source] of COFFRES) {
 				return y;
 			};
 			await expect(page.locator('.pdf-scroll:visible .pdf-text-layer span', { hasText: 'Expliquer' }).first()).toBeVisible({ timeout: 15_000 });
+			// Les mots invisibles doivent être SOUS les mots affichés : la couche de texte a la
+			// taille et la place du canvas. Sinon le test vise la couche et passe, pendant qu'un
+			// trait sur le texte visible tombe à côté (le PDF du memo, le 27 au soir).
+			const ecart = await page.locator('.pdf-scroll:visible .pdf-page').first().evaluate((p) => {
+				const a = p.querySelector('canvas')!.getBoundingClientRect();
+				const b = p.querySelector('.pdf-text-layer')!.getBoundingClientRect();
+				return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.width - b.width), Math.abs(a.height - b.height));
+			});
+			expect(ecart).toBeLessThan(2);
 			await page.locator('.toolbar-item[aria-label="Surligneur"]:visible').first().click();
 
 			const y = await surligner('Expliquer');
