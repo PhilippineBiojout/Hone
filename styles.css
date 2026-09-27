@@ -169,7 +169,7 @@
 @keyframes agent-action-respire { 50% { opacity: 0.3; } }
 .agent-action-forme { position: absolute; z-index: 941; box-sizing: border-box; pointer-events: none; }
 .agent-action-tete { padding: 8px 8px 4px 12px; }
-.agent-action-titre { flex: 1; font-weight: 600; }
+.agent-action-titre { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-action-corps { padding: 4px 12px 12px; }
 .agent-action-source { display: inline-flex; color: var(--text-muted); }
 .agent-action-corps.is-visuel { white-space: normal; color: var(--text-normal); }

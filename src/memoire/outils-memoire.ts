@@ -32,6 +32,7 @@ function demandeDe(d: Demande): string {
 /** Ce que l'agent a répondu, en texte. */
 function reponseDe(s: Sortie): string {
     if ('svg' in s) return s.possible && s.svg ? s.svg : `pas de visuel : ${s.raison ?? ''}`;
+    if ('sujet' in s) return s.sujet;
     return s.texte;
 }
 
@@ -47,13 +48,16 @@ export class Memoire {
         const chemin = d.passage.chemin;
         const texte = chemin ? await this.acces.lire(chemin).catch(() => null) : null;
         return {
-            memoire: blocMemoire(fenetre(this.journal.tous(), chemin, maintenant)),
+            // Le titre ne prend que le document autour du passage : les souvenirs n'aident pas à le nommer.
+            memoire: d.agent === 'titre' ? '' : blocMemoire(fenetre(this.journal.tous(), chemin, maintenant)),
             document: blocDocument(texte, d.passage.texte),
         };
     }
 
     /** Après une réponse réussie. */
     noter(d: Demande, s: Sortie, outils: string[], maintenant = new Date()): Promise<void> {
+        // Un titre est de l'habillage, pas un échange : la mémoire ne le garde pas.
+        if (d.agent === 'titre') return Promise.resolve();
         return this.journal.noter({
             date: maintenant.toISOString(), agent: d.agent, note: d.passage.chemin, passage: d.passage.texte,
             demande: demandeDe(d), reponse: reponseDe(s), outils,

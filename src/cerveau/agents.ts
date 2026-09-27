@@ -37,6 +37,9 @@ Règles du SVG :
 - au plus 20 éléments de contenu, des textes courts, rien qui se chevauche.
 Si le passage ne s'y prête pas, mets possible à false et explique pourquoi en une phrase. N'invente rien qui ne soit dans le passage ou le document.`,
     bilan: `On te donne une discussion orale, tour par tour, à propos d'un passage. Écris-en le bilan : les points clés, en trois à cinq puces courtes, commençant par « • ».`,
+    titre: `Donne le sujet du passage sélectionné, pour servir de titre : un groupe nominal de 2 à 6 mots, avec son article, dans la langue du passage, sans ponctuation finale ni guillemets.
+Par exemple « le machine learning », « la photosynthèse », « les causes de la Révolution française ».
+Nomme ce dont parle le passage, pas ses premiers mots. Si le passage ne nomme pas son sujet (« cette machine… »), le document autour le donne.`,
 };
 
 const COURT: ModelSettings = { reasoning: { effort: 'low' }, text: { verbosity: 'low' }, maxTokens: 1200 };
@@ -75,6 +78,8 @@ export function creerAgents(acces: AccesVault, modeles: { fort: string; leger: s
             z.object({ possible: z.boolean(), svg: z.string().nullable(), raison: z.string().nullable() })),
         bilan: agent('bilan', 'Bilan', false, MISSIONS.bilan,
             [], COURT),
+        titre: agent('titre', 'Titre', false, MISSIONS.titre,
+            [], { ...COURT, maxTokens: 200 }, z.object({ sujet: z.string() })),
     };
 }
 

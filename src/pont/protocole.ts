@@ -2,7 +2,7 @@
 // (cerveau/). Des types seulement.
 
 export type Outil = 'definir' | 'visualiser' | 'aider' | 'traduire' | 'resumer';
-export type NomAgent = 'chat' | 'bilan' | Outil;
+export type NomAgent = 'chat' | 'bilan' | 'titre' | Outil;
 /** D'où vient une réponse : le symbole que la carte affiche. */
 export type Source = 'vault' | 'web' | 'modele';
 
@@ -15,12 +15,15 @@ export interface Etape { outil: string; detail: string }
 export type Demande =
     | { agent: 'chat'; passage: Passage; question: string; historique: Message[] }
     | { agent: 'bilan'; passage: Passage; historique: Message[] }
+    | { agent: 'titre'; passage: Passage }
     | { agent: 'aider'; passage: Passage; indices: string[] }
     | { agent: Exclude<Outil, 'aider'>; passage: Passage };
 
 export interface Sorties {
     chat: { texte: string; source: Source };
     bilan: { texte: string };
+    /** Le sujet du passage, pour la tête du chat et des cartes. */
+    titre: { sujet: string };
     definir: { texte: string; source: Source };
     resumer: { texte: string; source: Source };
     traduire: { texte: string; langue: string };

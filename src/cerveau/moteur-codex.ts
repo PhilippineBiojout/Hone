@@ -117,6 +117,7 @@ export class MoteurCodex {
                 } catch {
                     throw new ErreurAgent('Codex a rendu une réponse illisible.');
                 }
+                if (demande.agent === 'titre') return { sujet: String(json.sujet ?? '') };
                 return demande.agent === 'definir' || demande.agent === 'resumer'
                     ? { texte: String(json.texte ?? ''), source: source(outils) }
                     : json as unknown as Sortie;

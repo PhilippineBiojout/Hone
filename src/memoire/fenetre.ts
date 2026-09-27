@@ -16,7 +16,7 @@ const JOUR_MS = 86_400_000;
 
 const NOMS: Record<string, string> = {
     chat: 'Chat', definir: 'Définir', resumer: 'Résumer', traduire: 'Traduire',
-    aider: 'Indice', visualiser: 'Visualiser', bilan: 'Bilan',
+    aider: 'Indice', visualiser: 'Visualiser', bilan: 'Bilan', titre: 'Titre',
 };
 
 /** Une ligne de mémoire, telle que l'agent la lit. */

@@ -44,7 +44,7 @@ export interface OptionsAtelier {
 
 const NOMS: Record<NomAgent, string> = {
     chat: 'Chat', definir: 'Définir', resumer: 'Résumer', traduire: 'Traduire',
-    aider: 'Indice', visualiser: 'Visualiser', bilan: 'Bilan',
+    aider: 'Indice', visualiser: 'Visualiser', bilan: 'Bilan', titre: 'Titre',
 };
 
 /** L'id (sans le préfixe `hone:` que Plugin.addCommand ajoute) de la commande d'une fonction. */

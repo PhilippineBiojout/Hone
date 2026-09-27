@@ -4,6 +4,7 @@ import { Fenetre, type Cadre } from '../positionnement/fenetre';
 import type { Message, Outil } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import { repondre, type ContexteQuestion } from '../pont/repondre';
+import { sansMarkdown, titreDuChat } from '../ui/texteLisible';
 import { boutonIcone, creer, PiedSupprimer, proteger } from '../ui/ui';
 
 type SurFermeture = (messages: Message[], contexte: ContexteQuestion | null, cadre: Cadre | null, origine: Outil | null, bilan: string | null) => void;
@@ -18,6 +19,8 @@ export class BulleAgent extends Component {
     readonly dom = creer(null, 'div', 'agent-bulle');
 
     private readonly extraitEl: HTMLElement;
+    /** Le sujet écrit par Hone ; tant qu'il manque, la tête montre le passage lisible. */
+    private sujet: string | null = null;
     private readonly filEl: HTMLElement;
     private readonly champEl: HTMLTextAreaElement;
     private readonly envoyerEl: HTMLButtonElement;
@@ -142,6 +145,8 @@ export class BulleAgent extends Component {
 
     /** Ouvre la bulle sur un passage (ou l'y déplace), le champ prend le focus. */
     ouvrir(contexte: ContexteQuestion): void {
+        // Un autre passage : son sujet viendra par titrer().
+        if (this.contexte?.texte !== contexte.texte) this.sujet = null;
         this.poserContexte(contexte);
         if (!this._loaded) {
             this.ouverture++;
@@ -197,8 +202,18 @@ export class BulleAgent extends Component {
 
     private poserContexte(contexte: ContexteQuestion): void {
         this.contexte = contexte;
-        this.extraitEl.textContent = contexte.texte.replace(/\s+/g, ' ').trim();
-        this.extraitEl.title = contexte.texte;
+        this.extraitEl.textContent = titreDuChat(this.sujet, contexte.texte);
+        this.extraitEl.title = sansMarkdown(contexte.texte);
+        this.extraitEl.classList.toggle('is-sujet', this.sujet !== null);
+    }
+
+    /** Le sujet du passage est arrivé : « Question sur … » remplace le passage, par un fondu. */
+    titrer(sujet: string | null): void {
+        if (sujet === this.sujet) return;
+        this.sujet = sujet;
+        if (!this.contexte) return;
+        this.poserContexte(this.contexte);
+        this.extraitEl.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
     }
 
     private async envoyer(): Promise<void> {

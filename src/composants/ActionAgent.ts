@@ -6,6 +6,7 @@ import type { Message } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import { agir, resumerOral, type ContexteQuestion, type Outil, type ReponseOutil } from '../pont/repondre';
 import { decrireEtape, resumerEtapes } from '../ui/etapes';
+import { titreDeCarte } from '../ui/texteLisible';
 import { arc, boutonIcone, OUTILS, PiedSupprimer, proteger } from '../ui/ui';
 
 /** Ce que montre la carte : la réponse d'un outil, ou le bilan d'une discussion orale. */
@@ -174,10 +175,26 @@ export class ActionAgent extends Component {
         this.unload();
     }
 
+    /** Le sujet du passage est arrivé : « Définir : … ». */
+    titrer(sujet: string | null): void {
+        if (sujet === this.sujet) return;
+        this.sujet = sujet;
+        const titre = titreDeCarte(this.libelle, sujet);
+        this.titreEl.textContent = titre;
+        this.titreEl.title = titre;
+        this.carteEl.setAttribute('aria-label', titre);
+    }
+
+    private libelle = '';
+    private sujet: string | null = null;
+
     private preparer({ icone, libelle }: { icone: string; libelle: string }): void {
         setIcon(this.iconeCercleEl, icone);
         setIcon(this.iconeCarteEl, icone);
+        this.libelle = libelle;
+        this.sujet = null;
         this.titreEl.textContent = libelle;
+        this.titreEl.title = libelle;
         this.carteEl.setAttribute('aria-label', libelle);
         this.corpsEl.textContent = '';
         this.corpsEl.classList.remove('is-error', 'is-visuel', 'is-stop');

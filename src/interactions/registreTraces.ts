@@ -18,6 +18,8 @@ export interface Trace {
     decalageTrait: number;
     contenu: Contenu;
     cadre: Cadre | null;
+    /** Le sujet écrit par Hone pour les têtes (« Question sur … ») : rouverte, la réponse le garde. */
+    sujet?: string;
 }
 
 export interface StockageTraces {
@@ -91,17 +93,19 @@ export class RegistreTraces {
         return undefined;
     }
 
-    ajouter(zone: ContexteQuestion, trait: Stroke, contenu: Contenu, cadre: Cadre | null): Trace {
-        const trace: Trace = { id: this.prochainId++, zone, trait, decalageTrait: trait.pos - zone.from, contenu, cadre };
+    ajouter(zone: ContexteQuestion, trait: Stroke, contenu: Contenu, cadre: Cadre | null, sujet?: string | null): Trace {
+        const trace: Trace = {
+            id: this.prochainId++, zone, trait, decalageTrait: trait.pos - zone.from, contenu, cadre, ...(sujet ? { sujet } : {}),
+        };
         this.liste(zone.chemin).push(trace);
         this.changer(zone.chemin, true);
         return trace;
     }
 
-    mettreAJour(id: number, contenu: Contenu, cadre: Cadre | null): void {
+    mettreAJour(id: number, contenu: Contenu, cadre: Cadre | null, sujet?: string | null): void {
         const t = this.trouver(id);
         if (!t) return;
-        Object.assign(t, { contenu, cadre });
+        Object.assign(t, { contenu, cadre, ...(sujet ? { sujet } : {}) });
         this.changer(t.zone.chemin, true);
     }
 

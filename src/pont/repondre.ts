@@ -2,6 +2,7 @@ import { AgentEnPause, ErreurAgent } from '../cerveau/moteur';
 import { moteurCodexCourant, type MoteurCodex } from '../cerveau/moteur-codex';
 import { transcrire } from '../cerveau/transcrire';
 import type { Etape, Message, Outil, Passage, Source, Sorties } from './protocole';
+import { nettoyerSujet, sansMarkdown } from '../ui/texteLisible';
 
 export type { Outil, Source } from './protocole';
 
@@ -192,4 +193,24 @@ export async function resumerOral(historique: Message[], contexte: ContexteQuest
                 + `• Hone donnera ici les points clés de la discussion.`;
         },
     );
+}
+
+/**
+ * Le sujet du passage, pour la tête du chat (« Question sur … ») et des cartes (« Définir : … »).
+ * Un titre n'est que de l'habillage : une erreur rend null, et la tête garde le passage lisible.
+ */
+export async function sujetDe(contexte: ContexteQuestion): Promise<string | null> {
+    try {
+        return nettoyerSujet(await parAgent(
+            async (moteur) => (await moteur.demander({ agent: 'titre', passage: passage(contexte) }) as Sorties['titre']).sujet,
+            async () => {
+                await attendre(300);
+                const mots = sansMarkdown(contexte.texte).split(' ').slice(0, 4).join(' ');
+                return `le sujet factice ${mots}`;
+            },
+        ));
+    } catch (err) {
+        console.warn('[hone] titre :', err);
+        return null;
+    }
 }

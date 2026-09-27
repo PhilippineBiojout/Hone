@@ -4,6 +4,7 @@ import type { Cadre } from '../positionnement/fenetre';
 import type { Repere } from '../positionnement/repere';
 import type { ContexteQuestion, Outil, ReponseOutil } from '../pont/repondre';
 import type { Contenu, RegistreTraces, Trace } from './registreTraces';
+import { etiquetteDeReponse } from '../ui/texteLisible';
 import { OUTILS } from '../ui/ui';
 
 export type { Contenu, Trace } from './registreTraces';
@@ -52,11 +53,11 @@ export class CarnetTraces {
     }
 
     /** Une trace rouverte reprend sa place avec son nouveau contenu ; sinon, une trace neuve. */
-    fermer(zone: ContexteQuestion, trait: Stroke, contenu: Contenu, cadre: Cadre | null): void {
+    fermer(zone: ContexteQuestion, trait: Stroke, contenu: Contenu, cadre: Cadre | null, sujet?: string | null): void {
         const rouverte = this.ouverte;
         this.ouverte = null;
-        if (rouverte !== null && this.registre.trouver(rouverte)) this.registre.mettreAJour(rouverte, contenu, cadre);
-        else this.registre.ajouter(zone, trait, contenu, cadre);
+        if (rouverte !== null && this.registre.trouver(rouverte)) this.registre.mettreAJour(rouverte, contenu, cadre, sujet);
+        else this.registre.ajouter(zone, trait, contenu, cadre, sujet);
         this.placer();
     }
 
@@ -149,6 +150,12 @@ export class CarnetTraces {
         for (const { t, ligne } of places) {
             const { el, rangee, handle } = this.icone(t);
             el.classList.toggle('is-ouverte', t.id === this.ouverte);
+            // Le sujet peut arriver après l'icône : son infobulle se relit à chaque placement.
+            const etiquette = etiquetteDe(t);
+            if (el.title !== etiquette) {
+                el.title = etiquette;
+                el.setAttribute('aria-label', etiquette);
+            }
             if (!ligne) continue;
             const top = (ligne.top + ligne.bottom) / 2 - TAILLE / 2;
             let col = 0;
@@ -187,12 +194,7 @@ export class CarnetTraces {
         el.type = 'button';
         el.classList.add('agent-trace');
         const outil = t.contenu.type === 'oral' ? undefined : t.contenu.outil;
-        const { libelle, icone } = t.contenu.type === 'oral'
-            ? { libelle: 'Discussion orale', icone: 'mic' }
-            : outil ? OUTILS[outil] : { libelle: 'Conversation', icone: 'cat' };
-        const extrait = t.zone.texte.replace(/\s+/g, ' ').trim();
-        el.setAttribute('aria-label', `${libelle} : ${extrait}`);
-        el.title = `${libelle} : « ${extrait.length > 60 ? `${extrait.slice(0, 60)}…` : extrait} »`;
+        const icone = t.contenu.type === 'oral' ? 'mic' : outil ? OUTILS[outil].icone : 'cat';
         setIcon(el, icone);
         el.addEventListener('click', () => {
             // onOuvrir d'abord : il ferme ce qui était ouvert, qui range sa trace en lisant `ouverte`.
@@ -217,6 +219,13 @@ export class CarnetTraces {
         icone?.rangee.remove();
         this.icones.delete(id);
     }
+}
+
+/** L'infobulle d'une icône : le titre de la réponse, ou son outil et le passage lisible. */
+export function etiquetteDe(t: Trace): string {
+    const outil = t.contenu.type === 'oral' ? undefined : t.contenu.outil;
+    const libelle = t.contenu.type === 'oral' ? 'Discussion orale' : outil ? OUTILS[outil].libelle : 'Conversation';
+    return etiquetteDeReponse(libelle, t.contenu.type === 'chat', t.sujet ?? null, t.zone.texte);
 }
 
 /** La longueur du document, en offsets. */

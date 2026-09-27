@@ -34,6 +34,7 @@ export const PROFILS: Record<NomAgent, Profil> = {
         schema: objet({ possible: { type: 'boolean' }, svg: chaineOuNull, raison: chaineOuNull }),
     },
     bilan: { vault: false, web: false, effort: 'low' },
+    titre: { vault: false, web: false, effort: 'low', schema: objet({ sujet: chaine }) },
 };
 
 /** Les deux outils de lecture du vault, les mêmes que ceux du moteur OpenAI (outils-vault.ts). */

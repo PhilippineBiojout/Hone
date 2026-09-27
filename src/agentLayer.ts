@@ -5,7 +5,7 @@ import { BarreAgent } from './composants/BarreAgent';
 import { BulleAgent } from './composants/BulleAgent';
 import { brancherDeclencheurs, SELECTION } from './interactions/declencheur';
 import { Repere } from './positionnement/repere';
-import type { ContexteQuestion } from './pont/repondre';
+import { sujetDe, type ContexteQuestion } from './pont/repondre';
 import { CarnetTraces, texteEntre, type Trace } from './interactions/traces';
 import { TRAIT_PERDU, type RegistreTraces } from './interactions/registreTraces';
 import { VoixAgent } from './composants/VoixAgent';
@@ -35,6 +35,30 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
     /** Vrai pendant la poubelle : ce qui se ferme ne laisse pas de trace. */
     let suppression = false;
     let voixReprise: { tours: number; bilan: string } | null = null;
+    /** Le sujet du passage visé, écrit par Hone pour les têtes ; demandé une fois par passage. */
+    let sujet: string | null = null;
+    let jetonSujet = 0;
+    let sujetDemande = false;
+    const nouveauPassage = (connu: string | null): void => {
+        jetonSujet++;
+        sujet = connu;
+        sujetDemande = false;
+    };
+    /** Le chat ou la carte vient de s'ouvrir : sa tête prend le sujet, demandé s'il manque. */
+    const demanderSujet = (): void => {
+        bulle.titrer(sujet);
+        action.titrer(sujet);
+        if (sujet || sujetDemande || !zone) return;
+        sujetDemande = true;
+        const jeton = jetonSujet;
+        void sujetDe(zone).then((s) => {
+            // Une réponse arrivée pour un passage qu'on a quitté ne titre rien.
+            if (jeton !== jetonSujet || !s) return;
+            sujet = s;
+            bulle.titrer(s);
+            action.titrer(s);
+        });
+    };
 
     const annotation = brancherAnnotation(c, ctx.app, paneEl, chemin);
     const repere = new Repere(editor, ctx.overlays, paneEl, () => trait, () => annotation.barre());
@@ -52,6 +76,7 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
     const barre = new BarreAgent(repere, {
         onChat: () => {
             if (zone) bulle.ouvrir(zone);
+            demanderSujet();
             majOccupe();
         },
         // Fermer la barre ferme tout : le chat n'aurait plus rien à côté de quoi se tenir.
@@ -69,6 +94,7 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
             barre.cacher();
             // Aider : les indices déjà donnés sur ce passage, pour le suivant.
             action.lancer(outil, zone, depuis, outil === 'aider' ? carnet.reponsesSur(outil, zone.from, zone.to) : []);
+            demanderSujet();
             majOccupe();
         },
         onVoix: () => {
@@ -85,9 +111,9 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
     const bulle = new BulleAgent(ctx.app, repere, () => barre, (messages, contexte, cadre, origine, bilan) => {
         if (enchainement) return;
         if (!suppression && contexte && trait && bilan !== null) {
-            carnet.fermer(contexte, trait, { type: 'oral', messages, bilan }, cadre);
+            carnet.fermer(contexte, trait, { type: 'oral', messages, bilan }, cadre, sujet);
         } else if (!suppression && contexte && trait && messages.length > 0) {
-            carnet.fermer(contexte, trait, { type: 'chat', messages, ...(origine ? { outil: origine } : {}) }, cadre);
+            carnet.fermer(contexte, trait, { type: 'chat', messages, ...(origine ? { outil: origine } : {}) }, cadre, sujet);
         } else carnet.oublierOuverte();
         // Rouverte seule depuis la marge, sans barre : sa croix ferme tout.
         if (!barre.estOuverte()) {
@@ -103,7 +129,7 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
         if (!suppression && resultat && zone && trait) {
             carnet.fermer(zone, trait, resultat.type === 'outil'
                 ? resultat
-                : { type: 'oral', messages: resultat.messages, bilan: resultat.texte }, action.cadre());
+                : { type: 'oral', messages: resultat.messages, bilan: resultat.texte }, action.cadre(), sujet);
         } else carnet.oublierOuverte();
         zone = null;
         majOccupe();
@@ -118,12 +144,13 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
         const inchangee = reprise !== null && historique.length === reprise.tours;
         if (parCroix && zone && historique.length > 0 && !inchangee) {
             action.lancerBilan(zone, historique, boite);
+            demanderSujet();
             majOccupe();
             return;
         }
         if (!suppression && zone && trait && historique.length > 0) {
             const bilan = inchangee ? reprise.bilan : 'Bilan non écrit : la discussion a été interrompue.';
-            carnet.fermer(zone, trait, { type: 'oral', messages: historique, bilan }, null);
+            carnet.fermer(zone, trait, { type: 'oral', messages: historique, bilan }, null, sujet);
         } else carnet.oublierOuverte();
         zone = null;
         majOccupe();
@@ -143,6 +170,7 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
         } else {
             bulle.rouvrir(zone, [{ auteur: 'agent', texte: resultat.texte }], depuis, cadre, { outil: resultat.outil, poubelle });
         }
+        demanderSujet();
         majOccupe();
         editor.requestUpdate();
     };
@@ -168,9 +196,11 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
         bulle.fermer();
         zone = { ...t.zone };
         trait = carnet.traitDe(t);
+        nouveauPassage(t.sujet ?? null);
         if (t.contenu.type === 'outil') action.montrer(t.contenu.outil, t.contenu, depuis, t.cadre);
         else if (t.contenu.type === 'oral') bulle.rouvrir(zone, t.contenu.messages, depuis, t.cadre, { bilan: t.contenu.bilan, poubelle: true });
         else bulle.rouvrir(zone, t.contenu.messages, depuis, t.cadre, { outil: t.contenu.outil, poubelle: true });
+        demanderSujet();
         majOccupe();
         editor.requestUpdate();
     };
@@ -209,6 +239,7 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
     brancherDeclencheurs(c, editor, repere, annotation, chemin, occupe, (z, t) => {
         zone = z;
         trait = t;
+        nouveauPassage(null);
         barre.montrer();
         editor.requestUpdate();
         majOccupe();
