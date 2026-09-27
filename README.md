@@ -1,228 +1,334 @@
-# Hone — plugin Fragment
+# Hone — a Fragment plugin
 
-Plugin Fragment (id **`hone`**). Un **trait d'annotation** (crayon / surligneur) ou une
-**sélection souris** sur un passage fait apparaître une **barre** qui ouvre un **chat** et des
-**outils d'IA** posés sur ce passage (définir, résumer, traduire, aider, visualiser…). Le plugin
-embarque aussi une fonction **scan** : un QR code permet d'envoyer une photo depuis le téléphone
-vers le vault, une fonction **reMarkable** : les carnets de la tablette arrivent en direct
-dans le vault, en PDF, et un panneau **Codex** : un chat dans le dock droit qui pilote le binaire
-`codex app-server` (fusionné depuis l'ex-plugin `codex-on-fragment`).
+Fragment plugin (id **`hone`**). An **annotation stroke** (pen / highlighter) or a **mouse
+selection** on a passage brings up a **toolbar** that opens a **chat** and **AI tools** anchored on
+that passage (define, summarize, translate, help, visualize…). The plugin also ships a **scan**
+feature (a QR code links your phone, and the sheets you photograph become the pages of a PDF in the
+vault), a **reMarkable** feature (the tablet's notebooks arrive live in the vault, as PDFs), and a
+**Codex** panel: a chat in the right dock that drives the `codex app-server` binary (merged from the
+former `codex-on-fragment` plugin).
 
-> Note technique détaillée pour l'assistant : voir [`CLAUDE.md`](./CLAUDE.md).
-> Tout le code, les commentaires et l'UI sont en **français** — **exception** : le dossier
-> `src/codex/` est en anglais (repris tel quel de `codex-on-fragment`).
+> Detailed technical notes for the assistant: see [`CLAUDE.md`](./CLAUDE.md).
+> The code, its comments and the UI are in **French** — **exception**: `src/codex/` is in English
+> (taken as is from `codex-on-fragment`).
 
 ---
 
-## Démarrage
+## Installation
+
+Hone is a Fragment **community plugin**: a folder inside your vault that Fragment loads at startup.
+You need four things: Fragment, the built plugin, Codex (the AI) and, for the scan, the website and
+relay from [`Hone-web_scan`](https://github.com/PhilippineBiojout/Hone-web_scan).
+
+### 1. Fragment
+
+Download the app from **[usefragment.org](https://www.usefragment.org)** (Windows; macOS at
+[usefragment.org/download/mac](https://www.usefragment.org/download/mac)), then open a folder as a
+vault. The plugin API types are published on npm as
+[`@usefragment/core`](https://www.npmjs.com/package/@usefragment/core): `npm install` fetches them,
+nothing to do by hand.
+
+#### Windows blocks the installer (« le fichier contient un virus… »)
+
+1. Allow the installer in your antivirus:
+   - **Windows Defender**: *Windows Security → Virus & threat protection → Protection history*,
+     open the entry for `Fragment Setup…`, then *Actions → Allow on device*.
+   - **McAfee**: *My Protection → Quarantined items*, select `Fragment Setup…`, *Restore*; then
+     *My Protection → Real-Time Scanning → Excluded files → Add file* and pick the installer.
+   - **Another antivirus**: restore the file from its quarantine, then add it to its exclusions.
+2. Run the installer. If SmartScreen shows *“Windows protected your PC”*, click
+   *More info → Run anyway*.
+
+### 2. The plugin
+
+Requirements: **Git** and **Node.js 20 or later**.
 
 ```bash
-npm install        # node_modules n'est pas versionné
-npm run build      # tsc --noEmit + esbuild (prod) → main.js
-npm run dev        # esbuild en watch
-npm test           # vitest run src  (tests unitaires dans src/tests/)
+cd <your-vault>/.fragment/plugins      # create it if it does not exist
+git clone https://github.com/PhilippineBiojout/Hone.git hone
+cd hone
+npm install
+npm run build                          # produces main.js, the only code Fragment reads
 ```
 
-- **Le bundle `main.js` n'est PAS versionné** (artefact de build). Après un clone frais, lancer
-  `npm install && npm run build` **avant** que Fragment puisse charger le plugin.
-- **Codex** : Hone répond par le binaire `codex`, connecté au compte ChatGPT (`codex login` dans
-  un terminal). Aucune clé API. Le réglage `factice: true` de `data.json` coupe tout appel (e2e).
-- **Clé Gradium** (la voix) : commande **« Hone : clé Gradium… »**, rangée dans les données du
-  plugin (`loadData`/`saveData`), pas dans un `.env`.
-- **Fragment verrouille les dossiers des plugins chargés** : fermer l'app avant de supprimer /
-  renommer un dossier, et la redémarrer pour recharger un plugin rebuildé.
+Then **restart Fragment**: it loads every folder in `.fragment/plugins/` that contains a
+`manifest.json`, with no activation screen. It only reads `manifest.json`, `main.js` and `styles.css`.
+
+- The folder must be a **real folder**, not a symbolic link or a junction.
+- `main.js` is not versioned: after every `git pull`, run `npm install && npm run build` again, then
+  restart Fragment (it only reads plugins at startup).
+- If something goes wrong: Fragment's console (**Ctrl+Shift+I**), lines starting with `[plugins] …`.
+
+### 3. Codex (Hone's AI)
+
+Hone answers through the **Codex** binary, signed in with a ChatGPT account. No API key.
+
+```bash
+npm install -g @openai/codex
+codex login                            # opens the browser to sign in
+```
+
+Install Codex **before** starting Fragment, so it finds it in the `PATH`. Otherwise, set its full
+path in the plugin's `data.json`: `"codex": { "codexPath": "…\\codex.cmd" }`.
+
+### 4. Voice (optional)
+
+Command **« Hone : clé Gradium… »** (Ctrl+P). The key is stored in the plugin's data.
+
+### 5. The scan: Hone-web_scan
+
+The scan (photographing sheets with your phone) relies on two pieces that live **outside this
+repository**, in [`github.com/PhilippineBiojout/Hone-web_scan`](https://github.com/PhilippineBiojout/Hone-web_scan):
+
+| Piece | Folder | Online |
+|---|---|---|
+| the **website** the phone opens (camera, sheet detection and straightening, upload) | `docs/` | GitHub Pages: `https://philippinebiojout.github.io/Hone-web_scan/` |
+| the **relay** that connects the phone to Fragment | `relay/` | Cloudflare Worker: `wss://hone-relay.lasky.workers.dev` |
+
+**By default the plugin uses these two hosted addresses: nothing to install**, the scan works as
+soon as the plugin is loaded. To host them yourself:
+
+1. fork `Hone-web_scan` and enable GitHub Pages on `main` / folder `/docs`;
+2. deploy the relay from **`relay/`**: `npm install`, then `npx wrangler deploy` (Cloudflare account);
+3. in this plugin, replace `SITE_URL` (`src/scan/scan.ts`) and `RELAY_URL` (`src/scan/relais.ts`)
+   with your addresses, then `npm run build`.
+
+The website and the plugin must speak the same protocol: update them together (see the
+`Hone-web_scan` README).
+
+**Using the scan:**
+- **QR icon** in the ribbon: the QR code shows up, the phone scans it and opens the website. Each
+  photo becomes a page of a PDF created at the root of the vault (`Scan <date> <time>.pdf`);
+- on the phone, the **left column** lists the pages: tap a page to **update** it (only that page of
+  the PDF is replaced); **« Nouveau »** (new) starts another PDF;
+- **right-click a PDF → « Reprendre le scan »** (resume the scan): photos continue that PDF, and its
+  existing pages can be updated. **Right-click a folder → « Scanner dans ce dossier »** (scan into
+  this folder). **Ctrl+P → « Scanner dans ce PDF »** does the same on the open PDF;
+- a phone that is already connected follows the new destination on its own, no need to rescan the QR.
 
 ---
 
-## Qui répond : Codex, avec le compte ChatGPT
+## Getting started (development)
 
-Le chat, les outils de la barre et l'oral passent par **un seul `codex app-server`** que la page
-pilote en JSON-RPC (`src/codex/serveur.ts`), lancé par `src/cerveau/moteur-codex.ts`. Chaque
-demande ouvre un fil éphémère, borné par son profil (`src/codex/profils.ts`) : consignes, outils
-fournis par nous (`dynamicTools`), web ou non, et aucun accès à la machine. Le SDK OpenAI et la
-clé API ont été retirés le 2026-09-27.
+```bash
+npm install        # node_modules is not versioned
+npm run build      # tsc --noEmit + esbuild (prod) → main.js
+npm run dev        # esbuild in watch mode
+npm test           # vitest run src  (unit tests in src/tests/)
+```
 
-- **Codex lit tout le vault, PDF compris** : `read_document` rend le texte d'un PDF page par page,
-  et chaque page sans texte (carnet reMarkable, scan) en image (`inputImage`), 6 au plus par appel ;
-  `en_image` force l'image d'une page à texte. `search_vault` cherche aussi dans le texte des PDF.
-  pdf.js (build legacy) est embarqué et tourne dans la page sans worker (`src/cerveau/pdf.ts`).
-- Les outils qu'on donne à Codex : `search_vault` et `read_document` (selon le profil), les deux
-  outils de la mémoire (`remember`, `note_preference`) et, si `atelierActif`, les six méta-outils
-  de l'atelier avec son catalogue en tête de la demande. Le titre n'en reçoit aucun.
-- [`src/pont/protocole.ts`](./src/pont/protocole.ts) porte les **types de domaine** (`Demande` /
-  `Sortie` / `Message`) ; le chat se streame par un simple **callback** (plus d'IPC).
+- **The `main.js` bundle is NOT versioned** (build artifact). After a fresh clone, run
+  `npm install && npm run build` **before** Fragment can load the plugin.
+- **Codex**: Hone answers through the `codex` binary, signed in with a ChatGPT account (`codex login`
+  in a terminal). No API key. The `factice: true` setting in `data.json` cuts every call (e2e).
+- **Gradium key** (voice): command **« Hone : clé Gradium… »**, stored in the plugin's data
+  (`loadData`/`saveData`), not in a `.env`.
+- **Fragment locks the folders of loaded plugins**: close the app before deleting / renaming a
+  folder, and restart it to reload a rebuilt plugin.
 
 ---
 
-## Structure des dossiers
+## Who answers: Codex, with the ChatGPT account
 
-`src/` est rangé **par responsabilité** (un dossier par partie). L'entrée esbuild est unique :
+The chat, the toolbar tools and the voice all go through **a single `codex app-server`** that the
+page drives over JSON-RPC (`src/codex/serveur.ts`), started by `src/cerveau/moteur-codex.ts`. Each
+request opens an ephemeral thread, bounded by its profile (`src/codex/profils.ts`): instructions,
+tools we provide (`dynamicTools`), web or not, and no access to the machine. The OpenAI SDK and the
+API key were removed on 2026-09-27.
+
+- **Codex reads the whole vault, PDFs included**: `read_document` returns a PDF's text page by page,
+  and each page without text (reMarkable notebook, scan) as an image (`inputImage`), 6 at most per
+  call; `en_image` forces the image of a text page. `search_vault` also searches PDF text. pdf.js
+  (legacy build) is bundled and runs in the page without a worker (`src/cerveau/pdf.ts`).
+- The tools we give Codex: `search_vault` and `read_document` (depending on the profile), the two
+  memory tools (`remember`, `note_preference`) and, if `atelierActif`, the six workshop meta-tools
+  with its catalogue at the top of the request. The title request gets none.
+- [`src/pont/protocole.ts`](./src/pont/protocole.ts) holds the **domain types** (`Demande` /
+  `Sortie` / `Message`); the chat streams through a simple **callback** (no more IPC).
+
+---
+
+## Folder structure
+
+`src/` is organized **by responsibility** (one folder per part). The single esbuild entry point is
 `src/main.ts`.
 
-| Dossier / fichier | Rôle |
+| Folder / file | Role |
 |---|---|
-| `main.ts` | Point d'entrée. `onload()` charge les réglages, ouvre le moteur Codex, enregistre le calque `hone` (un par vue), ajoute la commande « clé Gradium », pose la lentille de verre, branche le scan et le panneau Codex. |
-| `agentLayer.ts` | **L'orchestrateur** par vue : le seul fichier qui connaît toutes les pièces. Tient l'état `zone` (passage) + `trait`. |
-| `fragment-env.d.ts` | Shim de types pour l'import `fragment`. |
-| **`interactions/`** | Ce qui déclenche et ancre l'agent. |
-| ├ `annotation.ts` | Adaptateur vers le plugin d'annotation du cœur (strokes, gomme, événements). |
-| ├ `declencheur.ts` | Détecte trait (crayon/surligneur) ou sélection → demande la barre. |
-| ├ `zoneDuTrait.ts` | Géométrie pure : forme du trait → plage de texte `[from, to]`. |
-| ├ `traces.ts` | `CarnetTraces` : les icônes de la marge d'une vue, une par réponse fermée. |
-| └ `registreTraces.ts` | `RegistreTraces` : l'historique par document, tenu par le plugin et écrit dans `traces.json`. Une réponse ne part que par la poubelle. |
-| **`positionnement/`** | Géométrie et placement des widgets. |
-| ├ `repere.ts` | Le hub de coordonnées d'une vue : `WidgetLayer` + conversions client↔document. |
-| ├ `placement.ts` | Maths de placement (`aCote` : coin d'un widget à côté d'une boîte). |
-| └ `fenetre.ts` | Widget déplaçable / redimensionnable (`Fenetre`, `Cadre`) + gestes. |
-| **`composants/`** | Les widgets UI (chacun un `Component`). |
-| ├ `BarreAgent.ts` | La barre verticale (Toolbar) posée à côté du passage. |
-| ├ `BulleAgent.ts` | La bulle de **chat** (réponse streamée). |
-| ├ `ActionAgent.ts` | La **carte d'outil** (le rond réfléchit puis fleurit en carte). |
-| └ `VoixAgent.ts` | La **discussion orale** (micro, `MediaRecorder`, onde, TTS). |
-| **`ui/`** | Atomes partagés. |
-| ├ `ui.ts` | Table `OUTILS`, `boutonIcone`, `arc`, `proteger`, `PiedSupprimer`. |
-| ├ `animations.ts` | Gestes Web-Animations (`eclore`, `resorber`, `rallonger`, `ressort`) + `creer`. |
-| ├ `onde.ts` | La waveform à 5 barres de la voix. |
-| └ `nettoyerSvg.ts` | Assainit le SVG produit par « visualiser » avant affichage. |
-| **`pont/`** | Façade + types de domaine. |
-| ├ `repondre.ts` | Façade appelée par les widgets (`repondre`, `agir`, `parler`, `resumerOral`) + repli factice. |
-| └ `protocole.ts` | Les types de domaine (`Demande` / `Sortie` / `Message`). |
-| **`cerveau/`** | Ce qui fait répondre Hone. |
-| ├ `moteur-codex.ts` | Une `Demande` entre, une `Sortie` sort, par Codex ; mémoire et atelier branchés. Singleton `ouvrirMoteurCodex`/`moteurCodexCourant`. |
-| ├ `consignes.ts` | `BASE` (qui est Hone) et la mission de chaque agent. |
-| ├ `demande.ts` | `citer` (le passage tel que Codex le lit), `ErreurAgent`, `AgentEnPause`. |
-| ├ `appel.ts`, `gradium.ts` | La discussion orale : Gradium écoute et parle, Codex répond. |
-| ├ `outils-vault.ts` | Lecture **seule** : `chercherDansLeVault`, `lireDocument` (notes et PDF, async, sur `app.vault`). |
-| ├ `pdf.ts` | pdf.js dans la page : texte des pages, image des pages écrites à la main. |
-| ├ `vault.ts` | `AccesVault` sur l'API native `app.vault` (injectable, testable). |
-| ├ `garde.ts` | Validation de forme des chemins ; la portée au vault vient d'`app.vault`. |
-| └ `langue.ts` | Détecte la langue du vault (FR/EN) sans appel modèle. |
+| `main.ts` | Entry point. `onload()` loads the settings, opens the Codex engine, registers the `hone` layer (one per view), adds the « clé Gradium » command, sets the glass lens, wires the scan and the Codex panel. |
+| `agentLayer.ts` | **The orchestrator** per view: the only file that knows every piece. Holds the `zone` (passage) + `trait` state. |
+| `fragment-env.d.ts` | Type shim for the `fragment` import. |
+| **`interactions/`** | What triggers and anchors the agent. |
+| ├ `annotation.ts` | Adapter to the core annotation plugin (strokes, eraser, events). |
+| ├ `declencheur.ts` | Detects a stroke (pen/highlighter) or a selection → asks for the toolbar. |
+| ├ `zoneDuTrait.ts` | Pure geometry: stroke shape → text range `[from, to]`. |
+| ├ `traces.ts` | `CarnetTraces`: the margin icons of a view, one per closed answer. |
+| └ `registreTraces.ts` | `RegistreTraces`: per-document history, held by the plugin and written to `traces.json`. An answer only goes away through the trash button. |
+| **`positionnement/`** | Widget geometry and placement. |
+| ├ `repere.ts` | A view's coordinate hub: `WidgetLayer` + client↔document conversions. |
+| ├ `placement.ts` | Placement maths (`aCote`: corner of a widget next to a box). |
+| └ `fenetre.ts` | Draggable / resizable widget (`Fenetre`, `Cadre`) + gestures. |
+| **`composants/`** | The UI widgets (each one a `Component`). |
+| ├ `BarreAgent.ts` | The vertical toolbar placed next to the passage. |
+| ├ `BulleAgent.ts` | The **chat** bubble (streamed answer). |
+| ├ `ActionAgent.ts` | The **tool card** (the circle thinks, then blooms into a card). |
+| └ `VoixAgent.ts` | The **voice conversation** (mic, `MediaRecorder`, waveform, TTS). |
+| **`ui/`** | Shared atoms. |
+| ├ `ui.ts` | `OUTILS` table, `boutonIcone`, `arc`, `proteger`, `PiedSupprimer`. |
+| ├ `animations.ts` | Web Animations gestures (`eclore`, `resorber`, `rallonger`, `ressort`) + `creer`. |
+| ├ `onde.ts` | The 5-bar voice waveform. |
+| └ `nettoyerSvg.ts` | Sanitizes the SVG produced by « visualiser » before display. |
+| **`pont/`** | Facade + domain types. |
+| ├ `repondre.ts` | Facade called by the widgets (`repondre`, `agir`, `parler`, `resumerOral`) + fake fallback. |
+| └ `protocole.ts` | The domain types (`Demande` / `Sortie` / `Message`). |
+| **`cerveau/`** | What makes Hone answer. |
+| ├ `moteur-codex.ts` | A `Demande` goes in, a `Sortie` comes out, through Codex; memory and workshop wired in. Singleton `ouvrirMoteurCodex`/`moteurCodexCourant`. |
+| ├ `consignes.ts` | `BASE` (who Hone is) and each agent's mission. |
+| ├ `demande.ts` | `citer` (the passage as Codex reads it), `ErreurAgent`, `AgentEnPause`. |
+| ├ `appel.ts`, `gradium.ts` | The voice conversation: Gradium listens and speaks, Codex answers. |
+| ├ `outils-vault.ts` | **Read-only**: `chercherDansLeVault`, `lireDocument` (notes and PDFs, async, on `app.vault`). |
+| ├ `pdf.ts` | pdf.js in the page: page text, images of handwritten pages. |
+| ├ `vault.ts` | `AccesVault` on the native `app.vault` API (injectable, testable). |
+| ├ `garde.ts` | Path shape validation; scoping to the vault comes from `app.vault`. |
+| └ `langue.ts` | Detects the vault's language (FR/EN) without a model call. |
 | **`reglages/`** | |
-| └ `reglages.ts` | Réglages (`loadData`/`saveData`) : clé Gradium et son Modal, `factice`, `atelierActif`, `codex`. |
-| **`scan/`** | Fonction « scanner une feuille ». |
-| ├ `scan.ts` | Icône ruban + `ScanModal` (QR via `qr-code-styling`) ; range la photo dans `Scans/`. |
-| └ `relais.ts` | Client WebSocket vers le worker Cloudflare qui relaie le téléphone. |
-| **`remarkable/`** | Les carnets de la reMarkable en direct dans le vault (flux 7). |
-| ├ `remarkable.ts` | `brancherRemarkable` : icône ruban, événements du vault, synchro toutes les 2 s ; l'index dans `remarkable.json`. |
-| ├ `tablette.ts` | Client HTTP de l'interface web USB (`http` de Node, parseur tolérant). |
-| ├ `rmdoc.ts` | Dessine le PDF d'un carnet écrit à la main depuis ses traits bruts. |
-| ├ `synchro.ts` | Un tour de synchro : liste de la tablette, carnets changés retéléchargés. |
-| ├ `registre.ts`, `deplacements.ts` | L'index id → chemin, et le suivi d'un PDF déplacé ou supprimé. |
-| └ `demande.ts`, `entete.ts`, `eclosion.ts`, `dom.ts` | La demande d'autorisation, l'état en haut des PDF, la carte qui sort de l'icône. |
-| **`codex/`** | Panneau de chat **Codex** (en **anglais**, repris de `codex-on-fragment`). Pilote `codex app-server` en JSON-RPC — pas d'OpenAI. |
-| ├ `transport.ts` | `spawn` du serveur (Windows : via `cmd.exe`, kill via `taskkill`) ; framing NDJSON stdin/stdout. |
-| ├ `rpc.ts` | `JsonRpcClient` : distingue requête serveur / réponse / notification. |
-| ├ `view.ts` | `CodexView` (ItemView) : transcript + composer + boutons d'approbation ; streaming des deltas. |
-| └ `codex.ts` | `brancherCodex` : ruban « Open Codex », commande, ouverture de vue dans le dock droit. |
+| └ `reglages.ts` | Settings (`loadData`/`saveData`): Gradium key and its Modal, `factice`, `atelierActif`, `codex`. |
+| **`scan/`** | The « scan sheets » feature (the website and the relay live in `Hone-web_scan`). |
+| ├ `scan.ts` | `setupScan`: ribbon icon, right-click « Reprendre le scan » / « Scanner dans ce dossier », « Scanner dans ce PDF » command, `ScanModal` (QR via `qr-code-styling`), the destination sent to the phone; each photo goes to its page of the PDF. |
+| ├ `pdf.ts` | `putPageInPdf` (adds or replaces a page, with `pdf-lib`) and `pageCount`. |
+| └ `relais.ts` | WebSocket client to the relay: photo in chunks, `doc` / `page` / `replace`, « Nouveau ». |
+| **`remarkable/`** | The reMarkable's notebooks, live in the vault (flow 7). |
+| ├ `remarkable.ts` | `brancherRemarkable`: ribbon icon, vault events, sync every 2 s; the index in `remarkable.json`. |
+| ├ `tablette.ts` | HTTP client for the USB web interface (Node's `http`, lenient parser). |
+| ├ `rmdoc.ts` | Draws a handwritten notebook's PDF from its raw strokes. |
+| ├ `synchro.ts` | One sync round: the tablet's list, changed notebooks downloaded again. |
+| ├ `registre.ts`, `deplacements.ts` | The id → path index, and tracking of a moved or deleted PDF. |
+| └ `demande.ts`, `entete.ts`, `eclosion.ts`, `dom.ts` | The permission request, the status at the top of the PDFs, the card that comes out of the icon. |
+| **`codex/`** | **Codex** chat panel (in **English**, taken from `codex-on-fragment`). Drives `codex app-server` over JSON-RPC — no OpenAI. |
+| ├ `transport.ts` | Server `spawn` (Windows: through `cmd.exe`, killed with `taskkill`); NDJSON framing over stdin/stdout. |
+| ├ `rpc.ts` | `JsonRpcClient`: tells server requests, responses and notifications apart. |
+| ├ `view.ts` | `CodexView` (ItemView): transcript + composer + approval buttons; streamed deltas. |
+| └ `codex.ts` | `brancherCodex`: « Open Codex » ribbon icon, command, opens the view in the right dock. |
 | **`decor/`** | |
-| └ `verre.ts` | Lentille de verre décorative sur les `.toolbar` (indépendant de l'agent, Chromium). |
-| **`tests/`** | Les tests unitaires vitest (`npm test` = `vitest run src`). |
-| `e2e/` | Specs Playwright (voir la note *Tests* plus bas). |
-| `styles.css` | Feuille **unique** (convention Fragment), sectionnée par bannières alignées sur les dossiers. |
+| └ `verre.ts` | Decorative glass lens on the `.toolbar` elements (independent from the agent, Chromium). |
+| **`tests/`** | The vitest unit tests (`npm test` = `vitest run src`). |
+| `e2e/` | Playwright specs (see *Tests* below). |
+| `styles.css` | **Single** stylesheet (Fragment convention), split into banners that follow the folders. |
 
 ---
 
-## Les flux principaux
+## Main flows
 
-### 1. Déclenchement de la barre
+### 1. Showing the toolbar
 ```
-trait (crayon/surligneur) ─┐
-sélection souris ──────────┴─► declencheur ─► zoneDuTrait (plage [from,to])
-                                             ─► repere (ancre + coords)
-                                             ─► agentLayer ─► BarreAgent (à côté du passage)
+stroke (pen/highlighter) ─┐
+mouse selection ──────────┴─► declencheur ─► zoneDuTrait (range [from,to])
+                                            ─► repere (anchor + coords)
+                                            ─► agentLayer ─► BarreAgent (next to the passage)
 ```
 
-### 2. Chat (réponse streamée)
+### 2. Chat (streamed answer)
 ```
 BulleAgent ─► pont/repondre.repondre ─► cerveau/moteur-codex.demander
    ▲                                          │  { agent:'chat', passage, question, historique }
-   │  morceau, morceau, …                     ▼
-   └──────── texte final ◄── codex app-server + nos outils (vault, mémoire, atelier) ─► compte ChatGPT
+   │  chunk, chunk, …                         ▼
+   └──────── final text ◄── codex app-server + our tools (vault, memory, workshop) ─► ChatGPT account
 ```
-Réglage `factice` → réponse factice.
+`factice` setting → fake answer.
 
-### 3. Outil (carte)
+### 3. Tool (card)
 ```
-BarreAgent ─► ActionAgent ─► pont/repondre.agir ─► cerveau/moteur-codex ─► carte de résultat
-                                                   (« visualiser » : SVG passé par ui/nettoyerSvg)
-```
-
-### 4. Voix (discussion orale)
-```
-VoixAgent (micro + MediaRecorder + ui/onde) ─► pont/repondre.parler ─► factice « Gradium » (voix pas encore branchée)
+BarreAgent ─► ActionAgent ─► pont/repondre.agir ─► cerveau/moteur-codex ─► result card
+                                                   (« visualiser »: SVG sanitized by ui/nettoyerSvg)
 ```
 
-### 5. Traces (historique dans la marge)
+### 4. Voice (conversation)
 ```
-réponse fermée ─► agentLayer/CarnetTraces ─► icône dans la marge gauche ─► clic = ré-ouverture
-(les positions sont remappées à chaque édition du document)
-```
-
-### 6. Scan (QR → photo)
-```
-main.brancherScan ─► icône ruban 'qr-code' ─► ScanModal (QR: SITE_URL#sessionId)
-téléphone (github.com/RebornFlamme/Hone) ─► worker Cloudflare (wss://hone-relay.lasky.workers.dev)
-                                          ─► scan/relais ─► photo rangée dans Scans/
-```
-Le site téléphone (`docs/`) et le worker (`relay/`) vivent dans le dépôt
-[`github.com/RebornFlamme/Hone`](https://github.com/RebornFlamme/Hone), **hors de ce plugin**.
-
-### 7. reMarkable (tablette → PDF)
-```
-main.brancherRemarkable ─► icône ruban 'tablet' ─► DemandeAutorisation (rien avant d'avoir accepté)
-toutes les 2 s : remarkable/synchro ─► tablette (http://10.11.99.1) ─► PDF réécrit à sa place dans le vault
-```
-- **Première synchro** : tous les carnets arrivent dans `reMarkable/`, avec l'arborescence de la tablette.
-- **Carnets écrits à la main** : le plugin télécharge les traits bruts (`/download/{id}/rmdoc`, environ
-  0,5 s contre 10 s pour l'export PDF de la tablette) et dessine lui-même le PDF (`rmdoc.ts`), sans le
-  fond de modèle. Les PDF et EPUB importés passent par l'export PDF de la tablette.
-- **En haut d'un PDF de la tablette** (`entete.ts`) : « live » quand elle est branchée, une icône sinon
-  (au clic, les étapes pour la brancher).
-- **Ranger ailleurs** : un PDF déplacé ou renommé reste suivi (événement `rename` dans l'app ; hors de
-  l'app, `delete` puis `create` reconnus à la taille et à l'empreinte). Un PDF supprimé n'est plus recréé.
-- **Pourquoi `http` et pas `fetch`** : la CSP de Fragment refuse `http:` dans la page, et la tablette
-  envoie à la fois `Content-Length` et `Transfer-Encoding: chunked`, que le parseur strict de Node
-  refuse ; d'où `http.get` avec `insecureHTTPParser: true` (`tablette.ts`).
-- L'index (id du carnet → chemin dans le vault), `hote` et `autorise` sont dans
-  `.fragment/plugins/hone/remarkable.json`. Tester sans tablette : y mettre
-  `"hote": "http://localhost:<port>"`.
-
-### 8. Décor (indépendant de l'agent)
-```
-main.poserLeVerre ─► verre ─► lentille de verre (feDisplacementMap + backdrop-filter) sur les .toolbar
+VoixAgent (mic + MediaRecorder + ui/onde) ─► pont/repondre.parler ─► fake « Gradium » (voice not wired yet)
 ```
 
-### 8. Codex (chat pilotant `codex app-server`)
+### 5. Traces (history in the margin)
 ```
-main.brancherCodex ─► ruban 'bot' / commande « Open Codex panel » ─► CodexView (dock droit)
+closed answer ─► agentLayer/CarnetTraces ─► icon in the left margin ─► click = reopen
+(positions are remapped on every edit of the document)
+```
+
+### 6. Scan (phone → PDF)
+```
+main.setupScan ─► 'qr-code' icon / right-click / Ctrl+P ─► openScan(destination) ─► ScanModal
+                  (QR: SITE_URL?v=<timestamp>#sessionId, the destination shown below it)
+phone (Hone-web_scan website) ─► Cloudflare relay ─► scan/relais ─► savePhoto
+   savePhoto: reads the document's PDF ─► pdf.putPageInPdf (adds or replaces the page) ─► writes + reloads the tab
+```
+- **Destination**: a folder (new `Scan <date> <time>.pdf`) or an existing PDF. It is sent to the
+  phone (`{ type: "destination", key, pages }`) every time the QR opens and every time the phone
+  connects: the phone then shows the pages already there. « Nouveau » on the phone switches back to
+  a folder.
+- **Numbering**: the phone numbers the pages; each photo carries `{ doc, page, replace }`.
+- **No image is kept**: everything is in the PDF. A replaced page is copied into a fresh PDF rather
+  than removed, otherwise `pdf-lib` would keep the old image and the file would keep growing.
+- A PDF renamed or moved during a scan is still followed (`rename` event).
+- The phone website (`docs/`) and the relay (`relay/`) live in
+  [`github.com/PhilippineBiojout/Hone-web_scan`](https://github.com/PhilippineBiojout/Hone-web_scan),
+  **outside this plugin** (see *Installation*, step 5).
+
+### 7. reMarkable (tablet → PDF)
+```
+main.brancherRemarkable ─► 'tablet' ribbon icon ─► DemandeAutorisation (nothing before it is accepted)
+every 2 s: remarkable/synchro ─► tablet (http://10.11.99.1) ─► PDF rewritten in place in the vault
+```
+- **First sync**: every notebook arrives in `reMarkable/`, with the tablet's folder tree.
+- **Handwritten notebooks**: the plugin downloads the raw strokes (`/download/{id}/rmdoc`, about 0.5 s
+  versus 10 s for the tablet's PDF export) and draws the PDF itself (`rmdoc.ts`), without the
+  template background. Imported PDFs and EPUBs go through the tablet's PDF export.
+- **At the top of a tablet PDF** (`entete.ts`): « live » when it is plugged in, an icon otherwise
+  (on click, the steps to plug it in).
+- **Storing it elsewhere**: a moved or renamed PDF is still followed (`rename` event in the app;
+  outside the app, `delete` then `create` recognized by size and fingerprint). A deleted PDF is not
+  recreated.
+- **Why `http` and not `fetch`**: Fragment's CSP refuses `http:` in the page, and the tablet sends
+  both `Content-Length` and `Transfer-Encoding: chunked`, which Node's strict parser rejects; hence
+  `http.get` with `insecureHTTPParser: true` (`tablette.ts`).
+- The index (notebook id → path in the vault), `hote` and `autorise` are in
+  `.fragment/plugins/hone/remarkable.json`. To test without a tablet: set
+  `"hote": "http://localhost:<port>"` there.
+
+### 8. Decor (independent from the agent)
+```
+main.poserLeVerre ─► verre ─► glass lens (feDisplacementMap + backdrop-filter) on the .toolbar elements
+```
+
+### 9. Codex (chat driving `codex app-server`)
+```
+main.brancherCodex ─► 'bot' ribbon icon / « Open Codex panel » command ─► CodexView (right dock)
 CodexView ─► transport (spawn `codex app-server`) ─► rpc (JSON-RPC NDJSON)
-   ▲  deltas streamés (agentMessage / reasoning / commandExecution)   │  initialize → thread/start → turn/start
-   └──────────────────── approbations (Approve / For session / Decline) ◄── requêtes serveur
+   ▲  streamed deltas (agentMessage / reasoning / commandExecution)   │  initialize → thread/start → turn/start
+   └──────────────────── approvals (Approve / For session / Decline) ◄── server requests
 ```
-Le panneau a son propre `codex app-server`, distinct de celui de la bulle : c'est le binaire **Codex** (config dans `reglages.ts::CodexSettings`)
-qui tourne, avec la **racine du coffre** comme `cwd`.
+The panel has its own `codex app-server`, separate from the bubble's: it runs the **Codex** binary
+(config in `reglages.ts::CodexSettings`) with the **vault root** as its `cwd`.
 
 ---
 
 ## Tests & build
 
-- **Unitaires** : `npm test` → `vitest run src` (les `*.test.ts` dans `src/tests/` :
-  géométrie, sanitizer SVG, onde, placement, garde, outils-vault sur un faux vault).
-- **Build** : `npm run build` = `tsc --noEmit` (strict, `verbatimModuleSyntax`) puis esbuild —
-  **une seule entrée**, la page (`src/main.ts` → `main.js`, ~3 Mo, dont pdf.js).
-- **E2E** : les specs Playwright de `e2e/` se lancent depuis `Fragment-main/app/`, qui porte
-  Playwright : y copier `e2e/hone-commun.ts` tel quel et chaque spec sous le nom `hone-<spec>`,
-  puis `npx playwright test e2e/hone-agent-voix.spec.ts --workers=1`. `hone-commun.ts` porte le
-  lanceur et les gestes : `lancer()` pour l'app de dev en factice (`agent-*.spec.ts`),
-  `lancerInstallee()` pour l'app installée sur une copie de `fragment-notes`, avec le vrai Codex
-  (`codex-installee.spec.ts`, `voix-codex.spec.ts`).
+- **Unit**: `npm test` → `vitest run src` (the `*.test.ts` files in `src/tests/`: geometry, SVG
+  sanitizer, waveform, placement, path guard, vault tools on a fake vault).
+- **Build**: `npm run build` = `tsc --noEmit` (strict, `verbatimModuleSyntax`) then esbuild —
+  **a single entry point**, the page (`src/main.ts` → `main.js`, ~3 MB, pdf.js included).
+- **E2E**: the Playwright specs in `e2e/` run from `Fragment-main/app/`, which ships Playwright:
+  copy `e2e/hone-commun.ts` there as is and each spec as `hone-<spec>`, then
+  `npx playwright test e2e/hone-agent-voix.spec.ts --workers=1`. `hone-commun.ts` holds the launcher
+  and the gestures: `lancer()` for the dev app in fake mode (`agent-*.spec.ts`), `lancerInstallee()`
+  for the installed app on a copy of `fragment-notes`, with the real Codex (`codex-installee.spec.ts`,
+  `voix-codex.spec.ts`).
 
 ---
 
 ## Conventions
 
-- Français partout ; commentaires denses, style narratif. **Exception** : `src/codex/` est en
-  anglais (repris tel quel de `codex-on-fragment`).
-- Cycle de vie Fragment : tout se `register` sur un `Component` et se défait au démontage.
-- La clé Gradium vit dans les données du plugin (page), modèle Obsidian assumé. Aucune clé OpenAI.
-- Un nouveau fichier va dans le dossier de sa responsabilité, **jamais à plat** dans `src/`.
+- French everywhere in the code; dense, narrative comments. **Exception**: `src/codex/` is in
+  English (taken as is from `codex-on-fragment`).
+- Fragment lifecycle: everything is `register`ed on a `Component` and torn down on unload.
+- The Gradium key lives in the plugin's data (in the page), the Obsidian model, on purpose. No OpenAI key.
+- A new file goes into the folder of its responsibility, **never flat** in `src/`.
