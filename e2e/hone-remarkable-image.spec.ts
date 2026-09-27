@@ -102,3 +102,65 @@ test('Hone : un cercle sur un carnet manuscrit part en image, et Codex le lit', 
 		await electronApp.close();
 	}
 });
+
+const DEVOIR = '/Users/philippinebiojout/Documents/polytechnique/cours 2A/P1/PHY_41030_EP/phy430_x20_dm4.pdf';
+
+test('Hone : sur un PDF à texte, la zone part aussi en image, avec le texte', async () => {
+	test.setTimeout(300_000);
+	const base = await mkdtemp(path.join(os.tmpdir(), 'hone-pdf-image-'));
+	const vault = path.join(base, 'vault');
+	const userData = path.join(base, 'userdata');
+	await mkdir(userData, { recursive: true });
+	await cp(COFFRE, vault, { recursive: true,
+		filter: (src) => !src.includes('node_modules') && !src.includes('/.git') && !src.endsWith('.fragment/workspace.json') });
+	await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone/main.js', path.join(vault, '.fragment/plugins/hone/main.js'));
+	await cp(DEVOIR, path.join(vault, 'devoir.pdf'));
+	await writeFile(path.join(vault, '.fragment/plugins/hone/remarkable.json'),
+		JSON.stringify({ hote: 'http://127.0.0.1:9', autorise: false, statutLive: true, carnets: {} }), 'utf8');
+	await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
+
+	const electronApp = await _electron.launch({
+		executablePath: '/Applications/Fragment.app/Contents/MacOS/Fragment',
+		args: [`--user-data-dir=${userData}`, `--vault-root=${vault}`],
+		env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: process.env.HOME! } as Record<string, string>,
+	});
+	try {
+		let page = electronApp.windows().find((w) => !w.url().startsWith('devtools'));
+		while (!page) page = await electronApp.waitForEvent('window');
+		await page.waitForFunction(() => !!(window as any).app?.workspace?.layoutReady, undefined, { timeout: 30_000 });
+		await page.setViewportSize({ width: 1400, height: 900 });
+		await page.waitForFunction(() => !!(window as any).app.commands.findCommand('hone:open-codex-panel'), undefined, { timeout: 30_000 });
+		await page.evaluate(async () => {
+			const app = (window as any).app;
+			await app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('devoir.pdf'));
+			app.workspace.getLeavesOfType('pdf').find((l: any) => l.view.file?.path === 'devoir.pdf').view.toggleLayer('annotation');
+		});
+		const mot = page.locator('.pdf-scroll:visible .pdf-text-layer span', { hasText: 'Expliquer' }).first();
+		await expect(mot).toBeVisible({ timeout: 15_000 });
+		await page.locator('.toolbar-item[aria-label="Surligneur"]:visible').first().click();
+		const b = (await mot.boundingBox())!;
+		const y = b.y + b.height / 2;
+		await page.mouse.move(b.x + 2, y);
+		await page.mouse.down();
+		for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + 2 + ((b.width * 2) * i) / 10, y);
+		await page.mouse.up();
+
+		const barre = page.locator('.agent-barre');
+		await expect(barre).toBeVisible({ timeout: 5_000 });
+		const captures = await readdir(path.join(vault, '.fragment/plugins/hone/images'));
+		expect(captures.length).toBeGreaterThan(0);
+		await cp(path.join(vault, '.fragment/plugins/hone/images', captures.at(-1)!), `${CAPTURES}/hone-pdf-image-zone.png`);
+
+		await barre.locator('[aria-label="Définir"]').click();
+		const corps = page.locator('.agent-action-carte .agent-action-corps');
+		await expect.poll(async () => (await corps.textContent())?.trim().length ?? 0, { timeout: 240_000 }).toBeGreaterThan(20);
+		const reponse = (await corps.textContent())!;
+		console.log('DEFINIR PDF', reponse);
+		expect(reponse).not.toMatch(/n'a pas pu répondre|factice|illisible/i);
+		await expect(page.locator('.agent-action-carte')).toBeInViewport();
+		await page.waitForTimeout(1500);
+		await page.screenshot({ path: `${CAPTURES}/hone-pdf-image-carte.png` });
+	} finally {
+		await electronApp.close();
+	}
+});

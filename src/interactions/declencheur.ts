@@ -61,21 +61,34 @@ export function brancherDeclencheurs(
         } finally {
             for (const { el, avant } of surfaces) el.style.pointerEvents = avant;
         }
-        if (plage) {
-            surPassage({ texte: texteEntre(editor, plage.from, plage.to), chemin: path, ...plage }, stroke);
+        if (!plage && !formeDuTrait(points, stroke.tool)) return;
+        // Rien à lire sous le trait (carnet écrit à la main, PDF scanné) : le passage est vide et
+        // seule l'image parle. Sur un PDF à texte, l'image accompagne le texte : formules,
+        // schémas et annotations à la main n'existent pas dans la couche de texte.
+        const zone: ContexteQuestion = plage
+            ? { texte: texteEntre(editor, plage.from, plage.to), chemin: path, ...plage }
+            : { texte: '', chemin: path, from: stroke.pos, to: stroke.pos };
+        avecCapture(zone, points, stroke, !plage);
+    });
+
+    /**
+     * Sur un PDF, la zone part aussi en image (points en coordonnées document). Hors PDF, ou si
+     * la capture échoue, le passage part tel quel ; `imageSeule` : sans image, il n'y a rien à dire.
+     */
+    const avecCapture = (zone: ContexteQuestion, points: readonly Pt[], trait: Stroke, imageSeule: boolean): void => {
+        const ecran = points.map((p) => repere.versClient(p.x, p.y)).filter((p): p is Pt => p !== null);
+        const png = captureDuTrait(repere.pane, ecran, trait);
+        if (!png) {
+            if (!imageSeule) surPassage(zone, trait);
             return;
         }
-        // Rien à lire sous le trait (carnet écrit à la main, PDF scanné) : on envoie ce qu'on voit.
-        if (!formeDuTrait(points, stroke.tool)) return;
-        const ecran = points.map((p) => repere.versClient(p.x, p.y)).filter((p): p is Pt => p !== null);
-        const png = captureDuTrait(repere.pane, ecran, stroke);
-        if (!png) return;
         void rangerCapture(png).then((image) => {
             // Le temps d'écrire le fichier, on a pu changer de document ou ouvrir autre chose.
-            if (!image || path !== chemin() || occupe()) return;
-            surPassage({ texte: '', chemin: path, from: stroke.pos, to: stroke.pos, image }, stroke);
+            if (zone.chemin !== chemin() || occupe()) return;
+            if (image) surPassage({ ...zone, image }, trait);
+            else if (!imageSeule) surPassage(zone, trait);
         });
-    });
+    };
 
     // La sélection devient un faux trait qui épouse ses rectangles, comme un surligneur.
     const surSelection = (): void => {
@@ -89,14 +102,15 @@ export function brancherDeclencheurs(
         const right = Math.max(...rects.map((r) => r.right));
         const bottom = Math.max(...rects.map((r) => r.bottom));
         const coin = (x: number, y: number) => ({ dx: x - glyphe.left, dy: y - glyphe.top });
-        surPassage({ texte: texteEntre(editor, from, to), chemin: chemin(), from, to }, {
+        const trait: Stroke = {
             id: `${SELECTION}${Date.now()}`,
             pos: from,
             points: [coin(left, top), coin(right, top), coin(right, bottom), coin(left, bottom)],
             color: '',
             width: 0,
             tool: 'surligneur',
-        });
+        };
+        avecCapture({ texte: texteEntre(editor, from, to), chemin: chemin(), from, to }, trait.points.map((p) => ({ x: glyphe.left + p.dx, y: glyphe.top + p.dy })), trait, false);
     };
 
     let pointeurEnfonce = false;

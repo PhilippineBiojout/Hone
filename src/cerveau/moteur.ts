@@ -26,10 +26,13 @@ export class AgentEnPause extends ErreurAgent {}
  *  fonctions de l'agent). Il vient APRÈS les consignes et les outils, fixes, pour que le
  *  préfixe mis en cache par OpenAI reste le même. */
 export const citer = ({ passage: { texte, chemin, image } }: Demande, avant = '') =>
-    `${avant ? `${avant}\n\n` : ''}Document ouvert : ${chemin || '(sans fichier)'}\n${image
+    `${avant ? `${avant}\n\n` : ''}Document ouvert : ${chemin || '(sans fichier)'}\n${image && !texte
         ? 'Passage sélectionné : l\'image jointe, une zone de la page que l\'utilisateur a entourée ou surlignée. '
             + 'C\'est souvent de l\'écriture à la main : lis-la, et réponds sur ce qu\'elle dit.'
-        : `Passage sélectionné :\n"""\n${texte}\n"""`}`;
+        : `Passage sélectionné :\n"""\n${texte}\n"""${image
+            ? '\nL\'image jointe montre cette zone telle qu\'elle est sur la page, avec le trait de l\'utilisateur : '
+                + 'formules, schémas et notes à la main qu\'elle contient comptent autant que le texte.'
+            : ''}`}`;
 
 async function entree(acces: AccesVault, demande: Demande, avant = ''): Promise<string | AgentInputItem[]> {
     switch (demande.agent) {

@@ -1,9 +1,10 @@
 import type { Stroke } from './annotation';
 import type { Pt } from './zoneDuTrait';
 
-// Un trait sur une page sans texte (un carnet reMarkable écrit à la main, un PDF
-// scanné) : il n'y a rien à citer, mais il y a quelque chose à voir. On découpe les
-// pages peintes sous le trait et on y redessine le trait ; Codex lit l'image.
+// Un trait sur un PDF : on découpe les pages peintes sous lui et on y redessine le
+// trait ; Codex lit l'image. Sur une page sans texte (carnet reMarkable écrit à la main,
+// PDF scanné), elle est tout le passage ; ailleurs, elle montre ce que le texte perd
+// (formules, schémas, annotations à la main).
 // Toutes les coordonnées sont celles de l'écran (clientX, clientY).
 
 /** L'air laissé autour du trait, pour que l'écriture qu'il frôle reste entière. */
@@ -44,7 +45,8 @@ export function captureDuTrait(pane: HTMLElement, points: readonly Pt[], trait: 
         );
     }
 
-    // Le trait par-dessus : c'est lui qui dit ce qui est visé.
+    // Le trait par-dessus : c'est lui qui dit ce qui est visé. Une sélection n'en a pas (largeur 0).
+    if (trait.width === 0) return sortie.toDataURL('image/png').slice('data:image/png;base64,'.length);
     g.strokeStyle = trait.color || '#e03131';
     g.globalAlpha = trait.tool === 'surligneur' ? 0.35 : 1;
     g.lineWidth = Math.max(2, trait.width) * echelle;
