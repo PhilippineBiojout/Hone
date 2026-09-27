@@ -25,7 +25,12 @@ export function brancherDeclencheurs(
     const mesure: Mesure = {
         posAt: (x, y) => {
             const c = repere.versClient(x, y);
-            return c ? editor.posAtCoords(c.x, c.y) : null;
+            const off = c ? editor.posAtCoords(c.x, c.y) : null;
+            // Sur un PDF, un point sans caractère dessous (entre deux mots, la marge)
+            // rend l'ancre de la page, qui n'est pas un caractère : le trait aurait
+            // pris tout le haut de la page. Elle ne survit pas à l'aller-retour
+            // offset → position → offset ; sur une note, tout offset y survit.
+            return off !== null && editor.posToOffset(editor.offsetToPos(off)) === off ? off : null;
         },
         coordsAt: (off) => {
             const rects = editor.coordsForRange(off, off + 1);
@@ -39,7 +44,20 @@ export function brancherDeclencheurs(
         const glyphe = editor.coordsAtPos(stroke.pos);
         if (!glyphe) return;
         const points = stroke.points.map((p) => ({ x: glyphe.left + p.dx, y: glyphe.top + p.dy }));
-        const plage = plageDuTrait(points, stroke.tool, mesure);
+        // Sur un PDF, le cœur cherche le caractère sous un point par le navigateur
+        // (`caretRangeFromPoint`) : c'est l'élément du dessus qui répond. Outil armé,
+        // c'est la surface de dessin, et tout le trait tombait sur « la page », sans
+        // texte. On l'efface du pointeur le temps de la mesure. Sur une note, le
+        // calcul est géométrique et ne voit pas la différence.
+        // Le cœur arme l'outil en posant `pointer-events` en ligne : on rend la valeur d'avant.
+        const surfaces = [...repere.pane.querySelectorAll<HTMLElement>('.annotation-surface')].map((el) => ({ el, avant: el.style.pointerEvents }));
+        for (const { el } of surfaces) el.style.pointerEvents = 'none';
+        let plage: ReturnType<typeof plageDuTrait>;
+        try {
+            plage = plageDuTrait(points, stroke.tool, mesure);
+        } finally {
+            for (const { el, avant } of surfaces) el.style.pointerEvents = avant;
+        }
         if (plage) surPassage({ texte: texteEntre(editor, plage.from, plage.to), chemin: path, ...plage }, stroke);
     });
 
