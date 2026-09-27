@@ -63,3 +63,10 @@ function isPng(octets: ArrayBuffer): boolean{
     const b = new Uint8Array(octets, 0, 4);
     return b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] ===0x47;
 }
+
+// Exportée : scan.ts s'en sert pour dire au téléphone combien de pages a le PDF choisi.
+// async + await : PDFDocument.load analyse le fichier, il rend une promesse, pas le document.
+export async function pageCount(octets: ArrayBuffer): Promise<number>{
+    const pdf = await PDFDocument.load(octets);
+    return pdf.getPageCount();
+}

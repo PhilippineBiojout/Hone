@@ -17,11 +17,6 @@ const SITE_URL = 'https://philippinebiojout.github.io/Hone-web_scan/';
 /** Où vont les PDF des scans : '' = la racine du vault, 'Scans' = un dossier « Scans/ » (créé au besoin). */
 const SCAN_FOLDER = '';
 
-/** Le chemin d'un fichier ou dossier dans SCAN_FOLDER. */
-function inScanFolder(name: string): string {
-    return SCAN_FOLDER === '' ? name : `${SCAN_FOLDER}/${name}`;
-}
-
 /** Crée le dossier `path` s'il n'existe pas encore (createFolder échoue sur un dossier existant). */
 async function ensureFolder(app: App, path: string): Promise<void> {
     if (app.vault.getFolderByPath(path) === null) {
@@ -42,13 +37,15 @@ export function setupScan(plugin: Plugin): void {
     const docs = new Map<string, ScanDoc>();
     // Les photos sont rangées UNE PAR UNE, dans l'ordre d'arrivée : deux pages envoyées
     // coup sur coup liraient sinon le même ancien PDF, et la seconde effacerait la première.
+    let destination: Destination = {kind: 'folder', path: SCAN_FOLDER};
+
     let queue: Promise<void> = Promise.resolve();
     const relais = new Relais(
         sessionId,
         (connected) => { new Notice(connected ? 'Téléphone connecté' : 'Téléphone déconnecté'); },
         (photo, id, meta) => {
             queue = queue
-                .then(() => savePhoto(plugin.app, relais, docs, photo, id, meta))
+                .then(() => savePhoto(plugin.app, relais, docs, destination, photo, id, meta))
                 .catch((error) => {
                     // La file continue quand même pour les photos suivantes
                     console.error('[scan]', error);
@@ -59,7 +56,15 @@ export function setupScan(plugin: Plugin): void {
     relais.connect();
     plugin.register(() => relais.close());
 
+    // L'icône du ruban : la destination par défaut (SCAN_FOLDER, la racine aujourd'hui)
     const button = plugin.addRibbonIcon('qr-code', 'Scanner une feuille', () => {
+        openScan({ kind: 'folder', path: SCAN_FOLDER });
+    });
+
+    // Le seul point d'entrée pour ouvrir le QR (ruban, clic droit, Ctrl+P) : `dest` est
+    // l'endroit demandé pour CE QR, recopié dans `destination`, celle que lit savePhoto.
+    function openScan(dest: Destination): void {
+        destination = dest;
         // Anti-cache : `?v=<horodatage>` rend l'adresse du site neuve à chaque QR affiché.
         // Le téléphone ne peut donc pas ressortir un vieux HTML de son cache, et le site
         // recopie ce même `?v=…` sur son CSS et son JS (voir docs/index.html de Hone-web_scan).
@@ -67,7 +72,7 @@ export function setupScan(plugin: Plugin): void {
         // l'id de session (après `#`) reste dans le téléphone.
         const url = `${SITE_URL}?v=${Date.now().toString(36)}#${sessionId}`;
         new ScanModal(plugin.app, url, button).open();
-    });
+    }
 }
 
 /** « 27-09-2026 », à l'heure locale. */
@@ -90,6 +95,11 @@ interface ScanDoc {
     path: string;
 }
 
+type Destination = 
+    | {kind: 'folder'; path: string}
+    | {kind: 'pdf'; path: string};
+
+
 /**
  * Range une photo reçue : on lit le PDF de son document (s'il existe déjà), on y met la
  * photo à sa page (ajoutée à la fin, ou à la place de l'ancienne pour une mise à jour),
@@ -100,6 +110,7 @@ async function savePhoto(
     app: App,
     relais: Relais,
     docs: Map<string, ScanDoc>,
+    destination: Destination,
     photo: Blob,
     id: string,
     meta: PhotoMeta,
@@ -110,14 +121,31 @@ async function savePhoto(
     let scanDoc = docs.get(docId);
     if (scanDoc === undefined) {
         // Premier envoi du document : son nom = la date et l'heure locales de cette photo
+
         const now = new Date();
-        const base = `Scan ${jour(now)} ${heure(now)}`;
-        scanDoc = { base, path: inScanFolder(`${base}.pdf`) };
+
+
+        if (destination.kind ==='pdf'){
+            const path = destination.path;
+            // Le nom du fichier, sans le dossier ni « .pdf » : « Maths/Exercice 1.pdf » → « Exercice 1 »
+            const base = path.slice(path.lastIndexOf('/') + 1).replace(/\.pdf$/i, '');
+            scanDoc = { base, path };
+        }
+        else{
+            const base = `Scan ${jour(now)} ${heure(now)}`;
+            // Dans le dossier de la destination ('' = la racine du vault)
+            const path = destination.path === '' ? `${base}.pdf` : `${destination.path}/${base}.pdf`;
+            scanDoc = { base, path };
+        }
+        // Après les deux branches : le document est retenu, qu'il écrive dans un PDF ou un dossier
         docs.set(docId, scanDoc);
     }
 
-    // Le dossier des scans, si SCAN_FOLDER en demande un (la racine existe toujours)
-    if (SCAN_FOLDER !== '') await ensureFolder(app, SCAN_FOLDER);
+    // Le dossier qui contient le PDF (tout ce qui précède le dernier « / ») ; pas de « / » =
+    // le PDF est à la racine, qui existe toujours. Couvre SCAN_FOLDER, un dossier choisi,
+    // ou le dossier d'un PDF supprimé entre-temps.
+    const slash = scanDoc.path.lastIndexOf('/');
+    if (slash !== -1) await ensureFolder(app, scanDoc.path.slice(0, slash));
 
     // Le PDF actuel du document (null au premier envoi, ou s'il a été supprimé entre-temps)
     const existing = app.vault.getFileByPath(scanDoc.path);
