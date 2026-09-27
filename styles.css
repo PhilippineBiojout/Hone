@@ -320,10 +320,11 @@
 }
 .hone-voix .agent-voix-message.est-visible {
     display: block; position: absolute; left: 50%; bottom: 80px;
-    max-width: calc(100% - 32px); padding: 4px 12px;
+    width: max-content; max-width: calc(100% - 32px); padding: 4px 12px;
     translate: -50% 0;
-    border-radius: 999px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border-radius: 12px;
+    /* Tout le message se lit, sur plusieurs lignes s'il le faut : il dit la commande à lancer. */
+    white-space: normal; overflow-wrap: anywhere; text-wrap: balance; text-align: center;
     color: var(--text-normal);
     font-size: 13px; line-height: 20px;
 }

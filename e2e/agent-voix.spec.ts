@@ -203,6 +203,29 @@ test('micro refusé : la barre le dit, et sa croix la ferme', async () => {
     await expect(voix(page)).toHaveCount(0);
 });
 
+test('une erreur longue se lit en entier, sur plusieurs lignes, sans points de suspension', async () => {
+    const { page } = h;
+    await ouvrirVoix(page, true);
+    await expect(message(page)).toBeVisible({ timeout: 4_000 });
+    const texte = 'Hone n\'a pas pu répondre : pas de clé Gradium (commande « Hone : clé Gradium… »).';
+    await message(page).evaluate((el, t) => { el.textContent = t; }, texte);
+    const m = await message(page).evaluate((el) => {
+        const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+        return { coupe: el.scrollWidth > el.clientWidth + 1, lignes: Math.round(r.height / parseFloat(s.lineHeight)),
+            dedans: r.left >= 0 && r.right <= window.innerWidth };
+    });
+    expect(m.coupe).toBe(false);
+    expect(m.dedans).toBe(true);
+    for (const theme of ['light', 'dark'] as const) {
+        await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
+        await page.emulateMedia({ colorScheme: theme });
+        await page.waitForTimeout(1_000);
+        await expect(message(page)).toBeVisible();
+        await page.screenshot({ path: `test-results/hone-voix-erreur-${theme}.png` });
+    }
+    console.log('lignes :', m.lignes);
+});
+
 test('le bilan laisse un micro dans la marge ; rouvert, il reprend à voix haute et le nouveau bilan remplace l\'ancien', async () => {
     const { page } = h;
     await ouvrirVoix(page);
