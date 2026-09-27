@@ -8,7 +8,7 @@
  * settings change is picked up next time the panel connects.
  */
 
-import { type Plugin } from "fragment";
+import { type Plugin, type WorkspaceLeaf } from "fragment";
 import { CodexView, VIEW_TYPE_CODEX } from "./view";
 import type { CodexSettings } from "../reglages/reglages";
 
@@ -32,16 +32,22 @@ export function brancherCodex(
 	});
 }
 
+/** `getRightLeaf` and `revealLeaf` exist in the core (Workspace.ts) but are
+ *  missing from the published `@usefragment/core` 0.1.0 types. */
+interface WorkspaceDroit {
+	getRightLeaf(): WorkspaceLeaf;
+	revealLeaf(leaf: WorkspaceLeaf): void;
+}
+
 /** Reveal the Codex view in the right sidedock, reusing an existing one.
- *  The Fragment core contract exposes `rightSplit` + `createLeafInParent` +
- *  `WorkspaceSidedock.expand()` rather than Obsidian's `getRightLeaf`/`revealLeaf`. */
+ *  The leaf must live in a tab pile of the dock: a leaf placed directly in
+ *  `rightSplit` (createLeafInParent) is never laid out and stays 0 × 0. */
 async function activerVue(plugin: Plugin): Promise<void> {
-	const { workspace } = plugin.app;
+	const workspace = plugin.app.workspace as typeof plugin.app.workspace & WorkspaceDroit;
 	let leaf = workspace.getLeavesOfType(VIEW_TYPE_CODEX)[0];
 	if (!leaf) {
-		leaf = workspace.createLeafInParent(workspace.rightSplit);
+		leaf = workspace.getRightLeaf();
 		await leaf.setViewState({ type: VIEW_TYPE_CODEX, active: true });
 	}
-	workspace.rightSplit.expand();
-	workspace.setActiveLeaf(leaf);
+	workspace.revealLeaf(leaf);
 }

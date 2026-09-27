@@ -89,8 +89,10 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   `taskkill /t`), `rpc.ts` (`JsonRpcClient` : 3 formes de messages — requête serveur `id+method`,
   réponse `id` seul, notification `method` seul), `view.ts` (`CodexView` : transcript + composer +
   boutons d'approbation Approve/For session/Decline ; streaming des deltas en direct). `codex.ts` câble
-  tout et fait l'ouverture de vue via l'API core réelle (`workspace.rightSplit` + `createLeafInParent`
-  + `WorkspaceSidedock.expand()` — le core n'a PAS `getRightLeaf`/`revealLeaf`, contrairement à Obsidian).
+  tout et ouvre la vue par `workspace.getRightLeaf()` + `revealLeaf()` : ils existent dans le cœur
+  (`Workspace.ts`) mais pas dans les types publiés `@usefragment/core` 0.1.0, d'où un cast local.
+  Une feuille posée directement dans `rightSplit` (`createLeafInParent`) n'est jamais mise en page
+  (0 × 0) : c'était le panneau invisible du 2026-09-27. E2e : `e2e/codex.spec.ts` (vrai binaire).
   Config dans les réglages (`reglages.ts::CodexSettings` : `codexPath`, `model`, `approvalPolicy`,
   `sandbox`), lue paresseusement. Styles `.codex-*` en fin de `styles.css`. `cwd` = racine du coffre.
   ⚠️ `esbuild.config.mjs` externalise aussi les builtins préfixés `node:` (`...builtins.map(m => 'node:'+m)`)
