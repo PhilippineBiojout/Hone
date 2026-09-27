@@ -1,4 +1,4 @@
-import { FileView, type TFile, Modal, Notice, type App, type Plugin } from 'fragment';
+import { FileView, TFile, TFolder, Modal, Notice, type App, type Plugin } from 'fragment';
 import QRCodeStyling from 'qr-code-styling';
 import { Relais, type PhotoMeta } from './relais';
 import { putPageInPdf } from './pdf';
@@ -65,14 +65,43 @@ export function setupScan(plugin: Plugin): void {
     // l'endroit demandé pour CE QR, recopié dans `destination`, celle que lit savePhoto.
     function openScan(dest: Destination): void {
         destination = dest;
-        // Anti-cache : `?v=<horodatage>` rend l'adresse du site neuve à chaque QR affiché.
-        // Le téléphone ne peut donc pas ressortir un vieux HTML de son cache, et le site
-        // recopie ce même `?v=…` sur son CSS et son JS (voir docs/index.html de Hone-web_scan).
-        // L'horodatage, et pas l'id de session : ce qui suit `?` part au serveur GitHub,
-        // l'id de session (après `#`) reste dans le téléphone.
         const url = `${SITE_URL}?v=${Date.now().toString(36)}#${sessionId}`;
-        new ScanModal(plugin.app, url, button).open();
+        new ScanModal(plugin.app, url, button, dest).open();
     }
+    
+    plugin.registerEvent(
+        plugin.app.workspace.on('file-menu', (menu, file) => {
+            if (file instanceof TFile && file.extension === 'pdf'){
+                menu.addItem((item) =>
+                    item.setTitle("Reprendre le scan")
+                    .setIcon('qr-code')
+                    .onClick(()=> openScan({kind: 'pdf', path: file.path})),
+                );
+            }
+            else if (file instanceof TFolder){
+                menu.addItem((item) => 
+                    item.setTitle('scanner dans ce dossier')
+                    .setIcon('qr-code')
+                    .onClick(() => openScan({kind: 'folder', path: file.path}))
+                    )
+            }
+        })
+    )
+
+    plugin.addCommand({id: 'scan-into-pdf', name: 'Scanner dans ce PDF', icon: 'qr-code', checkCallback: (checking) => {
+                const file = plugin.app.workspace.getActiveViewOfType(FileView)?.file;
+                if (!file || file.extension !== 'pdf') return false;
+                if (checking){
+                    return true;
+                }
+                else{
+                    openScan({kind: 'pdf', path: file.path});
+                    return true;
+                }
+            }
+        }
+    )
+
 }
 
 /** « 27-09-2026 », à l'heure locale. */
@@ -192,8 +221,7 @@ async function reloadPdf(app: App, file: TFile): Promise<void> {
  */
 class ScanModal extends Modal {
     private closing = false;
-
-    constructor(app: App, private readonly url: string, private readonly anchor: HTMLElement) {
+    constructor(app: App, private readonly url: string, private readonly anchor: HTMLElement, private readonly destination: Destination) {
         super(app);
         // Nos classes à nous : styles.css ne touche qu'à cette fenêtre-là.
         this.containerEl.classList.remove('mod-dim');
@@ -209,6 +237,14 @@ class ScanModal extends Modal {
         qrBox.classList.add('scan-qr');
         showQrCode(this.url, qrBox);
         this.contentEl.append(qrBox);
+
+     
+        const where = document.createElement('div');
+        where.classList.add('scan-destination');
+        const { kind, path } = this.destination;
+        where.textContent = `Scanner dans : ${kind === 'pdf' ? path : path === '' ? '/ (racine)' : `${path}/`}`;
+        where.title = where.textContent; // le chemin complet au survol, s'il est coupé
+        this.contentEl.append(where);
 
         this.placeNextToAnchor();
     }
