@@ -61,7 +61,8 @@ Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le render
 | ├ `annotation.ts` | Adaptateur vers le plugin d'annotation du cœur (strokes, gomme, événements). |
 | ├ `declencheur.ts` | Détecte trait (crayon/surligneur) ou sélection → demande la barre. |
 | ├ `zoneDuTrait.ts` | Géométrie pure : forme du trait → plage de texte `[from, to]`. |
-| └ `traces.ts` | `CarnetTraces` : historique en mémoire, une icône par réponse fermée dans la marge. |
+| ├ `traces.ts` | `CarnetTraces` : les icônes de la marge d'une vue, une par réponse fermée. |
+| └ `registreTraces.ts` | `RegistreTraces` : l'historique par document, tenu par le plugin et écrit dans `traces.json`. Une réponse ne part que par la poubelle. |
 | **`positionnement/`** | Géométrie et placement des widgets. |
 | ├ `repere.ts` | Le hub de coordonnées d'une vue : `WidgetLayer` + conversions client↔document. |
 | ├ `placement.ts` | Maths de placement (`aCote` : coin d'un widget à côté d'une boîte). |

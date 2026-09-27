@@ -1,5 +1,6 @@
 import { Notice, Plugin } from 'fragment';
 import { createAgentLayer } from './agentLayer';
+import { RegistreTraces } from './interactions/registreTraces';
 import { AGENTS, Bibliotheque, lireAtelier } from './atelier/bibliotheque';
 import { Atelier } from './atelier/outils-atelier';
 import { ouvrirMoteur } from './cerveau/moteur';
@@ -52,6 +53,18 @@ export default class HonePlugin extends Plugin {
         await journal.charger();
         this.memoire = new Memoire(journal, new Preferences(lirePreferences(data), () => void this.sauver()), accesVault(this.app));
 
+        // L'historique de la marge : traces.json, à côté de data.json. Il vit avec le plugin,
+        // pas avec la vue, que le cœur remonte à chaque fichier ouvert.
+        const fichierTraces = `${this.app.plugins.pluginsDir}/${this.manifest.id}/traces.json`;
+        const traces = new RegistreTraces({
+            lire: async () => ((await adapter.exists(fichierTraces)) ? adapter.read(fichierTraces) : null),
+            ecrire: (texte) => adapter.write(fichierTraces, texte),
+        });
+        await traces.charger();
+        this.register(() => void traces.vider());
+        this.registerEvent(this.app.vault.on('rename', (fichier, ancien) => traces.renommer(ancien, fichier.path)));
+        this.registerEvent(this.app.vault.on('delete', (fichier) => traces.oublierDocument(fichier.path)));
+
         this.relancerMoteur();
         this.register(() => this.fermerMoteur?.());
         this.register(() => this.fermerCodex?.());
@@ -62,7 +75,7 @@ export default class HonePlugin extends Plugin {
             icon: 'message-circle',
             defaultEnabled: true,
             appliesTo: (view) => view.leaf.parent !== null,
-            create: (ctx) => createAgentLayer(ctx),
+            create: (ctx) => createAgentLayer(ctx, traces),
         });
 
         this.addCommand({

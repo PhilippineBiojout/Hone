@@ -10,6 +10,7 @@ main.js
 # Données du plugin : la clé API et la bibliothèque de l'atelier, propres à chaque vault
 data.json
 memoire.jsonl
+traces.json
 
 # Index des carnets de la reMarkable, propre à chaque vault
 remarkable.json

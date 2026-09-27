@@ -1,27 +1,12 @@
 import { setIcon, type TextSurface, type WidgetHandle } from 'fragment';
 import type { Stroke } from './annotation';
 import type { Cadre } from '../positionnement/fenetre';
-import type { Message } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import type { ContexteQuestion, Outil, ReponseOutil } from '../pont/repondre';
+import type { Contenu, RegistreTraces, Trace } from './registreTraces';
 import { OUTILS } from '../ui/ui';
 
-/** Une réponse d'outil, une conversation (née d'un outil ou non), ou une discussion orale et son bilan. */
-export type Contenu =
-    | ({ type: 'outil'; outil: Outil } & ReponseOutil)
-    | { type: 'chat'; messages: Message[]; outil?: Outil }
-    | { type: 'oral'; messages: Message[]; bilan: string };
-
-export interface Trace {
-    readonly id: number;
-    /** Remappé à l'édition, comme la zone de l'agent. */
-    zone: ContexteQuestion;
-    trait: Stroke;
-    /** L'écart entre le trait et le début du passage, pour recaler le trait à la réouverture. */
-    decalageTrait: number;
-    contenu: Contenu;
-    cadre: Cadre | null;
-}
+export type { Contenu, Trace } from './registreTraces';
 
 interface Icone {
     el: HTMLButtonElement;
@@ -31,15 +16,14 @@ interface Icone {
 
 const TAILLE = 24;
 const ECART = 6;
-let prochainId = 1;
 
 /**
  * L'historique de l'agent : une icône par réponse fermée, dans la marge gauche
- * (ancre de marge du cœur), qui la rouvre au clic. En mémoire seulement.
+ * (ancre de marge du cœur), qui la rouvre au clic. Les traces vivent dans le registre du
+ * plugin ; le carnet, propre à la vue, n'en tient que les icônes.
  */
 export class CarnetTraces {
 
-    private readonly traces: Trace[] = [];
     private readonly icones = new Map<number, Icone>();
     /** La trace rouverte : son icône s'efface mais garde sa place. */
     private ouverte: number | null = null;
@@ -49,14 +33,30 @@ export class CarnetTraces {
         private readonly repere: Repere,
         private readonly chemin: () => string,
         private readonly onOuvrir: (trace: Trace, depuis: HTMLElement) => void,
-    ) {}
+        private readonly registre: RegistreTraces,
+    ) {
+        this.detacher = registre.attacher(chemin());
+        this.desabonner = registre.onChange((c) => {
+            if (c === this.chemin()) this.placer();
+        });
+    }
+
+    private detacher: () => void;
+    private readonly desabonner: () => void;
+
+    /** Le document de la vue a changé (le cœur remonte d'ordinaire le calque, mais pas toujours). */
+    changerDeDocument(): void {
+        this.detacher();
+        this.detacher = this.registre.attacher(this.chemin());
+        this.placer();
+    }
 
     /** Une trace rouverte reprend sa place avec son nouveau contenu ; sinon, une trace neuve. */
     fermer(zone: ContexteQuestion, trait: Stroke, contenu: Contenu, cadre: Cadre | null): void {
-        const rouverte = this.traces.find((t) => t.id === this.ouverte);
+        const rouverte = this.ouverte;
         this.ouverte = null;
-        if (rouverte) Object.assign(rouverte, { contenu, cadre });
-        else this.traces.push({ id: prochainId++, zone, trait, decalageTrait: trait.pos - zone.from, contenu, cadre });
+        if (rouverte !== null && this.registre.trouver(rouverte)) this.registre.mettreAJour(rouverte, contenu, cadre);
+        else this.registre.ajouter(zone, trait, contenu, cadre);
         this.placer();
     }
 
@@ -67,18 +67,17 @@ export class CarnetTraces {
 
     /** Supprime la trace rouverte et la rend, pour que le calque efface son trait. */
     supprimerOuverte(): Trace | null {
-        const i = this.traces.findIndex((t) => t.id === this.ouverte);
+        const id = this.ouverte;
         this.ouverte = null;
-        if (i < 0) return null;
-        const [trace] = this.traces.splice(i, 1);
-        this.retirer(trace.id);
+        const trace = id === null ? null : this.registre.supprimer(id);
+        if (trace) this.retirer(trace.id);
         this.placer();
         return trace;
     }
 
     /** Les réponses de `outil` déjà données sur un passage qui chevauche [from, to]. */
     reponsesSur(outil: Outil, from: number, to: number): ReponseOutil[] {
-        return this.traces
+        return this.registre.pour(this.chemin())
             .filter((t) => t.contenu.type === 'outil' && t.contenu.outil === outil && t.zone.from < to && from < t.zone.to)
             .map((t) => t.contenu as ReponseOutil);
     }
@@ -95,22 +94,50 @@ export class CarnetTraces {
     /** Le passage suit le texte, et disparaît avec lui. */
     remapper(mapPos: (pos: number, assoc: 1 | -1) => { pos: number }): void {
         const chemin = this.chemin();
-        for (let i = this.traces.length - 1; i >= 0; i--) {
-            const t = this.traces[i];
-            if (t.zone.chemin !== chemin) continue;
-            const from = mapPos(t.zone.from, 1).pos;
-            const to = mapPos(t.zone.to, -1).pos;
-            if (to <= from) {
-                this.retirer(t.id);
-                this.traces.splice(i, 1);
-            } else t.zone = { ...t.zone, from, to, texte: texteEntre(this.editor, from, to) };
-        }
+        // Le même document dans deux onglets : chaque éditeur voit la modification, un seul la reporte.
+        if (!this.registre.doitRemapper(chemin, this.editor.contentEl.contains(document.activeElement))) return;
+        const retires = this.registre.remapper(chemin, mapPos, (from, to) => texteEntre(this.editor, from, to));
+        for (const id of retires) this.retirer(id);
     }
 
     /** Pose les icônes du document affiché, et retire les autres. */
     placer(): void {
+        // Poser un widget change la géométrie, qui rappelle placer() avant que l'icône soit rangée :
+        // sans cette garde, un carnet qui démarre avec des traces posait chaque icône deux fois.
+        // Un rappel en retard (ResizeObserver, changement d'éditeur) peut arriver après le démontage.
+        if (this.detruit) return;
+        if (this.enPlacement) {
+            this.aReplacer = true;
+            return;
+        }
+        this.enPlacement = true;
+        try {
+            do {
+                this.aReplacer = false;
+                this.poser();
+            } while (this.aReplacer);
+        } finally {
+            this.enPlacement = false;
+        }
+    }
+
+    private detruit = false;
+    /** Le document déjà recalé par cette vue : une fois, texte chargé. */
+    private recale: string | null = null;
+    private enPlacement = false;
+    private aReplacer = false;
+
+    private poser(): void {
         const chemin = this.chemin();
-        const visibles = this.traces.filter((t) => t.zone.chemin === chemin);
+        // La vue naît avant que le cœur y charge le texte : sur un document encore vide, une ancre
+        // hors du texte ferait échouer addWidget après qu'il a inséré l'icône, et le recalage
+        // ramènerait tous les passages au début.
+        const longueur = longueurDe(this.editor);
+        if (longueur > 0 && this.recale !== chemin) {
+            this.recale = chemin;
+            this.registre.recaler(chemin, this.editor);
+        }
+        const visibles = this.registre.pour(chemin).filter((t) => t.zone.to <= longueur);
         for (const id of [...this.icones.keys()]) {
             if (!visibles.some((t) => t.id === id)) this.retirer(id);
         }
@@ -145,7 +172,11 @@ export class CarnetTraces {
         }
     }
 
+    /** Retire les icônes de la vue ; les traces restent au registre. */
     detruire(): void {
+        this.detruit = true;
+        this.desabonner();
+        this.detacher();
         for (const id of [...this.icones.keys()]) this.retirer(id);
     }
 
@@ -186,6 +217,13 @@ export class CarnetTraces {
         icone?.rangee.remove();
         this.icones.delete(id);
     }
+}
+
+/** La longueur du document, en offsets. */
+function longueurDe(editor: TextSurface): number {
+    const derniere = editor.lineCount() - 1;
+    if (derniere < 0) return 0;
+    return editor.posToOffset({ line: derniere, ch: editor.getLine(derniere).length });
 }
 
 /** Le texte d'une plage, reconstruit ligne à ligne : la façade n'a pas de getRange. */

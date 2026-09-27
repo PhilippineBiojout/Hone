@@ -7,6 +7,7 @@ import { brancherDeclencheurs, SELECTION } from './interactions/declencheur';
 import { Repere } from './positionnement/repere';
 import type { ContexteQuestion } from './pont/repondre';
 import { CarnetTraces, texteEntre, type Trace } from './interactions/traces';
+import { TRAIT_PERDU, type RegistreTraces } from './interactions/registreTraces';
 import { VoixAgent } from './composants/VoixAgent';
 
 // À importer de 'fragment' quand le cœur l'exportera (core/editor/Editor.ts).
@@ -16,7 +17,7 @@ const hasText = (s: DocumentSurface): s is TextSurface => typeof (s as Partial<T
  * L'agent sur une vue : un passage surligné, entouré ou sélectionné fait apparaître la barre,
  * qui ouvre le chat, la carte d'un outil ou la pilule orale. Seul fichier qui connaît les pièces.
  */
-export function createAgentLayer(ctx: LayerContext): () => void {
+export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): () => void {
     const surface = ctx.editor;
     // Pas de texte adressable (PDF scanné, image) : rien à citer.
     if (!surface || !hasText(surface)) return () => {};
@@ -188,12 +189,12 @@ export function createAgentLayer(ctx: LayerContext): () => void {
             suppression = false;
         }
         zone = null;
-        if (!t.trait.id.startsWith(SELECTION)) annotation.effacer(t.zone.chemin, t.trait.id);
+        if (!t.trait.id.startsWith(SELECTION) && !t.trait.id.startsWith(TRAIT_PERDU)) annotation.effacer(t.zone.chemin, t.trait.id);
         majOccupe();
         editor.requestUpdate();
     };
 
-    const carnet = new CarnetTraces(editor, repere, chemin, rouvrir);
+    const carnet = new CarnetTraces(editor, repere, chemin, rouvrir, registre);
     // Au démontage, après les listeners : les fermetures rangent encore leur trace.
     c.register(() => {
         barre.fermer();
@@ -239,7 +240,7 @@ export function createAgentLayer(ctx: LayerContext): () => void {
             action.fermer();
             voix.fermer();
         }
-        carnet.placer();
+        carnet.changerDeDocument();
     }));
 
     return () => c.unload();

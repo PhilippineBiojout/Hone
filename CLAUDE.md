@@ -63,7 +63,8 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `agentLayer.ts` (racine) : LE chef d'orchestre, un par vue. Câble tout, tient `zone` (passage) + `trait`.
 - `interactions/declencheur.ts` : trait neuf (crayon/surligneur) OU sélection souris (→ faux trait `selection-`) → barre.
 - `interactions/zoneDuTrait.ts` : géométrie trait → plage `[from,to]`. `positionnement/repere.ts` : conversions client↔document + WidgetLayer.
-- `interactions/traces.ts` (CarnetTraces) : historique en mémoire, une icône par réponse fermée dans la marge gauche ; remappée à l'édition.
+- `interactions/registreTraces.ts` (RegistreTraces) : l'historique de la marge, **par document, tenu par le plugin** (le cœur remonte le calque à chaque fichier ouvert : un historique dans le calque se perdait) et écrit dans `traces.json` du dossier du plugin. Ajout et suppression s'écrivent tout de suite, le remappage après 300 ms. Suit rename/delete du vault. Un trait relu du disque est préfixé `perdu-` (le cœur ne persiste pas ses traits et renumérote dès `s1`).
+- `interactions/traces.ts` (CarnetTraces) : les icônes d'une vue dans la marge gauche ; ne pose rien tant que le texte du document n'est pas chargé (la vue naît vide).
 - `positionnement/fenetre.ts` : widget déplaçable/redimensionnable (Cadre). `positionnement/placement.ts` : maths de placement (aCote).
 - `composants/BarreAgent.ts` : barre verticale (Toolbar) posée à côté du passage.
 - `composants/BulleAgent` (chat), `composants/ActionAgent` (carte d'outil), `composants/VoixAgent` (oral : une lumière qui sort du bas du panneau et deux ronds ; le micro est transcrit sur la machine par whisper.cpp (`cerveau/transcrire.ts`, modèle dans `~/.hone/whisper/`), puis Hone répond par Codex comme dans le chat, lu par la synthèse du système. La voix en direct de Codex exige une clé API : refusée avec le compte ChatGPT).
