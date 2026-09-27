@@ -30,10 +30,14 @@ export interface Annotation {
     connaitre(): void;
 }
 
+/** La clé d'un document dans la source : un chemin hier, le TFile depuis que le cœur
+ *  persiste ses traits en artefacts (Fragment du 2026-09-27). On accepte les deux. */
+type CleDoc = string | { path: string };
+
 interface SourceAnnotation {
-    strokes(path: string): readonly Stroke[];
-    erase(path: string, id: string): void;
-    on(name: 'change', cb: (path: string) => void): { off(): void };
+    strokes(doc: CleDoc): readonly Stroke[];
+    erase(doc: CleDoc, id: string): void;
+    on(name: 'change', cb: (doc: CleDoc) => void): { off(): void };
 }
 
 /** Branche l'agent sur l'annotation de ce pane ; tout se défait avec `composant`. */
@@ -42,18 +46,36 @@ export function brancherAnnotation(composant: Component, app: App, paneEl: HTMLE
     const interne = app as unknown as { plugins?: { plugins?: Map<string, unknown> } };
     const source = (interne.plugins?.plugins?.get('annotation') as { source?: SourceAnnotation } | undefined)?.source;
 
+    // Le nouveau cœur range les traits par TFile : un chemin n'y trouve plus rien, et la barre
+    // ne s'ouvrait plus. On essaie le fichier, puis le chemin (cœur d'avant).
+    const cheminDe = (doc: CleDoc): string => (typeof doc === 'string' ? doc : doc.path);
+    const traitsDe = (path: string): readonly Stroke[] => {
+        if (!source) return [];
+        const fichier = app.vault.getFileByPath(path);
+        const parFichier = fichier ? source.strokes(fichier) : [];
+        return parFichier.length > 0 ? parFichier : source.strokes(path);
+    };
+
     const vus = new Set<string>();
+    let combien = 0;
     const connaitre = (): void => {
-        for (const s of source?.strokes(chemin()) ?? []) vus.add(s.id);
+        const traits = traitsDe(chemin());
+        for (const s of traits) vus.add(s.id);
+        combien = traits.length;
     };
     connaitre();
 
     const abonnes: ((path: string, stroke: Stroke) => void)[] = [];
-    const ref = source?.on('change', (path) => {
+    const ref = source?.on('change', (doc) => {
+        const path = cheminDe(doc);
         if (path !== chemin()) return;
-        const neuf = source.strokes(path).filter((s) => !vus.has(s.id)).at(-1);
+        const traits = traitsDe(path);
+        // Un trait posé à la main en ajoute un seul ; le cœur qui recharge les traits d'un
+        // document depuis ses artefacts les ajoute d'un coup : ce ne sont pas des traits neufs.
+        const unDePlus = traits.length === combien + 1;
+        const neuf = traits.filter((s) => !vus.has(s.id)).at(-1);
         connaitre();
-        if (neuf) for (const cb of abonnes) cb(path, neuf);
+        if (neuf && unDePlus) for (const cb of abonnes) cb(path, neuf);
     });
     composant.register(() => ref?.off());
 
@@ -67,7 +89,11 @@ export function brancherAnnotation(composant: Component, app: App, paneEl: HTMLE
 
     return {
         surTraitPose: (cb) => { abonnes.push(cb); },
-        effacer: (path, id) => source?.erase(path, id),
+        effacer: (path, id) => {
+            const fichier = app.vault.getFileByPath(path);
+            if (fichier) source?.erase(fichier, id);
+            source?.erase(path, id);
+        },
         // Demande 2 : la Toolbar du pane qui n'est pas celle de l'agent.
         barre: () => paneEl.querySelector('.toolbar:not(.agent-barre)')?.getBoundingClientRect() ?? null,
         suspendre: (oui) => {
