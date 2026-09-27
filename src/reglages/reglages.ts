@@ -20,6 +20,8 @@ export interface CodexSettings {
 export interface Reglages {
     /** La clé OpenAI. Vide → Hone répond en factice. */
     cle: string;
+    /** La clé Gradium : l'oreille et la voix de la discussion orale. Vide → pas de voix. */
+    gradiumCle: string;
     modeleFort: string;
     modeleLeger: string;
     /** Plafond de tokens par session (0 : sans plafond). */
@@ -42,6 +44,7 @@ export const CODEX_DEFAUT: CodexSettings = {
 
 export const REGLAGES_DEFAUT: Reglages = {
     cle: '',
+    gradiumCle: '',
     modeleFort: 'gpt-5.4',
     modeleLeger: 'gpt-5.4-mini',
     plafond: 500_000,
@@ -56,6 +59,7 @@ export function fusionner(data: unknown): Reglages {
     const c = (d.codex ?? {}) as Partial<CodexSettings>;
     return {
         cle: typeof d.cle === 'string' ? d.cle : REGLAGES_DEFAUT.cle,
+        gradiumCle: typeof d.gradiumCle === 'string' ? d.gradiumCle : REGLAGES_DEFAUT.gradiumCle,
         modeleFort: typeof d.modeleFort === 'string' && d.modeleFort ? d.modeleFort : REGLAGES_DEFAUT.modeleFort,
         modeleLeger: typeof d.modeleLeger === 'string' && d.modeleLeger ? d.modeleLeger : REGLAGES_DEFAUT.modeleLeger,
         plafond: typeof d.plafond === 'number' ? d.plafond : REGLAGES_DEFAUT.plafond,
@@ -70,36 +74,60 @@ export function fusionner(data: unknown): Reglages {
     };
 }
 
-/** Le Modal de saisie de la clé API. */
+/** Ce qui distingue les deux clés dans le Modal de saisie. */
+export interface SorteDeCle {
+    titre: string;
+    exemple: string;
+    aide: string;
+    champ: 'cle' | 'gradiumCle';
+}
+
+export const CLE_OPENAI: SorteDeCle = {
+    titre: 'Hone — clé API OpenAI',
+    exemple: 'sk-…',
+    aide: 'La clé est stockée dans les données du plugin et n\'est utilisée que par Hone, en local. '
+        + 'Sans clé, Hone répond en mode factice.',
+    champ: 'cle',
+};
+
+export const CLE_GRADIUM: SorteDeCle = {
+    titre: 'Hone — clé Gradium',
+    exemple: 'gd_…',
+    aide: 'La voix de Hone : Gradium écoute le micro et dit ses réponses. La clé est stockée dans les '
+        + 'données du plugin, jamais dans le dépôt. Sans clé, la discussion orale ne démarre pas.',
+    champ: 'gradiumCle',
+};
+
+/** Le Modal de saisie d'une clé (OpenAI ou Gradium). */
 export class ModalCle extends Modal {
     constructor(
         app: App,
         private readonly reglages: Reglages,
         private readonly onEnregistrer: (r: Reglages) => void,
+        private readonly sorte: SorteDeCle = CLE_OPENAI,
     ) {
         super(app);
     }
 
     onOpen(): void {
-        this.setTitle('Hone — clé API OpenAI');
+        this.setTitle(this.sorte.titre);
 
         const champ = document.createElement('input');
         champ.type = 'password';
-        champ.placeholder = 'sk-…';
-        champ.value = this.reglages.cle;
+        champ.placeholder = this.sorte.exemple;
+        champ.value = this.reglages[this.sorte.champ];
         champ.style.width = '100%';
         champ.style.boxSizing = 'border-box';
 
         const aide = document.createElement('p');
-        aide.textContent = 'La clé est stockée dans les données du plugin et n\'est utilisée que par Hone, en local. '
-            + 'Sans clé, Hone répond en mode factice.';
+        aide.textContent = this.sorte.aide;
         aide.style.color = 'var(--text-muted)';
         aide.style.fontSize = 'var(--font-ui-small)';
 
         const bouton = document.createElement('button');
         bouton.textContent = 'Enregistrer';
         const enregistrer = () => {
-            this.onEnregistrer({ ...this.reglages, cle: champ.value.trim() });
+            this.onEnregistrer({ ...this.reglages, [this.sorte.champ]: champ.value.trim() });
             this.close();
         };
         bouton.addEventListener('click', enregistrer);

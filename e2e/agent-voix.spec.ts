@@ -4,8 +4,9 @@ import { barre, bulle, carte, lancer, ligne, nbTraits, surligner, traces, voix, 
 /**
  * La discussion orale (VoixAgent.ts) : le micro de la barre, après la tête de
  * chat, fait sortir une lumière du bas du panneau (voice-glow, libraries.dev/voice),
- * sans boîte. Elle suit le micro ; le rond ■ finit le tour, l'agent répond à voix
- * haute, la croix rend le micro et laisse un bilan.
+ * sans boîte. C'est un appel en direct : une phrase puis un silence font un tour,
+ * Hone réfléchit puis répond à voix haute ; ■ lui coupe la parole, la croix raccroche
+ * et laisse un bilan. En factice : l'appel factice de cerveau/appel.ts.
  *
  * Pas de vrai micro : `getUserMedia` est remplacé dans la page par un
  * oscillateur à 220 Hz dont on règle le volume, et la synthèse vocale par un
@@ -56,16 +57,22 @@ async function ouvrirVoix(page: Page, refuser = false): Promise<void> {
     await expect(voix(page)).toBeVisible();
 }
 
-/** Un tour de parole complet : on parle, ■, l'agent répond, la barre écoute de nouveau. */
+/** Une phrase au micro : le volume monte, puis le silence. */
+async function parlerAuMicro(page: Page): Promise<void> {
+    const volume = (n: number) => page.evaluate((n) => {
+        const v = (window as unknown as { __voix: any }).__voix;
+        v.niveau = n;
+        for (const g of v.gains) g.gain.value = n;
+    }, n);
+    await volume(1);
+    await page.waitForTimeout(400);
+    await volume(0);
+}
+
+/** Un tour complet : une phrase, Hone réfléchit, répond à voix haute, puis la barre écoute de nouveau. */
 async function unTour(page: Page): Promise<void> {
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
-    await page.evaluate(() => {
-        const v = (window as unknown as { __voix: any }).__voix;
-        v.niveau = 1;
-        for (const g of v.gains) g.gain.value = 1;
-    });
-    await page.waitForTimeout(300);
-    await stop(page).click();
+    await parlerAuMicro(page);
     await expect(voix(page)).toHaveAttribute('data-etat', 'repond', { timeout: 4_000 });
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
 }
@@ -123,7 +130,8 @@ test('le micro, juste après la tête de chat, fait sortir la lumière du bas du
     expect((s.x + f.x + f.width) / 2).toBeCloseTo(b.x + b.width / 2, 0);
     expect(b.y + b.height - (f.y + f.height)).toBeCloseTo(28, 0);
     expect(await fermer(page).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('50%');
-    await expect(stop(page)).toHaveAttribute('aria-label', 'Finir de parler');
+    // ■ ne sert qu'à couper Hone : pendant qu'on parle, il ne fait rien.
+    await expect(stop(page)).toBeDisabled();
 
     // Dans la lumière, hors des ronds, un clic touche la note.
     const cible = await page.evaluate(({ x, y }) => {
@@ -139,26 +147,27 @@ test('le micro, juste après la tête de chat, fait sortir la lumière du bas du
     expect((await voix(page).boundingBox())!.y).toBeCloseTo(b.y, 0);
 });
 
-test('un tour : Hone réfléchit (la lueur balaie), répond à voix haute, écoute de nouveau ; le second tour garde le premier', async () => {
+test('une phrase puis un silence : Hone réfléchit (la lueur balaie), répond à voix haute, écoute de nouveau ; ■ lui coupe la parole', async () => {
     const { page } = h;
     await ouvrirVoix(page);
     await unTour(page);
     expect((await dits(page))[0]).toContain('numéro 1');
-    expect((await dits(page))[0]).toContain('ton enregistrement');
 
-    // Second tour, regardé de près : ■ désactivé et la lueur qui balaie pendant l'attente,
-    // puis la réponse sur la ligne d'état.
-    await stop(page).click();
-    await expect(voix(page)).toHaveAttribute('data-etat', 'reflechit');
+    // Second tour, regardé de près.
+    await parlerAuMicro(page);
+    await expect(voix(page)).toHaveAttribute('data-etat', 'reflechit', { timeout: 4_000 });
     await expect(stop(page)).toBeDisabled();
     await expect(message(page)).toHaveText('Hone réfléchit…');
     await expect(lueur(page)).toHaveAttribute('data-processing', /.*/);
     await expect(voix(page)).toHaveAttribute('data-etat', 'repond', { timeout: 4_000 });
     await expect(lueur(page)).not.toHaveAttribute('data-processing', /.*/);
+    // La réponse s'écrit sur la ligne d'état (lue par les lecteurs d'écran), et l'historique garde le premier tour.
     await expect(message(page)).toContainText('numéro 2');
-    // Pendant que Hone parle, le même bouton coupe sa voix.
-    await expect(stop(page)).toHaveAttribute('aria-label', 'Couper la parole à Hone');
     expect(await dits(page)).toHaveLength(2);
+
+    await expect(stop(page)).toHaveAttribute('aria-label', 'Couper la parole à Hone');
+    await stop(page).click();
+    await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute');
 });
 
 test('sans un mot, la croix rend le micro et ne laisse rien ; pendant l\'oral, un trait ne pose rien', async () => {
@@ -202,7 +211,7 @@ test('le bilan laisse un micro dans la marge ; rouvert, il reprend à voix haute
     // Le rond du micro tourne pendant que le bilan s'écrit ; le passage reste surligné.
     await expect(page.locator('.agent-action-cercle')).toBeVisible();
     await expect(carte(page)).toBeVisible({ timeout: 4_000 });
-    await expect(carte(page).locator('.agent-action-titre')).toHaveText('Bilan');
+    await expect(carte(page).locator('.agent-action-titre')).toHaveText(/^Bilan/);
     await expect(carte(page).locator('.agent-action-corps')).toContainText('1 tour de parole');
     await expect(page.locator('.agent-zone').first()).toBeAttached();
     await carte(page).locator('[aria-label="Fermer"]').click();

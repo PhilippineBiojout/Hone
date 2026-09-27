@@ -3,8 +3,9 @@ import { bornesDe, PROFILS } from '../codex/profils';
 import { ServeurCodex, transportReel, type FabriqueTransport } from '../codex/serveur';
 import { vaultRoot } from '../codex/racine';
 import type { Memoire } from '../memoire/outils-memoire';
-import type { Demande, Etape, Sortie, Source } from '../pont/protocole';
+import type { Demande, Etape, Message, Passage, Sortie, Source } from '../pont/protocole';
 import type { Reglages } from '../reglages/reglages';
+import { BASE } from './agents';
 import { langueDuVault } from './langue';
 import { AgentEnPause, citer, ErreurAgent } from './moteur';
 import { accesVault, type AccesVault } from './vault';
@@ -52,6 +53,10 @@ function source(outils: string[]): Source {
     if (outils.includes('web')) return 'web';
     return outils.some((o) => o === 'search_vault' || o === 'read_document') ? 'vault' : 'modele';
 }
+
+/** La discussion orale : ce qui change de l'écrit. */
+const A_L_ORAL = `Tu parles à voix haute avec l'utilisateur, à propos du passage cité. Réponds en français, en deux ou trois phrases.
+Pas de Markdown, pas de liste, pas de formule : tout ce que tu écris est dit.`;
 
 function messagePourUtilisateur(err: unknown): string {
     const msg = String((err as Error)?.message ?? err);
@@ -122,6 +127,31 @@ export class MoteurCodex {
                     ? { texte: String(json.texte ?? ''), source: source(outils) }
                     : json as unknown as Sortie;
             }
+        }
+    }
+
+    /** La clé Gradium de la discussion orale ; vide : pas de voix. */
+    cleGradium(): string {
+        return this.reglages.gradiumCle;
+    }
+
+    /** La discussion orale : la réponse à une phrase dite (appel.ts), sans outils ni web.
+     *  À l'oral, Hone parle et répond ; il ne va rien chercher, la réponse vient plus vite. */
+    async direOral(passage: Passage, historique: Message[], phrase: string): Promise<string> {
+        if (!this.pret()) throw new AgentEnPause('Hone en factice.');
+        const fil = historique.slice(-12)
+            .map((m) => `${m.auteur === 'moi' ? 'Utilisateur' : 'Toi'} : ${m.texte}`).join('\n\n');
+        const texte = `${citer({ agent: 'chat', passage, question: phrase, historique }, '')}`
+            + `${fil ? `\n\nCe qui s'est déjà dit à voix haute :\n${fil}` : ''}\n\nL'utilisateur vient de dire : ${phrase}`;
+        try {
+            const fin = await this.serveur.demander(
+                { consignes: `${BASE}\n${A_L_ORAL}${this.memoire?.preferences.bloc() ?? ''}`, outils: [], web: false },
+                texte, { effort: 'low' },
+            );
+            return fin.texte;
+        } catch (err) {
+            console.error('[hone] codex oral :', err);
+            throw new ErreurAgent(messagePourUtilisateur(err));
         }
     }
 

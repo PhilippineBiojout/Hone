@@ -11,7 +11,7 @@ import { lirePreferences, Preferences } from './memoire/preferences';
 import { accesVault } from './cerveau/vault';
 import { brancherCodex } from './codex/codex';
 import { poserLeVerre } from './decor/verre';
-import { fusionner, ModalCle, type Reglages } from './reglages/reglages';
+import { CLE_GRADIUM, fusionner, ModalCle, type Reglages } from './reglages/reglages';
 import { setupScan } from './scan/scan';
 import { brancherRemarkable } from './remarkable/remarkable';
 
@@ -88,6 +88,11 @@ export default class HonePlugin extends Plugin {
             id: 'cle-api',
             name: 'Hone : clé API…',
             callback: () => new ModalCle(this.app, this.reglages, (r) => void this.majReglages(r)).open(),
+        });
+        this.addCommand({
+            id: 'cle-gradium',
+            name: 'Hone : clé Gradium…',
+            callback: () => new ModalCle(this.app, this.reglages, (r) => void this.majReglages(r), CLE_GRADIUM).open(),
         });
 
         poserLeVerre(this);

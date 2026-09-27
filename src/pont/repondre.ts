@@ -1,6 +1,6 @@
-import { AgentEnPause, ErreurAgent } from '../cerveau/moteur';
+import { appelFactice, appelGradium, type Appel, type EcouteursAppel } from '../cerveau/appel';
+import { AgentEnPause } from '../cerveau/moteur';
 import { moteurCodexCourant, type MoteurCodex } from '../cerveau/moteur-codex';
-import { transcrire } from '../cerveau/transcrire';
 import type { Etape, Message, Outil, Passage, Source, Sorties } from './protocole';
 import { nettoyerSujet, sansMarkdown } from '../ui/texteLisible';
 
@@ -27,13 +27,6 @@ export interface ReponseOutil {
     stop?: boolean;
     /** Les outils appelés par l'agent pour y arriver, dans l'ordre. */
     etapes?: Etape[];
-}
-
-export interface ReponseOrale {
-    texte: string;
-    /** Sa voix encodée ; sans elle, la synthèse du système lit `texte`. */
-    audio?: ArrayBuffer;
-    transcription?: string;
 }
 
 export const INDICE_STOP = 'Je ne peux plus t\'aider sans te donner la solution. Pose ta question dans le chat si tu es bloqué.';
@@ -155,30 +148,19 @@ async function agirFactice(
     }
 }
 
-/** Ce qui fait d'une question du chat une réplique à dire : la synthèse lit tout, symboles compris. */
-const A_L_ORAL = '(Réponse dite à voix haute : deux ou trois phrases, sans Markdown, sans liste, sans formule.)';
-
-/** Un tour de parole : le micro transcrit sur la machine (cerveau/transcrire.ts), puis Hone
- *  répond comme dans le chat, par Codex. La synthèse du système lit sa réponse (VoixAgent). */
-export async function parler(audio: Blob, contexte: ContexteQuestion, historique: Message[] = []): Promise<ReponseOrale> {
-    return parAgent(async (moteur) => {
-        const transcription = await transcrire(audio);
-        if (!transcription) throw new ErreurAgent('Je n\'ai rien entendu. Réessaie en parlant plus près du micro.');
-        const { texte } = await moteur.demander({
-            agent: 'chat', passage: passage(contexte), question: `${transcription}\n\n${A_L_ORAL}`, historique,
-        }) as Sorties['chat'];
-        return { texte, transcription };
-    }, () => parlerFactice(audio, contexte, historique));
-}
-
-async function parlerFactice(audio: Blob, contexte: ContexteQuestion, historique: Message[]): Promise<ReponseOrale> {
-    await attendre(1000);
-    const tour = historique.filter((m) => m.auteur === 'moi').length + 1;
-    return {
-        texte: `Réponse orale factice numéro ${tour}. J'ai bien reçu ${audio.size > 0 ? 'ton enregistrement' : 'un enregistrement vide'}, `
-            + `sur le passage « ${extrait(contexte, 40)} ». Le back n'est pas encore branché.`,
-        transcription: `Transcription factice du tour ${tour}.`,
-    };
+/** La discussion orale en direct (cerveau/appel.ts) : Gradium écoute et parle, Codex répond ;
+ *  en factice seulement avec le réglage `factice` (ou hors du plugin chargé). */
+export async function appeler(micro: MediaStream, contexte: ContexteQuestion, historique: Message[], ecouteurs: EcouteursAppel): Promise<Appel> {
+    const moteur = moteurCodexCourant();
+    if (!moteur?.pret()) return appelFactice(micro, passage(contexte), historique, ecouteurs);
+    try {
+        const cle = moteur.cleGradium();
+        if (!cle) throw new Error('pas de clé Gradium (commande « Hone : clé Gradium… »).');
+        return await appelGradium(moteur, cle, micro, passage(contexte), historique, ecouteurs);
+    } catch (err) {
+        if (err instanceof AgentEnPause) return appelFactice(micro, passage(contexte), historique, ecouteurs);
+        throw err;
+    }
 }
 
 /** Le bilan écrit d'une discussion orale, à sa fermeture. */
