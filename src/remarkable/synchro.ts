@@ -197,10 +197,20 @@ export class Synchro {
 				const pages = vue.contentEl.querySelector<HTMLElement>('.pdf-pages');
 				if (!defilement || !pages) continue;
 				const { scrollTop, scrollLeft } = defilement;
+				const tailles = [...pages.querySelectorAll<HTMLElement>('.pdf-page')].map((p) => [p.style.width, p.style.height]);
 				pages.style.minHeight = `${pages.offsetHeight}px`;
 				try {
 					await vue.onUnloadFile(fichier);
 					await vue.onLoadFile(fichier);
+					// Le cœur redonne à chaque page la taille de la page 1. Or une
+					// page de carnet s'allonge quand on écrit plus bas : sans les
+					// anciennes tailles, le document raccourcit et le défilement
+					// remis tombe en bas. Chaque page reprend donc la sienne, que
+					// le cœur corrige s'il la repeint à une autre taille.
+					pages.querySelectorAll<HTMLElement>('.pdf-page').forEach((p, i) => {
+						if (!tailles[i]) return;
+						[p.style.width, p.style.height] = tailles[i];
+					});
 					defilement.scrollTop = scrollTop;
 					defilement.scrollLeft = scrollLeft;
 				} finally {

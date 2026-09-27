@@ -81,7 +81,10 @@ test('reMarkable : icônes uniques, commandes sync et show live status', async (
  * Une mise à jour de la tablette sur un PDF ouvert : on lisait le milieu de la
  * page 5, la page 4 change, on reste au même endroit de la page 5, et le
  * défilement ne passe jamais par 0 pendant le rechargement. Une fausse
- * tablette minimale sert un PDF de 8 pages. Sans le layout du coffre, qui a ses propres PDF.
+ * tablette minimale sert un PDF de 8 pages, dont les pages 2 et 3 trois fois
+ * plus hautes que la page 1, comme une page de carnet où l'on a écrit plus
+ * bas ; on les lit avant d'arriver à la page 5, pour que la vue connaisse leur
+ * vraie taille. Sans le layout du coffre, qui a ses propres PDF.
  */
 test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 	test.setTimeout(120_000);
@@ -99,12 +102,18 @@ test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 		const chemin = d.toString().split(' ')[1];
 		const corps = chemin === '/documents/'
 			? Buffer.from(JSON.stringify([{ ID: 'defil', VissibleName: 'E2E defilement', Type: 'DocumentType', ModifiedClient: String(modifie), fileType: 'pdf' }]))
-			: chemin === '/download/defil/pdf' ? pdfDeTest({ pages }) : Buffer.from('[]');
+			: chemin === '/download/defil/pdf' ? carnet() : Buffer.from('[]');
 		s.end(Buffer.concat([Buffer.from(`HTTP/1.1 200 OK\r\nContent-Length: ${corps.length}\r\nConnection: close\r\n\r\n`), corps]));
 	}));
 	await new Promise<void>((ok) => serveur.listen(0, '127.0.0.1', ok));
 	const hote = `http://127.0.0.1:${(serveur.address() as net.AddressInfo).port}`;
 	const ecrire = (version: number) => { pages[3] = `page 4 version ${version}`; modifie++; };
+	// Même longueur de texte, donc la table xref du PDF reste juste.
+	const carnet = () => {
+		let n = 0;
+		const texte = pdfDeTest({ pages, hauteur: 1000 }).toString('latin1');
+		return Buffer.from(texte.replace(/MediaBox \[ 0 0 420 1000 \]/g, (m) => (++n === 2 || n === 3 ? 'MediaBox [ 0 0 420 3000 ]' : m)), 'latin1');
+	};
 
 	const fichier = path.join(vault, '.fragment/plugins/hone/remarkable.json');
 	await writeFile(fichier, JSON.stringify({ hote, autorise: true, statutLive: true, carnets: {} }), 'utf8');
@@ -133,6 +142,17 @@ test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 		// Plus de bouton « live » ni d'icône débranchée en haut du PDF.
 		await expect(page.locator('.view-actions .remarkable-statut, .view-actions svg.lucide-unplug')).toHaveCount(0);
 		await expect(page.locator('.view-actions .view-action', { hasText: /live/i })).toHaveCount(0);
+
+		// On lit de haut en bas jusqu'à la page 5 : chaque page peinte prend sa vraie taille.
+		for (let n = 1; n <= 5; n++) {
+			await vue.evaluate((el, n) => {
+				const p = el.querySelector(`.pdf-page[data-page="${n}"]`)!.getBoundingClientRect();
+				el.scrollTop += p.top - el.getBoundingClientRect().top;
+			}, n);
+			await expect(vue.locator(`.pdf-page[data-page="${n}"] canvas`)).toHaveCount(1, { timeout: 15_000 });
+		}
+		await expect.poll(() => vue.evaluate((el) => el.querySelector<HTMLElement>('.pdf-page[data-page="2"]')!.offsetHeight
+			/ el.querySelector<HTMLElement>('.pdf-page[data-page="1"]')!.offsetHeight)).toBeCloseTo(3, 1);
 
 		// Au milieu de la page 5, puis un échantillon du défilement à chaque image.
 		await vue.evaluate((el) => {
@@ -169,15 +189,19 @@ test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 
 		// Une mise à jour : la page 4 change.
 		ecrire(2);
-		await expect(page4).toContainText('page 4 version 2', { timeout: 15_000 });
+		await expect.poll(async () => (await readFile(pdf, 'latin1')).includes('page 4 version 2'), { timeout: 15_000 }).toBe(true);
+		await page.waitForTimeout(1000);
 		await verifier('une');
+		await expect(page4).toContainText('page 4 version 2', { timeout: 15_000 });
 
 		// Deux mises à jour rapprochées : la seconde arrive dès que la première est écrite.
 		ecrire(3);
 		await expect.poll(async () => (await readFile(pdf, 'latin1')).includes('page 4 version 3'), { timeout: 15_000 }).toBe(true);
 		ecrire(4);
-		await expect(page4).toContainText('page 4 version 4', { timeout: 15_000 });
+		await expect.poll(async () => (await readFile(pdf, 'latin1')).includes('page 4 version 4'), { timeout: 15_000 }).toBe(true);
+		await page.waitForTimeout(1000);
 		await verifier('deux');
+		await expect(page4).toContainText('page 4 version 4', { timeout: 15_000 });
 	} finally {
 		await electronApp.close();
 		serveur.close();
