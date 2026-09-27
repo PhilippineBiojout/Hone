@@ -23,7 +23,7 @@ type Etat = 'arrivee' | 'ecoute' | 'reflechit' | 'repond' | 'refuse';
 
 const LIBELLES: Partial<Record<Etat, string>> = {
     ecoute: 'Finir de parler',
-    reflechit: "L'agent réfléchit",
+    reflechit: 'Hone réfléchit',
     repond: "Couper la parole à Hone",
 };
 
@@ -245,7 +245,7 @@ export class VoixAgent extends Component {
             if (!estCourant()) return;
             this.ecouter();
             // Après ecouter() : la ligne d'état l'aurait effacée.
-            this.messageEl.textContent = `L'agent n'a pas pu répondre : ${err instanceof Error ? err.message : String(err)}`;
+            this.messageEl.textContent = `Hone n'a pas pu répondre : ${err instanceof Error ? err.message : String(err)}`;
             this.messageEl.classList.add('est-visible');
             return;
         }

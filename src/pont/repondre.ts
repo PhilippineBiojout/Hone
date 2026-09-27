@@ -1,5 +1,6 @@
-import { AgentEnPause } from '../cerveau/moteur';
+import { AgentEnPause, ErreurAgent } from '../cerveau/moteur';
 import { moteurCodexCourant, type MoteurCodex } from '../cerveau/moteur-codex';
+import { transcrire } from '../cerveau/transcrire';
 import type { Etape, Message, Outil, Passage, Source, Sorties } from './protocole';
 
 export type { Outil, Source } from './protocole';
@@ -153,8 +154,23 @@ async function agirFactice(
     }
 }
 
-/** Un tour de parole enregistré ; toujours factice (la voix passera par Gradium). */
+/** Ce qui fait d'une question du chat une réplique à dire : la synthèse lit tout, symboles compris. */
+const A_L_ORAL = '(Réponse dite à voix haute : deux ou trois phrases, sans Markdown, sans liste, sans formule.)';
+
+/** Un tour de parole : le micro transcrit sur la machine (cerveau/transcrire.ts), puis Hone
+ *  répond comme dans le chat, par Codex. La synthèse du système lit sa réponse (VoixAgent). */
 export async function parler(audio: Blob, contexte: ContexteQuestion, historique: Message[] = []): Promise<ReponseOrale> {
+    return parAgent(async (moteur) => {
+        const transcription = await transcrire(audio);
+        if (!transcription) throw new ErreurAgent('Je n\'ai rien entendu. Réessaie en parlant plus près du micro.');
+        const { texte } = await moteur.demander({
+            agent: 'chat', passage: passage(contexte), question: `${transcription}\n\n${A_L_ORAL}`, historique,
+        }) as Sorties['chat'];
+        return { texte, transcription };
+    }, () => parlerFactice(audio, contexte, historique));
+}
+
+async function parlerFactice(audio: Blob, contexte: ContexteQuestion, historique: Message[]): Promise<ReponseOrale> {
     await attendre(1000);
     const tour = historique.filter((m) => m.auteur === 'moi').length + 1;
     return {
