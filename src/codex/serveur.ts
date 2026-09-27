@@ -19,6 +19,8 @@ export interface Bornes {
     consignes: string;
     outils: OutilFourni[];
     web: boolean;
+    /** Génération d'images permise (Visualiser seulement) ; sinon coupée, Codex l'ayant d'office. */
+    image?: boolean;
 }
 
 export interface Tour {
@@ -33,8 +35,10 @@ export interface Tour {
 
 export interface FinDeTour {
     texte: string;
-    /** Les outils appelés, dans l'ordre (`web` pour une recherche web). */
+    /** Les outils appelés, dans l'ordre (`web` pour une recherche web, `image` pour une image). */
     outils: string[];
+    /** Les images générées pendant le tour, en base64. */
+    images: string[];
 }
 
 /** Le transport, remplaçable dans les tests. */
@@ -48,6 +52,7 @@ interface EnCours {
     appeles: string[];
     finales: Set<string>;
     texte: string;
+    images: string[];
     fini: (r: FinDeTour) => void;
     echec: (e: Error) => void;
 }
@@ -107,7 +112,7 @@ export class ServeurCodex {
             approvalPolicy: 'never',
             sandbox: 'read-only',
             environments: [],
-            config: { web_search: bornes.web ? 'live' : 'disabled' },
+            config: { web_search: bornes.web ? 'live' : 'disabled', features: { image_generation: bornes.image === true } },
             developerInstructions: bornes.consignes,
             dynamicTools: bornes.outils.map(({ name, description, inputSchema }) => ({ type: 'function', name, description, inputSchema })),
         });
@@ -117,7 +122,7 @@ export class ServeurCodex {
         const fin = new Promise<FinDeTour>((fini, echec) => {
             this.fils.set(id, {
                 outils: new Map(bornes.outils.map((o) => [o.name, o])),
-                tour, appeles: [], finales: new Set(), texte: '', fini, echec,
+                tour, appeles: [], finales: new Set(), texte: '', images: [], fini, echec,
             });
         });
         let delai: ReturnType<typeof setTimeout> | undefined;
@@ -154,12 +159,19 @@ export class ServeurCodex {
                     fil.appeles.push('web');
                     fil.tour.surOutil?.('web', { requete: typeof item.query === 'string' ? item.query : '' });
                 }
+                if (item?.type === 'imageGeneration') {
+                    fil.appeles.push('image');
+                    fil.tour.surOutil?.('image', {});
+                }
                 break;
             case 'item/agentMessage/delta':
                 if (fil.finales.has(String(p.itemId)) && typeof p.delta === 'string') fil.tour.morceau?.(p.delta);
                 break;
             case 'item/completed':
                 if (item?.type === 'agentMessage' && item.phase === 'final_answer') fil.texte = String(item.text ?? '');
+                if (item?.type === 'imageGeneration' && item.status === 'completed' && typeof item.result === 'string' && item.result) {
+                    fil.images.push(item.result);
+                }
                 break;
             case 'turn/completed': {
                 const turn = (p.turn ?? {}) as Json;
@@ -167,7 +179,7 @@ export class ServeurCodex {
                     const e = turn.error as Json | null;
                     fil.echec(new Error(String(e?.message ?? 'Codex a échoué.')));
                 } else {
-                    fil.fini({ texte: fil.texte, outils: fil.appeles });
+                    fil.fini({ texte: fil.texte, outils: fil.appeles, images: fil.images });
                 }
                 break;
             }

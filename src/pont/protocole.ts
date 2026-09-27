@@ -28,6 +28,7 @@ export interface Sorties {
     resumer: { texte: string; source: Source };
     traduire: { texte: string; langue: string };
     aider: { texte: string; stop: boolean };
-    visualiser: { possible: boolean; svg: string | null; raison: string | null };
+    /** `image` : le chemin d'une image générée (codex/images.ts), à la place du SVG. */
+    visualiser: { possible: boolean; svg: string | null; raison: string | null; image?: string | null };
 }
 export type Sortie = Sorties[NomAgent];

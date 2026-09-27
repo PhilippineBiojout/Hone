@@ -23,6 +23,8 @@ export interface ReponseOutil {
     source?: Source;
     /** Visualiser : à nettoyer avant affichage (nettoyerSvg.ts). */
     svg?: string;
+    /** Visualiser : le chemin d'une image générée, dans le dossier du plugin (codex/images.ts). */
+    image?: string;
     /** Aider : le prochain indice donnerait la solution. */
     stop?: boolean;
     /** Les outils appelés par l'agent pour y arriver, dans l'ordre. */
@@ -86,6 +88,7 @@ export async function agir(
         switch (outil) {
             case 'visualiser': {
                 const v = sortie as Sorties['visualiser'];
+                if (v.image) return { texte: 'Image générée par Hone.', image: v.image };
                 return v.possible && v.svg
                     ? { texte: 'Visuel dessiné par Hone.', svg: v.svg }
                     : { texte: v.raison ?? 'Ce passage ne se prête pas à un visuel.' };

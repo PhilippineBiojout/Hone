@@ -174,6 +174,7 @@
 .agent-action-source { display: inline-flex; color: var(--text-muted); }
 .agent-action-corps.is-visuel { white-space: normal; color: var(--text-normal); }
 .agent-action-corps.is-visuel svg { display: block; width: 100%; height: auto; max-height: 60vh; }
+.agent-action-corps.is-visuel img { display: block; width: 100%; height: auto; max-height: 60vh; object-fit: contain; border-radius: 6px; }
 .agent-action-corps.is-stop { color: var(--text-muted); font-style: italic; }
 
 /* Le pied : la poubelle à gauche (un double clic ne tombe pas sur « Supprimer »), la tête de chat à droite */

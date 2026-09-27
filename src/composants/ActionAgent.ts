@@ -1,6 +1,7 @@
 import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
 import { eclore, resorber } from '../ui/animations';
 import { Fenetre, type Cadre } from '../positionnement/fenetre';
+import { imageSure } from '../codex/images';
 import { nettoyerSvg } from '../ui/nettoyerSvg';
 import type { Message } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
@@ -45,7 +46,7 @@ export class ActionAgent extends Component {
     private montre: Resultat | null = null;
 
     constructor(
-        app: App,
+        private readonly app: App,
         private readonly repere: Repere,
         private readonly onFermer: () => void,
         onSupprimer: () => void,
@@ -206,12 +207,16 @@ export class ActionAgent extends Component {
         this.montre = null;
     }
 
-    /** Le dessin de Visualiser, toujours nettoyé, sinon le texte. */
+    /** L'image ou le dessin de Visualiser, toujours vérifiés, sinon le texte. */
     private afficher(reponse: ReponseOutil): void {
         this.afficherParcours(reponse);
         this.corpsEl.textContent = '';
         this.sourceEl.hidden = reponse.source !== 'web';
         this.corpsEl.classList.toggle('is-stop', reponse.stop === true);
+        if (reponse.image !== undefined) {
+            this.afficherImage(reponse.image);
+            return;
+        }
         if (reponse.svg === undefined) {
             this.corpsEl.classList.remove('is-visuel');
             this.corpsEl.textContent = reponse.texte;
@@ -225,6 +230,24 @@ export class ActionAgent extends Component {
         }
         svg.setAttribute('aria-label', 'Visuel du passage');
         this.corpsEl.appendChild(svg);
+    }
+
+    /** Seulement un fichier rangé par Hone dans images/ (codex/images.ts), lu par la plateforme. */
+    private afficherImage(chemin: string): void {
+        const illisible = () => {
+            this.corpsEl.classList.remove('is-visuel');
+            this.corpsEl.textContent = 'L\'image reçue n\'a pas pu être affichée.';
+        };
+        if (!imageSure(this.app, chemin)) {
+            illisible();
+            return;
+        }
+        const img = document.createElement('img');
+        img.alt = 'Image du passage';
+        img.addEventListener('error', illisible, { once: true });
+        img.src = this.app.vault.adapter.getResourcePath(chemin);
+        this.corpsEl.classList.add('is-visuel');
+        this.corpsEl.appendChild(img);
     }
 
     private afficherParcours({ etapes = [] }: ReponseOutil): void {

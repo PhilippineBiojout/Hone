@@ -22,6 +22,8 @@ export function decrireEtape({ outil, detail }: Etape, fini: boolean): string {
             return `${t('Lance', 'Lancé')} sa fonction${guillemets(detail)}`;
         case 'delete_function':
             return `${t('Supprime', 'Supprimé')} la fonction${guillemets(detail)}`;
+        case 'image':
+            return t('Génère une image', 'Généré une image');
         case 'run_code':
             return t('Essaie un calcul', 'Essayé un calcul');
         case 'list_commands':
@@ -40,14 +42,16 @@ export function decrireEtape({ outil, detail }: Etape, fini: boolean): string {
 const RECHERCHES = new Set(['search_vault', 'web', 'remember']);
 const FONCTIONS = new Set(['create_function', 'call_function', 'run_code', 'delete_function']);
 
-/** « 2 recherches, 1 lecture, 1 fonction » : le titre du parcours replié. */
+/** « 2 recherches, 1 lecture, 1 image » : le titre du parcours replié. */
 export function resumerEtapes(etapes: readonly Etape[]): string {
     const compter = (n: number, un: string, plusieurs: string): string | null => (n === 0 ? null : `${n} ${n > 1 ? plusieurs : un}`);
     const recherches = etapes.filter((e) => RECHERCHES.has(e.outil)).length;
     const lectures = etapes.filter((e) => e.outil === 'read_document').length;
     const fonctions = etapes.filter((e) => FONCTIONS.has(e.outil)).length;
-    const autres = etapes.length - recherches - lectures - fonctions;
+    const images = etapes.filter((e) => e.outil === 'image').length;
+    const autres = etapes.length - recherches - lectures - fonctions - images;
     return [compter(recherches, 'recherche', 'recherches'), compter(lectures, 'lecture', 'lectures'),
-        compter(fonctions, 'fonction', 'fonctions'), compter(autres, 'autre action', 'autres actions')]
+        compter(fonctions, 'fonction', 'fonctions'), compter(images, 'image', 'images'),
+        compter(autres, 'autre action', 'autres actions')]
         .filter((x): x is string => x !== null).join(', ');
 }

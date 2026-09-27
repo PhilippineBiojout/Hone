@@ -25,6 +25,8 @@ describe('les étapes en mots', () => {
     it('le parcours replié compte recherches, lectures et fonctions', () => {
         expect(resumerEtapes(etapes)).toBe('2 recherches, 1 lecture, 2 fonctions');
         expect(resumerEtapes([etapes[1]])).toBe('1 lecture');
+        expect(resumerEtapes([{ outil: 'image', detail: '' }])).toBe('1 image');
+        expect(decrireEtape({ outil: 'image', detail: '' }, false)).toBe('Génère une image');
     });
 });
 

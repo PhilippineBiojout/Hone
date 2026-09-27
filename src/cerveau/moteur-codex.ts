@@ -1,9 +1,10 @@
 import type { App } from 'fragment';
 import { bornesDe, PROFILS } from '../codex/profils';
 import { ServeurCodex, transportReel, type FabriqueTransport } from '../codex/serveur';
+import { rangerImage } from '../codex/images';
 import { vaultRoot } from '../codex/racine';
 import type { Memoire } from '../memoire/outils-memoire';
-import type { Demande, Etape, Message, Passage, Sortie, Source } from '../pont/protocole';
+import type { Demande, Etape, Message, Passage, Sortie, Sorties, Source } from '../pont/protocole';
 import type { Reglages } from '../reglages/reglages';
 import { BASE } from './agents';
 import type { Langue } from './gradium';
@@ -81,7 +82,7 @@ export class MoteurCodex {
     private readonly acces: AccesVault;
     private readonly serveur: ServeurCodex;
 
-    constructor(app: App, private readonly reglages: Reglages, private readonly memoire?: Memoire, fabrique?: FabriqueTransport) {
+    constructor(private readonly app: App, private readonly reglages: Reglages, private readonly memoire?: Memoire, fabrique?: FabriqueTransport) {
         this.acces = accesVault(app);
         const cwd = vaultRoot(app);
         this.serveur = new ServeurCodex(cwd, fabrique ?? transportReel(reglages.codex.codexPath, cwd));
@@ -109,7 +110,8 @@ export class MoteurCodex {
                     surOutil: (nom, args) => surEtape?.(etape(nom, args)),
                 },
             );
-            const sortie = this.sortieDe(demande, fin.texte, fin.outils);
+            let sortie = this.sortieDe(demande, fin.texte, fin.outils);
+            if (demande.agent === 'visualiser') sortie = await this.avecImage(sortie as Sorties['visualiser'], fin.images);
             void this.memoire?.noter(demande, sortie, fin.outils);
             return sortie;
         } catch (err) {
@@ -138,6 +140,15 @@ export class MoteurCodex {
                     : json as unknown as Sortie;
             }
         }
+    }
+
+    /** Une image générée prend la place du dessin ; « image » annoncée sans image reçue : pas de visuel. */
+    private async avecImage(v: Sorties['visualiser'] & { forme?: string }, images: string[]): Promise<Sorties['visualiser']> {
+        const derniere = images.at(-1);
+        const chemin = derniere ? await rangerImage(this.app, derniere) : null;
+        if (chemin) return { possible: true, svg: null, raison: null, image: chemin };
+        if (v.forme === 'image') return { possible: false, svg: null, raison: 'L\'image n\'a pas pu être générée.', image: null };
+        return { possible: v.possible, svg: v.svg, raison: v.raison, image: null };
     }
 
     /** La clé Gradium de la discussion orale ; vide : pas de voix. */

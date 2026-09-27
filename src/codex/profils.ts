@@ -14,6 +14,8 @@ export interface Profil {
     web: boolean;
     schema?: Json;
     effort: NonNullable<Tour['effort']>;
+    /** Peut générer une image (Visualiser) : sa consigne reçoit alors CONSIGNE_IMAGE. */
+    image?: boolean;
 }
 
 /** Un objet JSON Schema strict : tous les champs requis, aucun autre. */
@@ -30,8 +32,10 @@ export const PROFILS: Record<NomAgent, Profil> = {
     traduire: { vault: false, web: true, effort: 'low', schema: objet({ texte: chaine, langue: chaine }) },
     aider: { vault: true, web: false, effort: 'medium', schema: objet({ texte: chaine, stop: { type: 'boolean' } }) },
     visualiser: {
-        vault: true, web: false, effort: 'low',
-        schema: objet({ possible: { type: 'boolean' }, svg: chaineOuNull, raison: chaineOuNull }),
+        vault: true, web: false, effort: 'low', image: true,
+        schema: objet({
+            forme: { type: 'string', enum: ['dessin', 'image'] }, possible: { type: 'boolean' }, svg: chaineOuNull, raison: chaineOuNull,
+        }),
     },
     bilan: { vault: false, web: false, effort: 'low' },
     titre: { vault: false, web: false, effort: 'low', schema: objet({ sujet: chaine }) },
@@ -57,12 +61,21 @@ export function outilsDuVault(acces: AccesVault): OutilFourni[] {
     ];
 }
 
-/** Ce qui borne le fil d'un agent : consignes (BASE + mission + préférences), outils, web. */
+/** Sur Codex seulement : Visualiser choisit entre un dessin SVG et une image générée. */
+export const CONSIGNE_IMAGE = `
+Au lieu d'un dessin, tu peux générer une image avec ton outil de génération d'images. Choisis la forme selon le passage :
+- forme "dessin" (le SVG ci-dessus) quand le passage a une structure : des étapes, des dates, des liens entre des idées, une comparaison ;
+- forme "image" quand le passage décrit une chose concrète qu'il faut voir : un objet, une forme, un lieu, un phénomène, une expérience.
+Pour une image : génère-la une seule fois, en illustration de manuel sur fond clair uni, avec des légendes courtes dans la langue du passage et rien qui ne soit dans le passage ou le document. Rends alors possible à true et svg à null.
+La règle « aucune image » plus haut ne vaut qu'à l'intérieur du SVG.`;
+
+/** Ce qui borne le fil d'un agent : consignes (BASE + mission + préférences), outils, web, image. */
 export function bornesDe(agent: NomAgent, acces: AccesVault, preferences = ''): Bornes {
     const p = PROFILS[agent];
     return {
-        consignes: `${BASE}\n${MISSIONS[agent]}${preferences}`,
+        consignes: `${BASE}\n${MISSIONS[agent]}${p.image ? CONSIGNE_IMAGE : ''}${preferences}`,
         outils: p.vault ? outilsDuVault(acces) : [],
         web: p.web,
+        image: p.image === true,
     };
 }

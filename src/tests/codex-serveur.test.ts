@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROFILS, bornesDe } from '../codex/profils';
+import { CONSIGNE_IMAGE, PROFILS, bornesDe } from '../codex/profils';
 import { ServeurCodex, type FabriqueTransport } from '../codex/serveur';
 import type { TransportHandlers } from '../codex/transport';
 import type { AccesVault } from '../cerveau/vault';
@@ -71,19 +71,37 @@ describe('ServeurCodex', () => {
             morceau: (t) => morceaux.push(t), surOutil: (nom) => outils.push(nom),
         });
 
-        expect(fin).toEqual({ texte: 'Bonjour', outils: ['read_document'] });
+        expect(fin).toEqual({ texte: 'Bonjour', outils: ['read_document'], images: [] });
         expect(morceaux.join('')).toBe('Bonjour'); // le « commentary » ne s'affiche pas
         expect(outils).toEqual(['read_document']);
 
         const fil = envoyes.find((m) => m.method === 'thread/start')!.params!;
         expect(fil.environments).toEqual([]); // ni shell ni fichiers
         expect(fil.approvalPolicy).toBe('never');
-        expect(fil.config).toEqual({ web_search: 'disabled' });
+        expect(fil.config).toEqual({ web_search: 'disabled', features: { image_generation: false } });
         expect((fil.dynamicTools as { name: string }[]).map((t) => t.name)).toEqual(['search_vault', 'read_document']);
 
         // Le passage entouré voyage mot pour mot dans la demande.
         const tour = envoyes.find((m) => m.method === 'turn/start')!.params!;
         expect(tour.input).toEqual([{ type: 'text', text: passage }]);
+    });
+
+    it('Visualiser peut générer une image : elle revient en base64 et l\'étape se voit', async () => {
+        const { fabrique, envoyes } = fauxCodex(async (emettre) => {
+            emettre({ method: 'item/started', params: { threadId: 'fil-1', item: { type: 'imageGeneration', id: 'i', status: 'in_progress', result: '' } } });
+            emettre({ method: 'item/completed', params: { threadId: 'fil-1', item: { type: 'imageGeneration', id: 'i', status: 'completed', result: 'iVBORw0KGgo' } } });
+            emettre({ method: 'item/started', params: { threadId: 'fil-1', item: { type: 'agentMessage', id: 'f', phase: 'final_answer' } } });
+            emettre({ method: 'item/completed', params: { threadId: 'fil-1', item: { type: 'agentMessage', id: 'f', phase: 'final_answer', text: '{}' } } });
+            emettre({ method: 'turn/completed', params: { threadId: 'fil-1', turn: { status: 'completed', error: null } } });
+        });
+        const etapes: string[] = [];
+        const fin = await new ServeurCodex('/v', fabrique).demander(bornesDe('visualiser', vaultVide), 'x', { surOutil: (nom) => etapes.push(nom) });
+
+        expect(fin.images).toEqual(['iVBORw0KGgo']);
+        expect(fin.outils).toEqual(['image']);
+        expect(etapes).toEqual(['image']);
+        const fil = envoyes.find((m) => m.method === 'thread/start')!.params!;
+        expect(fil.config).toEqual({ web_search: 'disabled', features: { image_generation: true } });
     });
 
     it('un échec du tour remonte', async () => {
@@ -103,6 +121,14 @@ describe('profils', () => {
         expect(bornesDe('visualiser', vaultVide).web).toBe(false);
         expect(bornesDe('aider', vaultVide).web).toBe(false);
         expect(bornesDe('bilan', vaultVide).outils).toEqual([]);
+    });
+
+    it('seul Visualiser peut générer une image, et seule sa consigne le dit', () => {
+        for (const nom of Object.keys(PROFILS) as (keyof typeof PROFILS)[]) {
+            const b = bornesDe(nom, vaultVide);
+            expect(b.image, nom).toBe(nom === 'visualiser');
+            expect(b.consignes.includes(CONSIGNE_IMAGE), nom).toBe(nom === 'visualiser');
+        }
     });
 
     it('chaque sortie structurée est un schéma strict', () => {

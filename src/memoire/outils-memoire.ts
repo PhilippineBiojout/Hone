@@ -31,7 +31,10 @@ function demandeDe(d: Demande): string {
 
 /** Ce que l'agent a répondu, en texte. */
 function reponseDe(s: Sortie): string {
-    if ('svg' in s) return s.possible && s.svg ? s.svg : `pas de visuel : ${s.raison ?? ''}`;
+    if ('svg' in s) {
+        if (s.image) return '[image générée]';
+        return s.possible && s.svg ? s.svg : `pas de visuel : ${s.raison ?? ''}`;
+    }
     if ('sujet' in s) return s.sujet;
     return s.texte;
 }

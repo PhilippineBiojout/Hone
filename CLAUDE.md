@@ -108,6 +108,12 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   par le code : `environments: []` (ni shell ni fichiers), `approvalPolicy: never`, `web_search`
   live/disabled, nos outils du vault en `dynamicTools` (exécutés par nous sur `item/tool/call`),
   `outputSchema` par tour. Seule la réponse `final_answer` s'affiche (pas les « commentary »).
+- **Visualiser choisit seul entre un dessin SVG et une image générée** : seul son profil a
+  `image: true` (génération d'images de Codex, coupée par `features.image_generation: false` pour
+  tous les autres fils) et reçoit `CONSIGNE_IMAGE`. L'image revient en base64 (item
+  `imageGeneration`), `codex/images.ts` l'écrit dans `images/` du dossier du plugin, et la carte
+  ne garde que le chemin (`ReponseOutil.image`), affiché par `getResourcePath`. E2e réel :
+  `e2e/visualiser-image.spec.ts`.
 - `codex/profils.ts` : par agent, vault oui/non, web oui/non, schéma, effort. Les consignes sont
   `BASE` + `MISSIONS` de `agents.ts`, partagées avec le moteur OpenAI, qui reste en place sans être appelé.
 - Le factice ne sert plus qu'avec le réglage `factice: true` (e2e). E2e réel : `e2e/codex-installee.spec.ts`. Lanceur et gestes communs des e2e : `e2e/hone-commun.ts`.
