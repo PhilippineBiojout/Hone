@@ -31,6 +31,8 @@ export interface Tour {
     morceau?: (texte: string) => void;
     /** Chaque outil appelé (les nôtres, ou une recherche web). */
     surOutil?: (nom: string, args: Record<string, unknown>) => void;
+    /** Des images jointes au texte (chemins absolus) : la capture d'une zone écrite à la main. */
+    images?: string[];
 }
 
 export interface FinDeTour {
@@ -132,7 +134,7 @@ export class ServeurCodex {
         try {
             await rpc.request('turn/start', {
                 threadId: id,
-                input: [{ type: 'text', text: texte }],
+                input: [{ type: 'text', text: texte }, ...(tour.images ?? []).map((path) => ({ type: 'localImage', path }))],
                 ...(tour.schema ? { outputSchema: tour.schema } : {}),
                 ...(tour.effort ? { effort: tour.effort } : {}),
             });

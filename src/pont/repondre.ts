@@ -15,6 +15,8 @@ export interface ContexteQuestion {
     chemin: string;
     from: number;
     to: number;
+    /** Une zone sans texte (écrite à la main) : sa capture, dans le dossier du plugin (interactions/capture.ts). */
+    image?: string;
 }
 
 /** Ce qu'une carte d'outil affiche ; `texte` est ce que le chat reprend. */
@@ -46,7 +48,7 @@ async function parAgent<T>(appel: (moteur: MoteurCodex) => Promise<T>, factice: 
     }
 }
 
-const passage = ({ texte, chemin }: ContexteQuestion): Passage => ({ texte, chemin });
+const passage = ({ texte, chemin, image }: ContexteQuestion): Passage => (image ? { texte, chemin, image } : { texte, chemin });
 const attendre = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const extrait = (c: ContexteQuestion, n: number) => (c.texte.length > n ? `${c.texte.slice(0, n)}…` : c.texte);
 

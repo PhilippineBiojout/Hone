@@ -6,7 +6,8 @@ export type NomAgent = 'chat' | 'bilan' | 'titre' | Outil;
 /** D'où vient une réponse : le symbole que la carte affiche. */
 export type Source = 'vault' | 'web' | 'modele';
 
-export interface Passage { texte: string; chemin: string }
+/** `image` : la capture d'une zone sans texte, que le modèle lit à la place du texte. */
+export interface Passage { texte: string; chemin: string; image?: string }
 export interface Message { auteur: 'moi' | 'agent'; texte: string }
 /** Un outil que l'agent vient d'appeler (son nom, et la requête, le chemin ou la fonction visée).
  *  Montré pendant l'attente puis replié au pied de la carte : c'est ce qui rend la boucle visible. */

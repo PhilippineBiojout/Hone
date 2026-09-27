@@ -25,8 +25,11 @@ export class AgentEnPause extends ErreurAgent {}
 /** `avant` : ce qui change d'une demande à l'autre sans être la demande (le catalogue des
  *  fonctions de l'agent). Il vient APRÈS les consignes et les outils, fixes, pour que le
  *  préfixe mis en cache par OpenAI reste le même. */
-export const citer = ({ passage: { texte, chemin } }: Demande, avant = '') =>
-    `${avant ? `${avant}\n\n` : ''}Document ouvert : ${chemin || '(sans fichier)'}\nPassage sélectionné :\n"""\n${texte}\n"""`;
+export const citer = ({ passage: { texte, chemin, image } }: Demande, avant = '') =>
+    `${avant ? `${avant}\n\n` : ''}Document ouvert : ${chemin || '(sans fichier)'}\n${image
+        ? 'Passage sélectionné : l\'image jointe, une zone de la page que l\'utilisateur a entourée ou surlignée. '
+            + 'C\'est souvent de l\'écriture à la main : lis-la, et réponds sur ce qu\'elle dit.'
+        : `Passage sélectionné :\n"""\n${texte}\n"""`}`;
 
 async function entree(acces: AccesVault, demande: Demande, avant = ''): Promise<string | AgentInputItem[]> {
     switch (demande.agent) {

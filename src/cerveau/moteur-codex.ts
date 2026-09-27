@@ -81,10 +81,12 @@ function messagePourUtilisateur(err: unknown): string {
 export class MoteurCodex {
     private readonly acces: AccesVault;
     private readonly serveur: ServeurCodex;
+    /** La racine du vault : les chemins du vault s'y ajoutent pour Codex. */
+    private readonly cwd: string;
 
     constructor(private readonly app: App, private readonly reglages: Reglages, private readonly memoire?: Memoire, fabrique?: FabriqueTransport) {
         this.acces = accesVault(app);
-        const cwd = vaultRoot(app);
+        const cwd = this.cwd = vaultRoot(app);
         this.serveur = new ServeurCodex(cwd, fabrique ?? transportReel(reglages.codex.codexPath, cwd));
     }
 
@@ -108,6 +110,7 @@ export class MoteurCodex {
                     effort: profil.effort,
                     morceau: demande.agent === 'chat' ? morceau : undefined,
                     surOutil: (nom, args) => surEtape?.(etape(nom, args)),
+                    images: this.images(demande.passage),
                 },
             );
             let sortie = this.sortieDe(demande, fin.texte, fin.outils);
@@ -151,6 +154,11 @@ export class MoteurCodex {
         return { possible: v.possible, svg: v.svg, raison: v.raison, image: null };
     }
 
+    /** La capture d'une zone sans texte, en chemin absolu pour Codex. */
+    private images(passage: Passage): string[] {
+        return passage.image ? [`${this.cwd}/${passage.image}`] : [];
+    }
+
     /** La clé Gradium de la discussion orale ; vide : pas de voix. */
     cleGradium(): string {
         return this.reglages.gradiumCle;
@@ -167,7 +175,7 @@ export class MoteurCodex {
         try {
             const fin = await this.serveur.demander(
                 { consignes: `${BASE}\n${A_L_ORAL}${this.memoire?.preferences.bloc() ?? ''}`, outils: [], web: false },
-                texte, { effort: 'low', schema: SCHEMA_ORAL },
+                texte, { effort: 'low', schema: SCHEMA_ORAL, images: this.images(passage) },
             );
             const json = JSON.parse(fin.texte) as { texte?: unknown; langue?: unknown };
             return { texte: String(json.texte ?? ''), langue: json.langue === 'en' ? 'en' : 'fr' };

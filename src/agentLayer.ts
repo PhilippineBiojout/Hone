@@ -9,6 +9,7 @@ import { sujetDe, type ContexteQuestion } from './pont/repondre';
 import { CarnetTraces, texteEntre, type Trace } from './interactions/traces';
 import { TRAIT_PERDU, type RegistreTraces } from './interactions/registreTraces';
 import { VoixAgent } from './composants/VoixAgent';
+import { rangerImage } from './codex/images';
 
 // À importer de 'fragment' quand le cœur l'exportera (core/editor/Editor.ts).
 const hasText = (s: DocumentSurface): s is TextSurface => typeof (s as Partial<TextSurface>).getLine === 'function';
@@ -243,7 +244,7 @@ export function createAgentLayer(ctx: LayerContext, registre: RegistreTraces): (
         barre.montrer();
         editor.requestUpdate();
         majOccupe();
-    });
+    }, (png) => rangerImage(ctx.app, png));
 
     // Les widgets suivent le texte d'eux-mêmes ; restent le passage cité et les colonnes de la marge.
     c.register(editor.onChange((ch) => {

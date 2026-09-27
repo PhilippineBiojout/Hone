@@ -3,7 +3,8 @@ import type { Annotation, Stroke } from './annotation';
 import type { Repere } from '../positionnement/repere';
 import type { ContexteQuestion } from '../pont/repondre';
 import { texteEntre } from './traces';
-import { plageDuTrait, type Mesure } from './zoneDuTrait';
+import { formeDuTrait, plageDuTrait, type Mesure, type Pt } from './zoneDuTrait';
+import { captureDuTrait } from './capture';
 
 /** Le préfixe d'id du faux trait posé par une sélection à la souris : il n'y a pas d'encre à effacer. */
 export const SELECTION = 'selection-';
@@ -21,6 +22,8 @@ export function brancherDeclencheurs(
     /** Chat, carte ou pilule ouverts : rien ne se déclenche. */
     occupe: () => boolean,
     surPassage: (zone: ContexteQuestion, trait: Stroke) => void,
+    /** Range la capture d'une zone sans texte ; rend son chemin dans le vault. */
+    rangerCapture: (png: string) => Promise<string | null>,
 ): void {
     const mesure: Mesure = {
         posAt: (x, y) => {
@@ -58,7 +61,20 @@ export function brancherDeclencheurs(
         } finally {
             for (const { el, avant } of surfaces) el.style.pointerEvents = avant;
         }
-        if (plage) surPassage({ texte: texteEntre(editor, plage.from, plage.to), chemin: path, ...plage }, stroke);
+        if (plage) {
+            surPassage({ texte: texteEntre(editor, plage.from, plage.to), chemin: path, ...plage }, stroke);
+            return;
+        }
+        // Rien à lire sous le trait (carnet écrit à la main, PDF scanné) : on envoie ce qu'on voit.
+        if (!formeDuTrait(points, stroke.tool)) return;
+        const ecran = points.map((p) => repere.versClient(p.x, p.y)).filter((p): p is Pt => p !== null);
+        const png = captureDuTrait(repere.pane, ecran, stroke);
+        if (!png) return;
+        void rangerCapture(png).then((image) => {
+            // Le temps d'écrire le fichier, on a pu changer de document ou ouvrir autre chose.
+            if (!image || path !== chemin() || occupe()) return;
+            surPassage({ texte: '', chemin: path, from: stroke.pos, to: stroke.pos, image }, stroke);
+        });
     });
 
     // La sélection devient un faux trait qui épouse ses rectangles, comme un surligneur.

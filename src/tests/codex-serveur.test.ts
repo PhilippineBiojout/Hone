@@ -86,6 +86,16 @@ describe('ServeurCodex', () => {
         expect(tour.input).toEqual([{ type: 'text', text: passage }]);
     });
 
+    it('une zone écrite à la main voyage en image jointe, après le texte', async () => {
+        const { fabrique, envoyes } = fauxCodex(async (emettre) => {
+            emettre({ method: 'turn/completed', params: { threadId: 'fil-1', turn: { status: 'completed', error: null } } });
+        });
+        await new ServeurCodex('/v', fabrique).demander(bornesDe('definir', vaultVide), 'x', { images: ['/v/capture.png'] });
+
+        const tour = envoyes.find((m) => m.method === 'turn/start')!.params!;
+        expect(tour.input).toEqual([{ type: 'text', text: 'x' }, { type: 'localImage', path: '/v/capture.png' }]);
+    });
+
     it('Visualiser peut générer une image : elle revient en base64 et l\'étape se voit', async () => {
         const { fabrique, envoyes } = fauxCodex(async (emettre) => {
             emettre({ method: 'item/started', params: { threadId: 'fil-1', item: { type: 'imageGeneration', id: 'i', status: 'in_progress', result: '' } } });
