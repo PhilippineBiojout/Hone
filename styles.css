@@ -448,6 +448,18 @@
     display: block;
 }
 
+/* « Scanner dans : … » sous le QR : petit, discret, coupé avec « … » s'il est trop long. */
+.scan-destination {
+    max-width: 200px; /* la largeur du QR (showQrCode) */
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Sortie : plus courte que l'entrée, sans rebond (CLOSE_MS dans scan.ts). */
 .scan-popover.is-closing .modal {
     animation: scan-pop-out 140ms ease-in both;

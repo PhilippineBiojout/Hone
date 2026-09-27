@@ -21,16 +21,19 @@ export class Relais {
     stopped = false;
     onPhone: (connected: boolean) => void;
     onPhoto: (photo: Blob, id: string, meta: PhotoMeta) => void;
+    onNewDocument: () => void;
     incoming: { id: string; mime: string; size: number; meta: PhotoMeta; chunks: ArrayBuffer[] } | null = null;
 
     constructor(
         sessionId: string,
         onPhone: (connected: boolean) => void,
         onPhoto: (photo: Blob, id: string, meta: PhotoMeta) => void,
+        onNewDocument: () => void, 
     ) {
         this.sessionId = sessionId;
         this.onPhone = onPhone;
         this.onPhoto = onPhoto;
+        this.onNewDocument = onNewDocument;
     }
 
     connect(): void {
@@ -54,6 +57,9 @@ export class Relais {
                 const meta = this.incoming.meta;
                 this.incoming = null;
                 this.onPhoto(photo, message.id, meta);
+            }
+            else if (message.type === 'doc-new'){
+                this.onNewDocument();
             }
         };
 
