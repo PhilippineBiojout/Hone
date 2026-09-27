@@ -1,4 +1,3 @@
-import { cpSync } from "fs";
 import { PDFDocument } from "pdf-lib";
 
 

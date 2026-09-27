@@ -1,28 +1,14 @@
-import { Modal, Notice, type App, type Plugin } from 'fragment';
+import { FileView, type TFile, Modal, Notice, type App, type Plugin } from 'fragment';
 import QRCodeStyling from 'qr-code-styling';
 import { imageName, pageLine, putPage } from './pages';
 import { Relais, type PhotoMeta } from './relais';
-
-// Scanner des feuilles avec le téléphone : une icône de ruban montre un QR code,
-// un relais WebSocket relie le téléphone au bureau, et les photos reçues se rangent
-// dans le vault (SCAN_FOLDER). Les pages d'un même document vont dans UNE seule note, les unes
-// à la suite des autres (une image par page) ; mettre à jour une page remplace son
-// image. Pas de transcription ici : le texte, c'est Codex qui s'en charge dans Fragment.
-// Le site du téléphone et le relais vivent dans le dépôt Hone-web_scan
-// (GitHub Pages + worker Cloudflare) ; ici, seul le côté bureau.
-// Retrait : ce fichier, `relais.ts`, `pages.ts`, l'appel dans main.ts, la section de styles.css.
+import { buildPdf } from './pdf';
 
 /** Le site que le téléphone ouvre : les pages GitHub du dossier docs/ de Hone-web_scan. */
 const SITE_URL = 'https://philippinebiojout.github.io/Hone-web_scan/';
-
-/**
- * Où vont les documents scannés. Chaque document a SON dossier, qui contient sa note et
- * les images de ses pages : « Scan 27-09-2026 02h36m01/Scan 27-09-2026 02h36m01.md ».
- * SCAN_FOLDER dit où poser ces dossiers : '' = la racine du vault (choix actuel),
- * 'Scans' = dans un dossier « Scans/ » (créé au besoin). Note et images restent
- * ensemble : la note affiche ses images par leur seul nom (`![[…jpg]]`).
- */
 const SCAN_FOLDER = '';
+
+const SCAN_FORMAT: 'pdf' | 'md' = 'pdf';
 
 /** Le chemin d'un fichier ou dossier dans SCAN_FOLDER. */
 function inScanFolder(name: string): string {
@@ -99,6 +85,7 @@ interface Note {
     base: string;
     folder: string;
     path: string;
+    pages: Map<number, string>
 }
 
 /**
@@ -122,12 +109,9 @@ async function savePhoto(
     const page = meta.page ?? 1;
     let note = notes.get(doc);
     if (note === undefined) {
-        // « Scan 27-09-2026 02h36m01 » : la date et l'heure de la première page, à l'heure
-        // locale (toISOString donnait l'heure UTC, deux heures de moins en été en France).
-        // Les secondes évitent que deux documents commencés la même minute se marchent dessus.
         const base = `Scan ${jour(now)} ${heure(now)}`;
         const folder = inScanFolder(base);
-        note = { base, folder, path: `${folder}/${base}.md` };
+        note = { base, folder, path: `${folder}/${base}.${SCAN_FORMAT}`, pages: new Map() };
         notes.set(doc, note);
     }
 
@@ -140,23 +124,88 @@ async function savePhoto(
     // l'ancienne reste dans le dossier, seule la note ne l'affiche plus. L'heure suffit
     // à la rendre unique : la date est déjà dans le nom du document.
     const image = imageName(note.base, page, heure(now));
+    const imagePath = `${note.folder}/${image}`;
     await app.vault.createBinary(`${note.folder}/${image}`, await photo.arrayBuffer());
+
+    const replaced = note.pages.get(page);
+    note.pages.set(page, imagePath);
     // Le téléphone affiche « Envoyé ! » dès que l'image est dans le vault
     relais.send({ type: 'photo-received', id });
 
-    const line = pageLine(image);
-    const existing = app.vault.getFileByPath(note.path);
-    if (existing === null) {
-        // Premier envoi du document (ou note supprimée entre-temps) : on la crée et on l'ouvre
-        // dans un NOUVEL onglet. getLeaf() sans argument réutilise l'onglet actif : la note du
-        // document précédent (ou celle qu'on lisait) disparaissait de l'écran, remplacée.
-        const created = await app.vault.create(note.path, `${line}\n`);
-        await app.workspace.getLeaf('tab').openFile(created);
-    } else {
-        // `process` lit et réécrit la note d'un seul coup : ce qu'on y a tapé entre-temps est gardé
-        await app.vault.process(existing, (text) => putPage(text, note.base, page, line));
+
+    if (SCAN_FORMAT ==='pdf'){
+        await writePdf(app, note);
+
     }
+    else{
+        const line = pageLine(image);
+        const existing = app.vault.getFileByPath(note.path);
+        if (existing === null) {
+            //premier envoi du doc.
+            const created = await app.vault.create(note.path, `${line}\n`);
+            await app.workspace.getLeaf('tab').openFile(created);
+        } else {
+            // `process` lit et réécrit la note d'un seul coup : ce qu'on y a tapé entre-temps est gardé
+            await app.vault.process(existing, (text) => putPage(text, note.base, page, line));
+        }
+    }
+
+    if (replaced !== undefined){
+        const old = app.vault.getFileByPath(replaced);
+        if (old !==null){
+            try{
+                await app.vault.trash(old, true);
+            }
+            catch (error){
+                console.warn('[scan] ancienne image non supprimée', replaced, error);
+            }
+        }
+    }
+
     new Notice(meta.replace ? `Page ${page} mise à jour` : `Page ${page} ajoutée`);
+}
+
+async function writePdf(app: App, note: Note): Promise<void> {
+    const paths = [...note.pages.entries()].sort((a,b) => a[0] - b[0]).map(([, path]) => path);
+    
+    const images: ArrayBuffer[] = [];
+
+    for (const path of paths){
+        const file = app.vault.getFileByPath(path);
+        if (file === null) continue;
+        images.push(await app.vault.readBinary(file));
+   }
+   const bytes = await buildPdf(images);
+
+   const existing = app.vault.getFileByPath(note.path)
+
+   if (existing === null){
+        const created = await app.vault.createBinary(note.path, bytes);
+        await app.workspace.getLeaf('tab').openFile(created);
+   }
+   else{
+        await app.vault.modifyBinary(existing, bytes);
+        await reloadPdf(app, existing);
+   }
+}
+
+
+/**
+ * Recharge les onglets qui affichent ce PDF (la vue PDF du cœur n'écoute pas `modify`),
+ * en gardant le zoom et l'endroit où on lisait. Repris de remarkable/synchro.ts::recharger.
+ */
+async function reloadPdf(app: App, file: TFile): Promise<void> {
+    for (const leaf of app.workspace.getLeavesOfFile(file)){
+        const view = leaf.view;
+        if (!(view instanceof FileView) || view.getViewType() !== 'pdf') continue;
+        const state = view.getEphemeralState();                        // zoom, page…
+        const scroller = view.contentEl.querySelector('.pdf-scroll');
+        const top = scroller?.scrollTop ?? 0;                          // où on en était
+        await view.onUnloadFile(file);
+        await view.onLoadFile(file);                                   // relit le fichier modifié
+        view.setEphemeralState(state);
+        if (scroller) scroller.scrollTop = top;
+    }
 }
 
 /**
