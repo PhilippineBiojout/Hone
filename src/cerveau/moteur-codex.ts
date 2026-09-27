@@ -1,6 +1,6 @@
 import type { App } from 'fragment';
 import type { Atelier } from '../atelier/outils-atelier';
-import { bornesDe, PROFILS, type Extras } from '../codex/profils';
+import { bornesDe, outilsDuVault, PROFILS, type Extras } from '../codex/profils';
 import { ServeurCodex, transportReel, type FabriqueTransport } from '../codex/serveur';
 import { rangerImage } from '../codex/images';
 import { vaultRoot } from '../codex/racine';
@@ -60,6 +60,8 @@ function source(outils: string[]): Source {
 
 /** La discussion orale : ce qui change de l'écrit. */
 const A_L_ORAL = `Tu parles à voix haute avec l'utilisateur, à propos du passage cité. Réponds en deux ou trois phrases.
+Le passage n'est qu'un point de départ : si l'utilisateur parle de la page, du document ou d'un autre cours, lis-le d'abord avec read_document (ou search_vault), puis réponds.
+Ne dis jamais que tu ne peux pas lire plus que le passage : tu peux.
 Réponds dans la langue où l'utilisateur vient de parler : en anglais s'il parle anglais, en français sinon. Indique cette langue dans \`langue\`.
 Pas de Markdown, pas de liste, pas de formule : tout ce que tu écris est dit.`;
 
@@ -187,8 +189,9 @@ export class MoteurCodex {
         return this.reglages.gradiumCle;
     }
 
-    /** La discussion orale : la réponse à une phrase dite (appel.ts), sans outils ni web.
-     *  À l'oral, Hone parle et répond ; il ne va rien chercher, la réponse vient plus vite. */
+    /** La discussion orale : la réponse à une phrase dite (appel.ts). Sans web, mais avec les
+     *  deux outils de lecture du vault : « résume la page dont le titre est entouré » demande
+     *  de lire le document, et une lecture ne coûte que quelques secondes de plus. */
     async direOral(passage: Passage, historique: Message[], phrase: string): Promise<{ texte: string; langue: Langue }> {
         if (!this.pret()) throw new AgentEnPause('Hone en factice.');
         const fil = historique.slice(-12)
@@ -197,7 +200,7 @@ export class MoteurCodex {
             + `${fil ? `\n\nCe qui s'est déjà dit à voix haute :\n${fil}` : ''}\n\nL'utilisateur vient de dire : ${phrase}`;
         try {
             const fin = await this.serveur.demander(
-                { consignes: `${BASE}\n${A_L_ORAL}${this.memoire?.preferences.bloc() ?? ''}`, outils: [], web: false },
+                { consignes: `${BASE}\n${A_L_ORAL}${this.memoire?.preferences.bloc() ?? ''}`, outils: outilsDuVault(this.acces), web: false },
                 texte, { effort: 'low', schema: SCHEMA_ORAL, images: this.images(passage) },
             );
             const json = JSON.parse(fin.texte) as { texte?: unknown; langue?: unknown };

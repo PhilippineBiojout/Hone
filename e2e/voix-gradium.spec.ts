@@ -91,7 +91,8 @@ for (const cas of CAS) test(`en ${cas.langue}, le micro part à Hone : Gradium e
     expect(reponse).toContain('Hone');
     expect(reponse).not.toMatch(/Codex|ChatGPT/);
     expect(reponse).toMatch(cas.mot);
-    expect(await page.evaluate(() => (window as unknown as { __voix: string[] }).__voix)).toEqual([cas.voix]);
+    // La réplique s'affiche avant que la voix ne soit demandée (jeton Gradium, puis connexion) : on l'attend.
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __voix: string[] }).__voix), { timeout: 15_000 }).toEqual([cas.voix]);
     // C'est la voix de Gradium qui parle, pas celle du système.
     expect(await page.evaluate(() => (window as unknown as { __dits: string[] }).__dits)).toEqual([]);
     await page.screenshot({ path: `test-results/hone-voix-gradium-${cas.langue}.png` });
