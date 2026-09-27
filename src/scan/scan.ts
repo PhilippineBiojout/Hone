@@ -5,7 +5,7 @@ import { Relais, type PhotoMeta } from './relais';
 
 // Scanner des feuilles avec le téléphone : une icône de ruban montre un QR code,
 // un relais WebSocket relie le téléphone au bureau, et les photos reçues se rangent
-// dans « Scans/ ». Les pages d'un même document vont dans UNE seule note, les unes
+// dans le vault (SCAN_FOLDER). Les pages d'un même document vont dans UNE seule note, les unes
 // à la suite des autres (une image par page) ; mettre à jour une page remplace son
 // image. Pas de transcription ici : le texte, c'est Codex qui s'en charge dans Fragment.
 // Le site du téléphone et le relais vivent dans le dépôt Hone-web_scan
@@ -14,6 +14,27 @@ import { Relais, type PhotoMeta } from './relais';
 
 /** Le site que le téléphone ouvre : les pages GitHub du dossier docs/ de Hone-web_scan. */
 const SITE_URL = 'https://philippinebiojout.github.io/Hone-web_scan/';
+
+/**
+ * Où vont les documents scannés. Chaque document a SON dossier, qui contient sa note et
+ * les images de ses pages : « Scan 27-09-2026 02h36m01/Scan 27-09-2026 02h36m01.md ».
+ * SCAN_FOLDER dit où poser ces dossiers : '' = la racine du vault (choix actuel),
+ * 'Scans' = dans un dossier « Scans/ » (créé au besoin). Note et images restent
+ * ensemble : la note affiche ses images par leur seul nom (`![[…jpg]]`).
+ */
+const SCAN_FOLDER = '';
+
+/** Le chemin d'un fichier ou dossier dans SCAN_FOLDER. */
+function inScanFolder(name: string): string {
+    return SCAN_FOLDER === '' ? name : `${SCAN_FOLDER}/${name}`;
+}
+
+/** Crée le dossier `path` s'il n'existe pas encore (createFolder échoue sur un dossier existant). */
+async function ensureFolder(app: App, path: string): Promise<void> {
+    if (app.vault.getFolderByPath(path) === null) {
+        await app.vault.createFolder(path);
+    }
+}
 
 /** Durée de l'animation de fermeture — la même que dans styles.css. */
 const CLOSE_MS = 140;
@@ -70,16 +91,21 @@ function deux(n: number): string {
     return String(n).padStart(2, '0');
 }
 
-/** La note d'un document : `Scans/<base>.md`, et `<base>` préfixe les images de ses pages. */
+/**
+ * Un document : son dossier `folder`, sa note `path` (`<folder>/<base>.md`), et `base`
+ * qui préfixe les images de ses pages (rangées dans le même dossier).
+ */
 interface Note {
     base: string;
+    folder: string;
     path: string;
 }
 
 /**
- * Range une photo reçue : l'image dans « Scans/ » (créé au besoin), puis sa ligne dans
- * la note de son document. Première page d'un document → on crée la note et on l'ouvre ;
- * page suivante → elle s'ajoute à la fin ; page mise à jour → sa ligne est remplacée.
+ * Range une photo reçue : l'image dans le dossier de son document (créé au besoin), puis
+ * sa ligne dans la note du document. Première page d'un document → on crée le dossier et
+ * la note, et on l'ouvre ; page suivante → elle s'ajoute à la fin ; page mise à jour →
+ * sa ligne est remplacée.
  */
 async function savePhoto(
     app: App,
@@ -89,9 +115,6 @@ async function savePhoto(
     id: string,
     meta: PhotoMeta,
 ): Promise<void> {
-    if (app.vault.getFolderByPath('Scans') === null) {
-        await app.vault.createFolder('Scans');
-    }
     const now = new Date();
 
     // Un ancien site n'envoie ni `doc` ni `page` : chaque photo est alors son propre document
@@ -103,15 +126,21 @@ async function savePhoto(
         // locale (toISOString donnait l'heure UTC, deux heures de moins en été en France).
         // Les secondes évitent que deux documents commencés la même minute se marchent dessus.
         const base = `Scan ${jour(now)} ${heure(now)}`;
-        note = { base, path: `Scans/${base}.md` };
+        const folder = inScanFolder(base);
+        note = { base, folder, path: `${folder}/${base}.md` };
         notes.set(doc, note);
     }
 
+    // Le dossier du document (et « Scans/ » au-dessus si SCAN_FOLDER le demande). Vérifié
+    // à chaque photo, pas seulement à la première : il a pu être supprimé entre-temps.
+    if (SCAN_FOLDER !== '') await ensureFolder(app, SCAN_FOLDER);
+    await ensureFolder(app, note.folder);
+
     // Toujours une nouvelle image, même pour une mise à jour (createBinary refuse d'écraser) :
-    // l'ancienne reste dans « Scans/ », seule la note ne l'affiche plus. L'heure suffit
+    // l'ancienne reste dans le dossier, seule la note ne l'affiche plus. L'heure suffit
     // à la rendre unique : la date est déjà dans le nom du document.
     const image = imageName(note.base, page, heure(now));
-    await app.vault.createBinary(`Scans/${image}`, await photo.arrayBuffer());
+    await app.vault.createBinary(`${note.folder}/${image}`, await photo.arrayBuffer());
     // Le téléphone affiche « Envoyé ! » dès que l'image est dans le vault
     relais.send({ type: 'photo-received', id });
 
