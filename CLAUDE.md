@@ -5,7 +5,7 @@ sélection fait apparaître une barre qui ouvre un chat et des outils d'IA sur l
 
 ## Stack & commandes
 - TypeScript, bundlé par esbuild (`esbuild.config.mjs`), types via `@usefragment/core`.
-- Deps runtime (plus de SDK OpenAI depuis le 2026-09-27, `main.js` ~3 Mo) : `pdfjs-dist` (build legacy, Codex lit les PDF), `zod` (arguments de l'atelier), `pdf-lib`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable), `voice-glow` + `react`/`react-dom` (la lueur de la discussion orale, îlot React unique dans `ui/lueur.ts`).
+- Deps runtime (plus de SDK OpenAI depuis le 2026-09-27, `main.js` ~3,4 Mo) : `pdfjs-dist` (build legacy, Codex lit les PDF), `marked` + `katex` (rendu du texte des agents), `zod` (arguments de l'atelier), `pdf-lib`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable), `voice-glow` + `react`/`react-dom` (la lueur de la discussion orale, îlot React unique dans `ui/lueur.ts`).
 - Scripts : `npm run build` (tsc --noEmit + esbuild prod), `npm test` (vitest run src), `npm run dev`.
 - **node_modules pas versionné** : faire `npm install` avant un build à froid ; l'API Fragment se lit via l'usage, pas via le core.
 
@@ -66,6 +66,11 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `ui/ui.ts` (atomes : OUTILS, boutonIcone, arc…), `ui/animations.ts` (éclore/résorber…), `ui/onde.ts` (le spectre en 5 bandes et le niveau d'une voix), `ui/lueur.ts` (le `VoiceBeam` de voice-glow, seul endroit où vit React).
 - `decor/verre.ts` : lentille de verre décorative (feDisplacementMap) sur toute `.toolbar` — indépendant de l'agent, Chromium seulement.
 - `ui/nettoyerSvg.ts` : assainit le SVG de « visualiser » avant affichage.
+- `ui/rendu.ts` : **tout texte d'un agent passe par `rendreMarkdown`**, jamais `textContent` (chat, bilan,
+  cartes, panneau Codex) : Markdown (`marked`), formules en MathML (`katex`, `$…$`, `$$…$$`, `\(…\)`,
+  `\[…\]`), un SVG en bloc ou à nu dessiné via `nettoyerSvg`. HTML du modèle échappé, liens web
+  ouverts dans le navigateur, `[[note]]` ouvre la note. En direct : `rendreEnDirect` (une fois par
+  image, `annuler()`). Styles `.hone-rendu` en fin de `styles.css`. E2e réel : `e2e/rendu-codex.spec.ts`.
 - `pont/repondre.ts` : la façade que les composants appellent (chat/outils/oral) + repli factice ; `pont/protocole.ts` : les types de domaine.
 - `reglages/reglages.ts` : réglages (`loadData`/`saveData`), la clé Gradium et son Modal de saisie.
 - `scan/scan.ts` + `scan/relais.ts` : « scanner une feuille » (fusionné depuis l'ex-plugin `scan`, 2026-09-26).

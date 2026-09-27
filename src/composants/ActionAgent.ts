@@ -7,6 +7,7 @@ import type { Message } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import { agir, resumerOral, type ContexteQuestion, type Outil, type ReponseOutil } from '../pont/repondre';
 import { decrireEtape, resumerEtapes } from '../ui/etapes';
+import { rendreMarkdown } from '../ui/rendu';
 import { titreDeCarte } from '../ui/texteLisible';
 import { arc, boutonIcone, OUTILS, PiedSupprimer, proteger } from '../ui/ui';
 
@@ -211,6 +212,7 @@ export class ActionAgent extends Component {
     private afficher(reponse: ReponseOutil): void {
         this.afficherParcours(reponse);
         this.corpsEl.textContent = '';
+        this.corpsEl.classList.remove('hone-rendu');
         this.sourceEl.hidden = reponse.source !== 'web';
         this.corpsEl.classList.toggle('is-stop', reponse.stop === true);
         if (reponse.image !== undefined) {
@@ -219,7 +221,9 @@ export class ActionAgent extends Component {
         }
         if (reponse.svg === undefined) {
             this.corpsEl.classList.remove('is-visuel');
-            this.corpsEl.textContent = reponse.texte;
+            rendreMarkdown(this.corpsEl, reponse.texte, {
+                ouvrirNote: (chemin) => void this.app.workspace.openLinkText(chemin, '', false),
+            });
             return;
         }
         const svg = nettoyerSvg(reponse.svg);

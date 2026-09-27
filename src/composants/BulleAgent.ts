@@ -4,6 +4,7 @@ import { Fenetre, type Cadre } from '../positionnement/fenetre';
 import type { Message, Outil } from '../pont/protocole';
 import type { Repere } from '../positionnement/repere';
 import { repondre, type ContexteQuestion } from '../pont/repondre';
+import { rendreEnDirect, rendreMarkdown, type OptionsRendu } from '../ui/rendu';
 import { sansMarkdown, titreDuChat } from '../ui/texteLisible';
 import { boutonIcone, creer, PiedSupprimer, proteger } from '../ui/ui';
 
@@ -40,6 +41,8 @@ export class BulleAgent extends Component {
     private origine: Outil | null = null;
     /** Le bilan d'une discussion orale relue par écrit, en tête du fil. */
     private bilan: string | null = null;
+    /** Le rendu des réponses : une note citée en [[lien]] s'ouvre dans l'app. */
+    private readonly rendu: OptionsRendu;
 
     constructor(
         app: App,
@@ -50,6 +53,7 @@ export class BulleAgent extends Component {
         onMicro: () => void,
     ) {
         super();
+        this.rendu = { ouvrirNote: (chemin) => void app.workspace.openLinkText(chemin, '', false) };
         // Non modale : on peut continuer d'éditer la note.
         this.dom.setAttribute('role', 'dialog');
         this.dom.setAttribute('aria-label', "Question à Hone");
@@ -117,7 +121,7 @@ export class BulleAgent extends Component {
         if (this.bilan !== null) {
             const el = creer(this.filEl, 'div', 'agent-bilan');
             creer(el, 'div', 'agent-bilan-titre').textContent = 'Bilan';
-            creer(el, 'div').textContent = this.bilan;
+            rendreMarkdown(creer(el, 'div'), this.bilan, this.rendu);
         }
         this.microEl.hidden = this.bilan === null;
         for (const m of messages) this.ajouterMessage(m.auteur, m.texte);
@@ -232,17 +236,22 @@ export class BulleAgent extends Component {
         this.envoyerEl.disabled = true;
         const reponseEl = this.ajouterMessage('agent', '…');
         reponseEl.classList.add('is-pending');
+        let afficher: ReturnType<typeof rendreEnDirect> | null = null;
         try {
             // Le chat s'écrit en direct : les points de l'attente s'effacent au premier morceau.
+            // Mis en forme au plus une fois par image, pour ne pas clignoter ; le dernier texte gagne.
             let recu = '';
-            const reponse = await repondre(question, contexte, historique, (morceau) => {
-                if (!estCourante()) return;
-                reponseEl.textContent = recu += morceau;
-                this.filEl.scrollTop = this.filEl.scrollHeight;
+            afficher = rendreEnDirect(reponseEl, this.rendu, () => {
+                if (estCourante()) this.filEl.scrollTop = this.filEl.scrollHeight;
             });
-            if (estCourante()) reponseEl.textContent = reponse;
+            const reponse = await repondre(question, contexte, historique, (morceau) => {
+                if (estCourante()) afficher?.(recu += morceau);
+            });
+            if (estCourante()) afficher?.(reponse);
         } catch (err) {
+            afficher?.annuler();
             if (estCourante()) {
+                reponseEl.classList.remove('hone-rendu');
                 reponseEl.textContent = `L'agent n'a pas pu répondre : ${err instanceof Error ? err.message : String(err)}`;
                 reponseEl.classList.add('is-error');
             }
@@ -257,7 +266,9 @@ export class BulleAgent extends Component {
 
     private ajouterMessage(auteur: 'moi' | 'agent', texte: string): HTMLElement {
         const el = creer(this.filEl, 'div', 'agent-message', `mod-${auteur}`);
-        el.textContent = texte;
+        // Ce que l'utilisateur a tapé reste tel quel ; ce que Hone écrit est mis en forme.
+        if (auteur === 'agent' && texte !== '…') rendreMarkdown(el, texte, this.rendu);
+        else el.textContent = texte;
         this.filEl.scrollTop = this.filEl.scrollHeight;
         return el;
     }

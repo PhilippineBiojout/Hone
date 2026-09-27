@@ -1,3 +1,4 @@
+import { sansMarkdown } from '../ui/texteLisible';
 import { Component, type App, type WidgetHandle } from 'fragment';
 import { ressort } from '../ui/animations';
 import { Lueur, type LireNiveau } from '../ui/lueur';
@@ -158,7 +159,7 @@ export class VoixAgent extends Component {
                     if (!estCourant()) return;
                     this.historique.push(message);
                     // Ce que dit Hone s'écrit sur la ligne d'état, pour les lecteurs d'écran.
-                    if (message.auteur === 'agent') this.dernierDit = this.messageEl.textContent = message.texte;
+                    if (message.auteur === 'agent') this.dernierDit = this.messageEl.textContent = sansMarkdown(message.texte);
                 },
                 erreur: (message) => { if (estCourant()) this.montrerErreur(message); },
             });

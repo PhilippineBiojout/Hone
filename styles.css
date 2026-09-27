@@ -854,3 +854,34 @@
 .pdf-page {
 	position: relative;
 }
+
+/* ═══ Le texte des agents mis en forme (ui/rendu.ts) : Markdown, formules, dessins ═══ */
+.hone-rendu { white-space: normal; }
+.hone-rendu > :first-child { margin-top: 0; }
+.hone-rendu > :last-child { margin-bottom: 0; }
+.hone-rendu p, .hone-rendu ul, .hone-rendu ol, .hone-rendu pre, .hone-rendu table, .hone-rendu blockquote { margin: 0 0 0.6em; }
+.hone-rendu ul, .hone-rendu ol { padding-left: 1.3em; }
+.hone-rendu li { margin: 0.15em 0; }
+.hone-rendu li > p { margin: 0; }
+.hone-rendu h1, .hone-rendu h2, .hone-rendu h3, .hone-rendu h4, .hone-rendu h5, .hone-rendu h6 {
+	margin: 0.8em 0 0.35em; font-size: 1em; font-weight: 650; line-height: 1.3;
+}
+.hone-rendu h1, .hone-rendu h2 { font-size: 1.1em; }
+.hone-rendu strong { font-weight: 650; }
+.hone-rendu code {
+	padding: 0.1em 0.35em; border-radius: 4px; background: rgba(128, 128, 128, 0.18);
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em;
+}
+.hone-rendu pre { padding: 8px 10px; border-radius: 8px; background: rgba(128, 128, 128, 0.14); overflow-x: auto; white-space: pre; }
+.hone-rendu pre code { padding: 0; background: none; font-size: 0.85em; }
+.hone-rendu blockquote { padding-left: 0.8em; border-left: 3px solid rgba(128, 128, 128, 0.45); color: var(--text-muted); }
+.hone-rendu table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
+.hone-rendu th, .hone-rendu td { padding: 4px 8px; border: 1px solid rgba(128, 128, 128, 0.3); text-align: left; }
+.hone-rendu th { background: rgba(128, 128, 128, 0.12); font-weight: 600; }
+.hone-rendu hr { margin: 0.8em 0; border: 0; border-top: 1px solid rgba(128, 128, 128, 0.35); }
+.hone-rendu a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.hone-rendu math { font-size: 1.08em; }
+.hone-rendu math[display="block"] { display: block; margin: 0.5em 0; overflow-x: auto; }
+.hone-rendu .hone-svg { margin: 0.4em 0 0.6em; }
+.hone-rendu .hone-svg svg { display: block; width: 100%; height: auto; max-height: 50vh; color: var(--text-normal); }
+.hone-rendu .hone-svg.is-attente { color: var(--text-muted); font-style: italic; }

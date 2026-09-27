@@ -12,6 +12,7 @@ import { vaultRoot } from "./racine";
 import { AppServerTransport } from "./transport";
 import { JsonRpcClient, type Json } from "./rpc";
 import type { CodexSettings } from "../reglages/reglages";
+import { rendreEnDirect } from "../ui/rendu";
 
 export class SessionCodex {
 	/** Built once, kept for the plugin's lifetime: views borrow it. */
@@ -29,6 +30,9 @@ export class SessionCodex {
 
 	// Live streaming targets, keyed by the server's itemId.
 	private readonly streams = new Map<string, HTMLElement>();
+	/** Assistant replies: the raw Markdown received so far, and its renderer (ui/rendu.ts). */
+	private readonly rawTexts = new Map<string, string>();
+	private readonly renderers = new Map<string, ReturnType<typeof rendreEnDirect>>();
 
 	constructor(
 		private readonly appRef: App,
@@ -127,8 +131,20 @@ export class SessionCodex {
 	private streamInto(key: string, role: "assistant" | "reasoning", text: string): void {
 		let target = this.streams.get(key);
 		if (!target) target = this.addBubble(role, key);
-		target.textContent = (target.textContent ?? "") + text;
-		this.scrollToBottom();
+		if (role === "reasoning") {
+			target.textContent = (target.textContent ?? "") + text;
+			this.scrollToBottom();
+			return;
+		}
+		// Assistant replies are Markdown: keep the raw text, render it at most once per frame.
+		const raw = (this.rawTexts.get(key) ?? "") + text;
+		this.rawTexts.set(key, raw);
+		let render = this.renderers.get(key);
+		if (!render) {
+			render = rendreEnDirect(target, {}, () => this.scrollToBottom());
+			this.renderers.set(key, render);
+		}
+		render(raw);
 	}
 
 	private scrollToBottom(): void {
@@ -201,6 +217,9 @@ export class SessionCodex {
 		this.teardown();
 		this.transcriptEl.replaceChildren();
 		this.streams.clear();
+		for (const render of this.renderers.values()) render.annuler();
+		this.renderers.clear();
+		this.rawTexts.clear();
 		this.setBusy(true, "reconnecting…");
 		await this.connect();
 	}
