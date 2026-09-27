@@ -1,7 +1,7 @@
 import { FileView, TFile, TFolder, Modal, Notice, type App, type Plugin } from 'fragment';
 import QRCodeStyling from 'qr-code-styling';
 import { Relais, type PhotoMeta } from './relais';
-import { putPageInPdf } from './pdf';
+import { pageCount, putPageInPdf } from './pdf';
 
 // Scanner des feuilles avec le téléphone : une icône de ruban montre un QR code, un
 // relais WebSocket relie le téléphone au bureau, et chaque photo devient une page du
@@ -42,7 +42,10 @@ export function setupScan(plugin: Plugin): void {
     let queue: Promise<void> = Promise.resolve();
     const relais = new Relais(
         sessionId,
-        (connected) => { new Notice(connected ? 'Téléphone connecté' : 'Téléphone déconnecté'); },
+        (connected) => {
+            new Notice(connected ? 'Téléphone connecté' : 'Téléphone déconnecté');
+            if (connected) void sendDestination();
+        },
         (photo, id, meta) => {
             queue = queue
                 .then(() => savePhoto(plugin.app, relais, docs, destination, photo, id, meta))
@@ -52,6 +55,12 @@ export function setupScan(plugin: Plugin): void {
                     new Notice('Scan : impossible de ranger la photo dans le vault', 8000);
                 });
         },
+        () => {
+            if (destination.kind === 'pdf'){
+                destination = { kind: 'folder', path: SCAN_FOLDER};
+                void sendDestination();
+            }
+        }
     );
     relais.connect();
     plugin.register(() => relais.close());
@@ -65,9 +74,11 @@ export function setupScan(plugin: Plugin): void {
     // l'endroit demandé pour CE QR, recopié dans `destination`, celle que lit savePhoto.
     function openScan(dest: Destination): void {
         destination = dest;
+        void sendDestination();
         const url = `${SITE_URL}?v=${Date.now().toString(36)}#${sessionId}`;
         new ScanModal(plugin.app, url, button, dest).open();
     }
+
     
     plugin.registerEvent(
         plugin.app.workspace.on('file-menu', (menu, file) => {
@@ -88,6 +99,16 @@ export function setupScan(plugin: Plugin): void {
         })
     )
 
+    plugin.registerEvent(
+        plugin.app.vault.on('rename', (file, oldPath) => {
+            for (const scanDoc of docs.values()){
+                if (scanDoc.path === oldPath) { scanDoc.path = file.path;}
+            }
+            if (destination.path === oldPath) {destination = {kind : destination.kind, path: file.path};
+            }
+        })
+    )
+
     plugin.addCommand({id: 'scan-into-pdf', name: 'Scanner dans ce PDF', icon: 'qr-code', checkCallback: (checking) => {
                 const file = plugin.app.workspace.getActiveViewOfType(FileView)?.file;
                 if (!file || file.extension !== 'pdf') return false;
@@ -101,6 +122,21 @@ export function setupScan(plugin: Plugin): void {
             }
         }
     )
+
+    async function sendDestination(): Promise<void>{
+        // Déclaré une seule fois, avant les if : 0 par défaut (dossier, PDF absent ou illisible)
+        let pages = 0;
+        if (destination.kind ==='pdf'){
+            const fichier = plugin.app.vault.getFileByPath(destination.path);
+            if( fichier){
+                try { pages = await pageCount(await plugin.app.vault.readBinary(fichier)); }
+                catch (error) { console.warn('[scan] pages du PDF illisibles', destination.path, error); }
+            }
+        }
+
+        
+        relais.send({type: 'destination', key: `${destination.kind}:${destination.path}`, pages });
+    }
 
 }
 
