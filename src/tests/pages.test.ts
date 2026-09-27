@@ -34,6 +34,14 @@ describe('putPage', () => {
         expect(putPage(note, BASE, 1, ligne(1, 'a'))).toBe(`${autre}\n\n${ligne(1, 'a')}\n`);
     });
 
+    it('marche avec les noms lisibles de scan.ts (espaces, heure locale)', () => {
+        const base = 'Scan 27-09-2026 02h36m01';
+        const l = (page: number, h: string) => pageLine(imageName(base, page, h));
+        const note = `${l(1, '02h36m01')}\n\n${l(2, '02h37m15')}\n`;
+        expect(putPage(note, base, 1, l(1, '02h40m00')))
+            .toBe(`${l(1, '02h40m00')}\n\n${l(2, '02h37m15')}\n`);
+    });
+
     it('garde le texte écrit à la main autour des pages', () => {
         const note = `# Mon cours\n\n${ligne(1, 'a')}\n\nUne remarque\n\n${ligne(2, 'b')}\n`;
         expect(putPage(note, BASE, 1, ligne(1, 'z')))

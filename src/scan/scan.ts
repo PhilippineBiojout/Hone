@@ -56,6 +56,20 @@ export function setupScan(plugin: Plugin): void {
     });
 }
 
+/** « 27-09-2026 », à l'heure locale. */
+function jour(d: Date): string {
+    return `${deux(d.getDate())}-${deux(d.getMonth() + 1)}-${d.getFullYear()}`;
+}
+
+/** « 02h36m01 », à l'heure locale. Pas de « : », interdit dans les noms de fichiers sous Windows. */
+function heure(d: Date): string {
+    return `${deux(d.getHours())}h${deux(d.getMinutes())}m${deux(d.getSeconds())}`;
+}
+
+function deux(n: number): string {
+    return String(n).padStart(2, '0');
+}
+
 /** La note d'un document : `Scans/<base>.md`, et `<base>` préfixe les images de ses pages. */
 interface Note {
     base: string;
@@ -78,21 +92,25 @@ async function savePhoto(
     if (app.vault.getFolderByPath('Scans') === null) {
         await app.vault.createFolder('Scans');
     }
-    const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const now = new Date();
 
     // Un ancien site n'envoie ni `doc` ni `page` : chaque photo est alors son propre document
     const doc = meta.doc ?? crypto.randomUUID();
     const page = meta.page ?? 1;
     let note = notes.get(doc);
     if (note === undefined) {
-        const base = `scan-${stamp}`;
+        // « Scan 27-09-2026 02h36m01 » : la date et l'heure de la première page, à l'heure
+        // locale (toISOString donnait l'heure UTC, deux heures de moins en été en France).
+        // Les secondes évitent que deux documents commencés la même minute se marchent dessus.
+        const base = `Scan ${jour(now)} ${heure(now)}`;
         note = { base, path: `Scans/${base}.md` };
         notes.set(doc, note);
     }
 
     // Toujours une nouvelle image, même pour une mise à jour (createBinary refuse d'écraser) :
-    // l'ancienne reste dans « Scans/ », seule la note ne l'affiche plus.
-    const image = imageName(note.base, page, stamp);
+    // l'ancienne reste dans « Scans/ », seule la note ne l'affiche plus. L'heure suffit
+    // à la rendre unique : la date est déjà dans le nom du document.
+    const image = imageName(note.base, page, heure(now));
     await app.vault.createBinary(`Scans/${image}`, await photo.arrayBuffer());
     // Le téléphone affiche « Envoyé ! » dès que l'image est dans le vault
     relais.send({ type: 'photo-received', id });
@@ -101,8 +119,10 @@ async function savePhoto(
     const existing = app.vault.getFileByPath(note.path);
     if (existing === null) {
         // Premier envoi du document (ou note supprimée entre-temps) : on la crée et on l'ouvre
+        // dans un NOUVEL onglet. getLeaf() sans argument réutilise l'onglet actif : la note du
+        // document précédent (ou celle qu'on lisait) disparaissait de l'écran, remplacée.
         const created = await app.vault.create(note.path, `${line}\n`);
-        await app.workspace.getLeaf().openFile(created);
+        await app.workspace.getLeaf('tab').openFile(created);
     } else {
         // `process` lit et réécrit la note d'un seul coup : ce qu'on y a tapé entre-temps est gardé
         await app.vault.process(existing, (text) => putPage(text, note.base, page, line));
