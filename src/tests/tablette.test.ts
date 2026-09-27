@@ -2,7 +2,7 @@
 import * as net from 'net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmdocDeTest } from './rmdocDeTest';
-import { Tablette } from '../remarkable/tablette';
+import { cableBranche, Tablette } from '../remarkable/tablette';
 
 // Une fausse tablette qui répond comme la vraie : Content-Length ET chunked.
 const reponses: Record<string, { statut: number; corps: string | Buffer }> = {
@@ -63,5 +63,18 @@ describe('Tablette', () => {
 	it('échoue sur un export refusé ou une tablette absente', async () => {
 		await expect(tablette.telecharger('c2', false)).rejects.toThrow('HTTP 500');
 		await expect(new Tablette('http://127.0.0.1:1').lister()).rejects.toThrow();
+	});
+});
+
+describe('cableBranche', () => {
+	const ip = (address: string) => ({ address, family: 'IPv4', netmask: '255.255.255.0', mac: '', internal: false, cidr: null }) as const;
+	it('voit le câble quand le Mac a une adresse dans le sous-réseau de la tablette', () => {
+		expect(cableBranche('http://10.11.99.1', { en0: [ip('192.168.1.12')], en7: [ip('10.11.99.2')] })).toBe(true);
+	});
+	it('câble débranché : aucune adresse en 10.11.99.x', () => {
+		expect(cableBranche('http://10.11.99.1', { en0: [ip('192.168.1.12')] })).toBe(false);
+	});
+	it('la fausse tablette locale : la boucle locale tient lieu de câble', () => {
+		expect(cableBranche('http://127.0.0.1:5000', { lo0: [ip('127.0.0.1')] })).toBe(true);
 	});
 });

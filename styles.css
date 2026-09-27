@@ -536,15 +536,52 @@
 	color: var(--text-muted);
 }
 
-/* En haut d'un PDF de la tablette : « live » écrit à la place de l'icône. */
+/* Le statut dans la barre d'état du cœur, sous le verre de la toolbar
+   (mêmes valeurs que la lentille du plugin verre). */
 
-.view-action.remarkable-statut[data-live="true"] {
-	width: auto;
-	padding: 0 6px;
-	font-size: var(--font-ui-small, 12px);
-	font-weight: 600;
+.status-bar-item.remarkable-statut {
+	--toolbar-glass-teinte: rgba(255, 255, 255, 0.06);
+	--toolbar-glass-reflet: rgba(255, 255, 255, 0.42);
+	--toolbar-glass-arete: rgba(255, 255, 255, 0.14);
+	--toolbar-glass-creux: rgba(0, 0, 0, 0.35);
+	--toolbar-glass-ombre: rgba(0, 0, 0, 0.35);
+	height: 16px;
+	margin: 0 2px;
+	padding: 0 8px;
+	border-radius: 8px;
+	background: var(--toolbar-glass-teinte);
+	backdrop-filter: blur(0.4px) saturate(1.5) brightness(1.08);
+	box-shadow:
+		inset 0 1px 0.5px var(--toolbar-glass-reflet),
+		inset 0 0 0 0.5px var(--toolbar-glass-arete),
+		inset 0 -1px 1px var(--toolbar-glass-creux),
+		0 2px 6px var(--toolbar-glass-ombre);
+	cursor: pointer;
+}
+
+/* Un item caché (le statut hors PDF de la tablette, « Fragment <version> »)
+   ne s'affiche pas, et une barre sans item visible disparaît en entier. */
+.status-bar-item[hidden] {
+	display: none;
+}
+
+.status-bar:not(:has(> .status-bar-item:not([hidden]))) {
+	display: none;
+}
+
+.status-bar-item.remarkable-statut[data-etat="live"] {
 	color: var(--color-accent);
-	opacity: 1;
+	font-weight: 600;
+}
+
+@media (prefers-color-scheme: light) {
+	.status-bar-item.remarkable-statut {
+		--toolbar-glass-teinte: rgba(255, 255, 255, 0.1);
+		--toolbar-glass-reflet: rgba(255, 255, 255, 0.95);
+		--toolbar-glass-arete: rgba(0, 0, 0, 0.08);
+		--toolbar-glass-creux: rgba(0, 0, 0, 0.12);
+		--toolbar-glass-ombre: rgba(0, 0, 0, 0.16);
+	}
 }
 
 .remarkable-bulle {
@@ -556,14 +593,12 @@
 	line-height: 1.4;
 }
 
-.remarkable-bulle p,
-.remarkable-bulle ol {
+.remarkable-bulle p {
 	margin: 0;
 }
 
-.remarkable-bulle ol {
-	margin-top: 6px;
-	padding-left: 18px;
+.remarkable-bulle strong + p {
+	margin-top: 4px;
 }
 
 /* La demande sort de l'icône du ruban (src/eclosion.ts) et s'ouvre à côté :

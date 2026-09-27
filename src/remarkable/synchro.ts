@@ -1,9 +1,18 @@
-import { FileView, type App, type TFile } from 'fragment';
-import { empreinte, type Entree, type Registre } from './registre';
-import type { ElementTablette, Tablette } from './tablette';
+import { FileView, TFolder, type App, type TFile } from 'fragment';
+import { cibles, DOSSIER, type Entree, type Registre } from './registre';
+import { cableBranche, type ElementTablette, type Tablette } from './tablette';
 
-/** Le dossier du vault où arrivent les carnets la première fois. */
-const DOSSIER = 'reMarkable';
+/** Le dossier qui contient `chemin`. */
+const parent = (chemin: string): string => chemin.slice(0, chemin.lastIndexOf('/'));
+
+/** Live, ou ce qui manque : le câble, ou l'interface web USB (câble là, la tablette ne répond pas). */
+export type Etat = 'live' | 'cable' | 'interface';
+
+const JOURNAL: Record<Etat, string> = {
+	live: 'tablette connectée',
+	cable: 'tablette injoignable : câble débranché',
+	interface: 'tablette injoignable : câble branché, interface web USB activée ?',
+};
 
 /** Dans la console : de quoi mesurer le rythme de la tablette. */
 export function log(msg: string): void {
@@ -11,25 +20,29 @@ export function log(msg: string): void {
 }
 
 /**
- * La boucle : interroge la tablette, télécharge ce qui a changé et l'écrit
- * dans le vault, là où l'index dit que le PDF se trouve maintenant.
+ * La boucle : interroge la tablette et fait de `reMarkable/` son miroir.
+ * Chaque tour, dans l'ordre : ce qui a disparu de la tablette part à la
+ * corbeille, chaque document est mis à sa place (déplacé, renommé) puis
+ * retéléchargé s'il a changé, et les dossiers suivent (créés, et retirés
+ * quand ils n'existent plus sur la tablette et sont vides).
  */
 export class Synchro {
-	connectee: boolean | null = null;
+	/** `null` tant que le premier tour n'a pas répondu. */
+	etat: Etat | null = null;
 	private occupe = false;
 
 	constructor(
 		private readonly app: App,
 		private readonly registre: Registre,
 		private readonly tablette: Tablette,
-		/** Sauvegarde l'index et met à jour l'état en haut des PDF. */
+		/** Sauvegarde l'index et met à jour le statut. */
 		private readonly changer: () => Promise<void>,
 	) {}
 
-	private async etreConnectee(valeur: boolean): Promise<void> {
-		if (this.connectee === valeur) return;
-		this.connectee = valeur;
-		log(valeur ? 'tablette connectée' : 'tablette injoignable (branchée ? interface web USB activée ?)');
+	private async passer(etat: Etat): Promise<void> {
+		if (this.etat === etat) return;
+		this.etat = etat;
+		log(JOURNAL[etat]);
 		await this.changer();
 	}
 
@@ -37,26 +50,66 @@ export class Synchro {
 		if (this.occupe) return;
 		this.occupe = true;
 		try {
+			// `lister` échoue en entier si une seule requête échoue : on n'agit
+			// jamais sur une liste partielle (on supprimerait ce qui manque).
 			const elements = await this.tablette.lister();
-			await this.etreConnectee(true);
+			await this.passer('live');
+			const docs = elements.filter((el) => !el.dossier);
+			await this.retirerSupprimes(docs);
+			const ou = cibles(docs, this.registre.carnets);
 			// Le plus récemment modifié d'abord : le carnet où l'on écrit passe
 			// devant la première synchro et devant un export lent. (Les dates
 			// ISO se trient comme des chaînes.)
-			const carnets = elements.filter((el) => !el.dossier).sort((a, b) => b.modifie.localeCompare(a.modifie));
-			for (const el of carnets) await this.suivre(el);
+			for (const el of [...docs].sort((a, b) => b.modifie.localeCompare(a.modifie))) await this.suivre(el, ou.get(el.id)!);
+			await this.miroirDesDossiers(elements.filter((el) => el.dossier));
 		} catch {
-			await this.etreConnectee(false);
+			await this.passer(cableBranche(this.tablette.hote) ? 'interface' : 'cable');
 		} finally {
 			this.occupe = false;
 		}
 	}
 
-	private async suivre(el: ElementTablette): Promise<void> {
+	/** Supprimé sur la tablette (corbeille comprise, elle n'est pas listée) : à la corbeille du vault. */
+	private async retirerSupprimes(docs: ElementTablette[]): Promise<void> {
+		const presents = new Set(docs.map((d) => d.id));
+		// Une tablette qui ne liste rien du tout vient sans doute de démarrer : on ne vide pas tout.
+		if (presents.size === 0) return;
+		for (const [id, e] of Object.entries(this.registre.carnets)) {
+			if (presents.has(id)) continue;
+			const fichier = e.chemin ? this.app.vault.getFileByPath(e.chemin) : null;
+			if (fichier) await this.app.vault.trash(fichier, false);
+			delete this.registre.carnets[id];
+			log(`${e.chemin} : supprimé sur la tablette, mis à la corbeille`);
+			await this.changer();
+		}
+	}
+
+	private async suivre(el: ElementTablette, cible: string): Promise<void> {
 		const e = this.registre.entree(el.id);
-		if (e.ignore || e.modifie === el.modifie) return;
+		const { vault } = this.app;
+		const fichier = e.chemin ? vault.getFileByPath(e.chemin) : null;
+
+		// Déplacé ou renommé sur la tablette : on le déplace dans le vault.
+		if (fichier && e.chemin !== cible) {
+			if (vault.getAbstractFileByPath(cible)) {
+				log(`${cible} : déjà pris, ${e.chemin} reste où il est pour ce tour`);
+			} else {
+				const avant = e.chemin;
+				await this.creerDossier(parent(cible));
+				e.chemin = cible;
+				await vault.rename(fichier, cible);
+				log(`${avant} → ${cible}`);
+				await this.changer();
+			}
+		}
+		// Écrit une fois mais plus là (sorti de reMarkable/ ou supprimé dans
+		// Fragment) : on le recrée, ce qui a été sorti reste une copie. Pas un
+		// document jamais écrit (export en échec) : il attend sa modification.
+		if (e.chemin && !fichier) Object.assign(e, { chemin: null, modifie: null });
+		if (e.modifie === el.modifie) return;
 
 		const avant = e.modifie;
-		log(`${el.chemin} : ${avant ? 'modifié' : 'nouveau'}, téléchargement…`);
+		log(`${el.chemin} : ${fichier ? 'modifié' : 'à écrire'}, téléchargement…`);
 		// On retient la version tout de suite : un export qui échoue n'est
 		// retenté qu'à la prochaine modification du carnet. Le réessayer à
 		// chaque tour bloquerait toute la boucle (un carnet dont l'export ne
@@ -72,7 +125,7 @@ export class Synchro {
 			return;
 		}
 		try {
-			await this.ecrire(e, el, octets);
+			await this.ecrire(e, cible, octets);
 			log(`${e.chemin} : ${(octets.byteLength / 1024).toFixed(0)} Ko en ${Date.now() - t0} ms`);
 		} catch (err) {
 			e.modifie = avant;
@@ -81,29 +134,40 @@ export class Synchro {
 		await this.changer();
 	}
 
-	/** Écrit le PDF là où il est, ou le crée dans reMarkable/ la première fois. */
-	private async ecrire(e: Entree, el: ElementTablette, octets: ArrayBuffer): Promise<void> {
+	/** Écrit le PDF là où il est, ou le crée à `cible`. */
+	private async ecrire(e: Entree, cible: string, octets: ArrayBuffer): Promise<void> {
 		const { vault } = this.app;
 		const fichier = e.chemin ? vault.getFileByPath(e.chemin) : null;
 		if (fichier) {
 			await vault.modifyBinary(fichier, octets);
 			await this.recharger(fichier);
-		} else {
-			const nom = el.chemin.replace(/\.pdf$/i, '');
-			const chemin = this.cheminLibre(`${DOSSIER}/${nom}`);
-			await this.creerDossiers(chemin);
-			// Noté avant d'écrire : le `create` que le vault va émettre est le
-			// nôtre, pas un déplacement à reconnaître.
-			e.chemin = chemin;
-			try {
-				await vault.createBinary(chemin, octets);
-			} catch (err) {
-				e.chemin = null;
-				throw err;
-			}
+			return;
 		}
-		e.empreinte = empreinte(octets);
-		e.taille = octets.byteLength;
+		if (vault.getAbstractFileByPath(cible)) throw new Error(`${cible} existe déjà`);
+		await this.creerDossier(parent(cible));
+		e.chemin = cible;
+		await vault.createBinary(cible, octets);
+	}
+
+	/**
+	 * Les dossiers de la tablette existent dans reMarkable/, même vides. Un
+	 * dossier de reMarkable/ qui n'est plus sur la tablette est retiré s'il est
+	 * vide (renommé ou supprimé sur la tablette : ses documents sont déjà
+	 * partis). Jamais un dossier qui contient encore quelque chose.
+	 */
+	private async miroirDesDossiers(dossiers: ElementTablette[]): Promise<void> {
+		const attendus = new Set([DOSSIER, ...dossiers.map((d) => `${DOSSIER}/${d.chemin}`)]);
+		for (const chemin of attendus) await this.creerDossier(chemin);
+		const racine = this.app.vault.getFolderByPath(DOSSIER);
+		if (racine) await this.retirerVides(racine, attendus);
+	}
+
+	/** Du plus profond au plus haut : vide un dossier de ses sous-dossiers vides avant de le juger. */
+	private async retirerVides(dossier: TFolder, attendus: Set<string>): Promise<void> {
+		for (const enfant of [...dossier.children]) if (enfant instanceof TFolder) await this.retirerVides(enfant, attendus);
+		if (attendus.has(dossier.path) || dossier.children.length > 0) return;
+		await this.app.vault.delete(dossier);
+		log(`${dossier.path} : n'est plus sur la tablette, retiré`);
 	}
 
 	/**
@@ -126,18 +190,11 @@ export class Synchro {
 	}
 
 	/** Le cœur ne crée aucun dossier parent : on crée chaque niveau, un par un. */
-	private async creerDossiers(chemin: string): Promise<void> {
-		const morceaux = chemin.split('/').slice(0, -1);
+	private async creerDossier(chemin: string): Promise<void> {
+		const morceaux = chemin.split('/');
 		for (let i = 1; i <= morceaux.length; i++) {
 			const dossier = morceaux.slice(0, i).join('/');
 			if (!this.app.vault.getAbstractFileByPath(dossier)) await this.app.vault.createFolder(dossier);
 		}
-	}
-
-	/** « Nom.pdf », ou « Nom (2).pdf » si le nom est pris. */
-	private cheminLibre(base: string): string {
-		let chemin = `${base}.pdf`;
-		for (let n = 2; this.app.vault.getAbstractFileByPath(chemin); n++) chemin = `${base} (${n}).pdf`;
-		return chemin;
 	}
 }

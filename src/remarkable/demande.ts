@@ -3,10 +3,25 @@ import { creer } from './dom';
 import { eclore, type Eclosion } from './eclosion';
 
 /**
- * La demande, au clic sur l'icône de la tablette tant qu'on n'a pas accepté.
- * Elle en sort comme une carte de l'agent (le rond de l'icône devient la
- * carte), et s'ouvre à côté, sans voile. Fermée sans réponse (Échap, clic à
- * côté), elle reviendra au prochain clic. Après un refus, elle le rappelle.
+ * Ce que dit la carte. Au clic sur l'icône après un refus : le rappel. Depuis
+ * les commandes « reMarkable: sync » et « reMarkable: show live status » :
+ * l'état, et les boutons disent ce qu'ils font.
+ */
+export type Question = 'rappel' | 'active' | 'coupee' | 'affiche' | 'masque';
+
+const TEXTES: Record<Question, { question: string; non: string; oui: string }> = {
+	rappel: { question: 'Autoriser Fragment à télécharger les dossiers et documents de la reMarkable, en PDF, dans reMarkable/ ?', non: 'Refuser', oui: 'Autoriser' },
+	active: { question: 'La synchro de la reMarkable est active. La garder ?', non: 'Couper', oui: 'Garder' },
+	coupee: { question: 'La synchro est coupée. La relancer ?', non: 'Laisser coupée', oui: 'Relancer' },
+	affiche: { question: 'Le statut live est affiché. Le garder ?', non: 'Masquer', oui: 'Garder' },
+	masque: { question: 'Le statut live est masqué. L’afficher ?', non: 'Laisser masqué', oui: 'Afficher' },
+};
+
+/**
+ * La carte qui pose la question, au clic sur l'icône de la tablette tant que
+ * la synchro est coupée, ou depuis une commande. Elle sort de l'icône comme une
+ * carte de l'agent (le rond de l'icône devient la carte), et s'ouvre à côté,
+ * sans voile. Fermée sans réponse (Échap, clic à côté), rien ne change.
  */
 export class DemandeAutorisation extends Modal {
 	private eclosion: Eclosion | null = null;
@@ -14,7 +29,7 @@ export class DemandeAutorisation extends Modal {
 	constructor(
 		app: App,
 		private readonly icone: HTMLElement,
-		private readonly refusee: boolean,
+		private readonly question: Question,
 		private readonly repondre: (oui: boolean) => void,
 	) {
 		super(app);
@@ -23,10 +38,11 @@ export class DemandeAutorisation extends Modal {
 	}
 
 	onOpen(): void {
-		if (this.refusee) creer(this.contentEl, 'p', 'remarkable-refus', 'Tu n’as pas accepté que Fragment télécharge les dossiers et documents de la reMarkable.');
-		creer(this.contentEl, 'p', '', 'Autoriser Fragment à télécharger les dossiers et documents de la reMarkable, en PDF, dans reMarkable/ ?');
+		const t = TEXTES[this.question];
+		if (this.question === 'rappel') creer(this.contentEl, 'p', 'remarkable-refus', 'Tu n’as pas accepté que Fragment télécharge les dossiers et documents de la reMarkable.');
+		creer(this.contentEl, 'p', '', t.question);
 		const boutons = creer(this.contentEl, 'div', 'remarkable-boutons');
-		for (const [texte, oui] of [['Refuser', false], ['Autoriser', true]] as const) {
+		for (const [texte, oui] of [[t.non, false], [t.oui, true]] as const) {
 			const b = creer(boutons, 'button', oui ? 'mod-cta' : '', texte);
 			b.addEventListener('click', () => {
 				this.close();

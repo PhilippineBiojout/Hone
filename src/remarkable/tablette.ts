@@ -1,4 +1,5 @@
 import * as http from 'http';
+import * as os from 'os';
 import { rmdocEnPdf } from './rmdoc';
 
 // Interface web USB de la reMarkable (Paramètres > Stockage > Interface web USB).
@@ -38,6 +39,18 @@ function obtenir(url: string, delaiMs: number): Promise<{ statut: number; corps:
 // point en tête (le vault ignore les chemins cachés).
 function segment(nom: string): string {
 	return nom.replace(/[\\/:]/g, '-').replace(/^\.+/, '').trim() || 'sans nom';
+}
+
+/**
+ * Le câble : branchée en USB, la tablette donne au Mac une adresse dans son
+ * sous-réseau (10.11.99.x). On le lit sans rien interroger. Un hôte qui n'est
+ * pas une adresse IPv4 : on ne sait pas, on suppose le câble là.
+ */
+export function cableBranche(hote: string, interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): boolean {
+	const ip = new URL(hote).hostname;
+	if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip)) return true;
+	const reseau = ip.slice(0, ip.lastIndexOf('.') + 1);
+	return Object.values(interfaces).flat().some((i) => i?.family === 'IPv4' && i.address.startsWith(reseau));
 }
 
 export class Tablette {

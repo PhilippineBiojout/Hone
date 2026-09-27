@@ -1,50 +1,38 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { Registre } from '../remarkable/registre';
+import { cibles, Registre } from '../remarkable/registre';
 
-function registre(): Registre {
-	const r = new Registre();
-	Object.assign(r.entree('a'), { chemin: 'reMarkable/Cours/A.pdf', empreinte: 'ha', taille: 100 });
-	Object.assign(r.entree('b'), { chemin: 'reMarkable/Cours/B.pdf', empreinte: 'hb', taille: 200 });
-	Object.assign(r.entree('c'), { chemin: 'reMarkable/C.pdf', empreinte: 'hc', taille: 100 });
-	return r;
-}
+const doc = (id: string, chemin: string) => ({ id, chemin });
+
+describe('cibles', () => {
+	it('met chaque document à reMarkable/<son chemin sur la tablette>', () => {
+		const r = new Registre();
+		expect([...cibles([doc('a', 'Cours/A'), doc('c', 'C')], r.carnets)]).toEqual([
+			['a', 'reMarkable/Cours/A.pdf'],
+			['c', 'reMarkable/C.pdf'],
+		]);
+	});
+
+	it('suit la tablette : déplacé ou renommé là-bas, la cible change', () => {
+		const r = new Registre({ a: { chemin: 'reMarkable/Cours/A.pdf', modifie: 't1' } });
+		expect(cibles([doc('a', 'Archive/A renommé')], r.carnets).get('a')).toBe('reMarkable/Archive/A renommé.pdf');
+	});
+
+	it('numérote deux documents du même nom, et garde chacun à sa place d’un tour à l’autre', () => {
+		const r = new Registre();
+		const premier = cibles([doc('x', 'Notes'), doc('y', 'Notes')], r.carnets);
+		expect([premier.get('x'), premier.get('y')]).toEqual(['reMarkable/Notes.pdf', 'reMarkable/Notes (2).pdf']);
+		// y était déjà « Notes.pdf » (x est arrivé après) : il le garde, x prend « (2) ».
+		const r2 = new Registre({ y: { chemin: 'reMarkable/Notes.pdf', modifie: 't' } });
+		const second = cibles([doc('x', 'Notes'), doc('y', 'Notes')], r2.carnets);
+		expect([second.get('x'), second.get('y')]).toEqual(['reMarkable/Notes (2).pdf', 'reMarkable/Notes.pdf']);
+	});
+});
 
 describe('Registre', () => {
-	it('suit un fichier renommé', () => {
-		const r = registre();
-		expect(r.renommer('reMarkable/C.pdf', 'Maths/C bis.pdf')).toBe(true);
-		expect(r.carnets.c.chemin).toBe('Maths/C bis.pdf');
-		expect(r.suivi('Maths/C bis.pdf')).toBe(true);
-	});
-
-	it('fait suivre tout ce qui est sous un dossier renommé, et seulement ça', () => {
-		const r = registre();
-		r.renommer('reMarkable/Cours', 'Semestre/Cours 2A');
-		expect(r.carnets.a.chemin).toBe('Semestre/Cours 2A/A.pdf');
-		expect(r.carnets.b.chemin).toBe('Semestre/Cours 2A/B.pdf');
-		expect(r.carnets.c.chemin).toBe('reMarkable/C.pdf');
-		// « Semestre/Cours 2 » n'est pas un parent de « Semestre/Cours 2A/… ».
-		expect(r.renommer('Semestre/Cours 2', 'X')).toBe(false);
-	});
-
-	it('arrête de suivre un fichier supprimé, et tout un dossier', () => {
-		const r = registre();
-		r.supprimer('reMarkable/Cours/A.pdf', 1000);
-		expect(r.carnets.a).toMatchObject({ chemin: null, ignore: true, supprimeLe: 1000 });
-		r.supprimer('reMarkable/Cours', 1000);
-		expect(r.carnets.b.ignore).toBe(true);
-		expect(r.carnets.c.ignore).toBe(false);
-	});
-
-	it('propose les carnets supprimés dans la fenêtre, de même taille', () => {
-		const r = registre();
-		r.supprimer('reMarkable/Cours/A.pdf', 1000);
-		r.supprimer('reMarkable/C.pdf', 1000);
-		// même taille : deux candidats, l'empreinte départage (dans deplacements)
-		expect(r.candidats(100, 500).sort()).toEqual(['a', 'c']);
-		expect(r.candidats(100, 2000)).toEqual([]);
-		r.rattacher('a', 'Ailleurs/A.pdf');
-		expect(r.carnets.a).toMatchObject({ chemin: 'Ailleurs/A.pdf', ignore: false, supprimeLe: undefined });
+	it('ne garde d’un ancien data.json que le chemin et la version', () => {
+		const r = new Registre({ a: { chemin: 'reMarkable/A.pdf', modifie: 't', ignore: true, empreinte: 'h' } as never });
+		expect(r.carnets).toEqual({ a: { chemin: 'reMarkable/A.pdf', modifie: 't' } });
+		expect(r.suivi('reMarkable/A.pdf')).toBe(true);
 	});
 });

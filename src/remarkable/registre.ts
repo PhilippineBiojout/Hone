@@ -1,77 +1,74 @@
 /**
- * L'index : où est, dans le vault, le PDF de chaque carnet de la tablette.
+ * L'index : où est, dans le vault, le PDF de chaque document de la tablette.
  *
- * Un carnet est suivi par son id sur la tablette, jamais par son nom : le vault
- * ne bouge pas quand on renomme le carnet sur la tablette, et le PDF reste
- * suivi quand on le range ailleurs dans le vault. Logique pure, testée seule.
+ * `reMarkable/` est le miroir de la tablette : chaque document y est à
+ * `reMarkable/<son chemin sur la tablette>.pdf`. Déplacé, renommé ou supprimé
+ * sur la tablette, il l'est aussi dans le vault. Un PDF qu'on sort de
+ * `reMarkable/` dans Fragment n'est plus qu'une copie : l'original est recréé
+ * à sa place. Logique pure, testée seule.
  */
 
-import { createHash } from 'crypto';
-
 export interface Entree {
-	/** Chemin du PDF dans le vault, null quand il n'y est pas (ou plus). */
+	/** Là où on a écrit le PDF la dernière fois, null tant qu'il n'existe pas. */
 	chemin: string | null;
 	/** `ModifiedClient` de la version déjà écrite ; null force un téléchargement. */
 	modifie: string | null;
-	/** sha1 et taille du dernier PDF écrit : de quoi le reconnaître après un déplacement hors de l'app. */
-	empreinte: string | null;
-	taille: number;
-	/** Supprimé du vault : plus recréé. */
-	ignore: boolean;
-	/** Heure de la suppression : un déplacement hors de l'app arrive en delete puis create. */
-	supprimeLe?: number;
 }
 
-/** Le sha1 d'un PDF : ce qui le reconnaît après un déplacement hors de l'app. */
-export function empreinte(octets: ArrayBuffer): string {
-	return createHash('sha1').update(new Uint8Array(octets)).digest('hex');
-}
+/** Le dossier du vault qui reflète la tablette. */
+export const DOSSIER = 'reMarkable';
 
 export class Registre {
-	constructor(public carnets: Record<string, Entree> = {}) {}
+	carnets: Record<string, Entree> = {};
 
-	/** L'entrée du carnet, créée vide la première fois qu'on le voit. */
+	constructor(lus: Record<string, Partial<Entree>> = {}) {
+		// Un data.json d'avant le miroir a d'autres champs : on ne garde que ceux-ci.
+		for (const [id, e] of Object.entries(lus)) this.carnets[id] = { chemin: e.chemin ?? null, modifie: e.modifie ?? null };
+	}
+
+	/** L'entrée du document, créée vide la première fois qu'on le voit. */
 	entree(id: string): Entree {
-		this.carnets[id] ??= { chemin: null, modifie: null, empreinte: null, taille: 0, ignore: false };
+		this.carnets[id] ??= { chemin: null, modifie: null };
 		return this.carnets[id];
 	}
 
 	suivi(chemin: string): boolean {
 		return Object.values(this.carnets).some((e) => e.chemin === chemin);
 	}
+}
 
-	/**
-	 * Un fichier ou un dossier renommé dans l'app. Pour un dossier, le cœur
-	 * n'émet qu'un événement : tous les chemins dessous suivent ici.
-	 */
-	renommer(ancien: string, nouveau: string): boolean {
-		const entrees = this.sous(ancien);
-		for (const e of entrees) e.chemin = nouveau + e.chemin!.slice(ancien.length);
-		return entrees.length > 0;
+/**
+ * Où doit être le PDF de chaque document : `reMarkable/<chemin>.pdf`, ou
+ * « <nom> (2).pdf » quand deux documents du même dossier ont le même nom.
+ * Stable d'un tour à l'autre : un document déjà à l'une des variantes de son
+ * nom la garde, les autres prennent la première libre.
+ */
+export function cibles(docs: { id: string; chemin: string }[], carnets: Record<string, Entree>): Map<string, string> {
+	const parBase = new Map<string, string[]>();
+	for (const d of [...docs].sort((a, b) => a.id.localeCompare(b.id))) {
+		const base = `${DOSSIER}/${d.chemin}`;
+		parBase.set(base, [...(parBase.get(base) ?? []), d.id]);
 	}
 
-	/** Un fichier, ou tout un dossier, retiré du vault : ses carnets ne sont plus suivis. */
-	supprimer(chemin: string, maintenant: number): boolean {
-		const entrees = this.sous(chemin);
-		for (const e of entrees) Object.assign(e, { chemin: null, ignore: true, supprimeLe: maintenant });
-		return entrees.length > 0;
+	const sortie = new Map<string, string>();
+	for (const [base, ids] of parBase) {
+		const variante = (n: number) => (n === 1 ? `${base}.pdf` : `${base} (${n}).pdf`);
+		const prises = new Set<string>();
+		const restants: string[] = [];
+		for (const id of ids) {
+			const actuel = carnets[id]?.chemin;
+			const variantes = ids.map((_, i) => variante(i + 1));
+			if (actuel && variantes.includes(actuel) && !prises.has(actuel)) {
+				prises.add(actuel);
+				sortie.set(id, actuel);
+			} else restants.push(id);
+		}
+		let n = 1;
+		for (const id of restants) {
+			while (prises.has(variante(n))) n++;
+			prises.add(variante(n));
+			sortie.set(id, variante(n));
+		}
 	}
-
-	/** Les carnets dont le PDF est `chemin` lui-même, ou dans le dossier `chemin`. */
-	private sous(chemin: string): Entree[] {
-		return Object.values(this.carnets).filter((e) => e.chemin === chemin || e.chemin?.startsWith(chemin + '/'));
-	}
-
-	/** Les carnets supprimés après `depuis` dont le PDF avait cette taille. */
-	candidats(taille: number, depuis: number): string[] {
-		return Object.keys(this.carnets).filter((id) => {
-			const e = this.carnets[id];
-			return e.chemin === null && e.taille === taille && (e.supprimeLe ?? 0) >= depuis;
-		});
-	}
-
-	/** Le PDF d'un carnet retrouvé ailleurs : de nouveau suivi, à ce chemin. */
-	rattacher(id: string, chemin: string): void {
-		Object.assign(this.carnets[id], { chemin, ignore: false, supprimeLe: undefined });
-	}
+	return sortie;
 }

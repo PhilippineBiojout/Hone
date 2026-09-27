@@ -1,25 +1,34 @@
-import type { App, Plugin } from 'fragment';
-import { Deplacements } from './deplacements';
+import { FileView, type App, type Plugin } from 'fragment';
 import { Registre, type Entree } from './registre';
 import { Synchro } from './synchro';
 import { HOTE_PAR_DEFAUT, Tablette } from './tablette';
 import { DemandeAutorisation } from './demande';
-import { bulle, majEntetes } from './entete';
+import { bulle } from './statut';
 
 // Les carnets de la reMarkable en direct dans le vault, en PDF (voir README).
 // Retrait : ce dossier, l'appel dans main.ts, la section de styles.css.
+
+// La barre d'état est dans le cœur (Plugin.addStatusBarItem) mais pas encore
+// dans le paquet publié : à retirer quand @usefragment/core l'aura.
+declare module '@usefragment/core' {
+	interface Plugin {
+		addStatusBarItem(): HTMLElement;
+	}
+}
 
 /** Ce que reMarkable garde dans `remarkable.json`, à côté du data.json de Hone. */
 interface Donnees {
 	/** Adresse de la tablette ; un faux serveur pour tester sans elle. */
 	hote: string;
-	/** La réponse à la demande d'autorisation ; absente tant qu'on n'a pas répondu. */
+	/** Synchro active ou coupée ; absente, elle est active. */
 	autorise?: boolean;
-	/** L'index : id du carnet sur la tablette → où est son PDF dans le vault. */
+	/** Le statut dans la barre d'état ; absent, il est affiché. */
+	statutLive?: boolean;
+	/** L'index : id du document sur la tablette → où est son PDF dans reMarkable/. */
 	carnets: Record<string, Entree>;
 }
 
-/** Branche la tablette sur le plugin : icône du ruban, suivi des PDF, synchro toutes les 2 s. */
+/** Branche la tablette sur le plugin : icône du ruban, statut, commandes, synchro toutes les 2 s. */
 export async function brancherRemarkable(plugin: Plugin): Promise<void> {
 	const adapter = plugin.app.vault.adapter;
 	const fichier = `${plugin.app.plugins.pluginsDir}/${plugin.manifest.id}/remarkable.json`;
@@ -31,41 +40,54 @@ export async function brancherRemarkable(plugin: Plugin): Promise<void> {
 export class Remarkable {
 	registre: Registre;
 	synchro: Synchro;
-	private deplacements: Deplacements;
-	/** Rien n'est téléchargé tant que ce n'est pas `true`. */
-	autorise: boolean | undefined;
+	/** Active d'office ; rien n'est téléchargé quand c'est `false`. */
+	autorise: boolean;
+	/** Le statut dans la barre d'état, affiché d'office. */
+	statutLive: boolean;
+	private statut!: HTMLElement;
 	private hote: string;
 
 	constructor(readonly app: App, lu: Partial<Donnees> | null, private ecrire: (d: Donnees) => Promise<void>) {
 		this.hote = lu?.hote ?? HOTE_PAR_DEFAUT;
-		this.autorise = lu?.autorise;
+		this.autorise = lu?.autorise ?? true;
+		this.statutLive = lu?.statutLive ?? true;
 		this.registre = new Registre(lu?.carnets);
 		this.synchro = new Synchro(app, this.registre, new Tablette(this.hote), () => this.changer());
-		this.deplacements = new Deplacements(app, this.registre);
 	}
 
 	brancher(plugin: Plugin): void {
-		// Tant qu'on n'a pas accepté : la demande. Ensuite : l'état de la tablette.
-		const icone = plugin.addRibbonIcon('tablet', 'reMarkable', () => {
-			if (this.autorise) bulle(icone, this.synchro.connectee === true, true);
-			else new DemandeAutorisation(this.app, icone, this.autorise === false, (oui) => void this.autoriser(oui)).open();
-		});
-		plugin.registerEvent(this.app.workspace.on('layout-change', () => majEntetes(this)));
-		plugin.registerEvent(this.app.workspace.on('file-open', () => majEntetes(this)));
+		// « Live » ou « Déconnectée » dans la barre d'état du cœur ; au clic, ce qu'il faut faire.
+		this.statut = plugin.addStatusBarItem();
+		this.statut.classList.add('remarkable-statut');
+		this.statut.addEventListener('click', () => bulle(this.statut, this.synchro.etat, 'dessus'));
+		// « Fragment <version> », posé par le plugin interne `app` : caché, il ne reste que le statut.
+		const version = this.app.statusBarItems.entries().filter((e) => e.owner === 'app').map((e) => (e.value as { el: HTMLElement }).el);
+		for (const el of version) el.hidden = true;
+		plugin.register(() => { for (const el of version) el.hidden = false; });
+		// Le statut ne se montre que sur un PDF de la tablette.
+		plugin.registerEvent(this.app.workspace.on('active-leaf-change', () => this.majStatut()));
+		plugin.registerEvent(this.app.workspace.on('file-open', () => this.majStatut()));
 
-		plugin.registerEvent(this.app.vault.on('rename', async (f, ancien) => {
-			// Dans l'app, un dossier renommé n'émet qu'un événement : le registre fait suivre ce qu'il contient.
-			if (this.registre.renommer(ancien, f.path)) await this.changer();
-		}));
-		plugin.registerEvent(this.app.vault.on('delete', async (f) => {
-			if (await this.deplacements.supprime(f.path)) await this.changer();
-		}));
-		plugin.registerEvent(this.app.vault.on('create', async (f) => {
-			if (await this.deplacements.apparu(f)) await this.changer();
-		}));
+		// Synchro coupée : la demande. Active : l'état de la tablette.
+		const icone = plugin.addRibbonIcon('tablet', 'reMarkable', () => {
+			if (this.autorise) bulle(icone, this.synchro.etat, 'droite');
+			else new DemandeAutorisation(this.app, icone, 'rappel', (oui) => void this.autoriser(oui)).open();
+		});
+		// La seule façon de couper la synchro, ou de la relancer : « reMarkable : sync » dans la palette.
+		plugin.addCommand({
+			id: 'remarkable-sync',
+			name: 'reMarkable : sync',
+			icon: 'tablet',
+			callback: () => new DemandeAutorisation(this.app, icone, this.autorise ? 'active' : 'coupee', (oui) => void this.autoriser(oui)).open(),
+		});
+		plugin.addCommand({
+			id: 'remarkable-show-live-status',
+			name: 'reMarkable : show live status',
+			icon: 'tablet',
+			callback: () => new DemandeAutorisation(this.app, icone, this.statutLive ? 'affiche' : 'masque', (oui) => void this.afficherStatut(oui)).open(),
+		});
 
 		this.app.workspace.onLayoutReady(async () => {
-			await this.deplacements.auDemarrage();
 			await this.changer();
 			plugin.registerInterval(window.setInterval(() => {
 				if (this.autorise) void this.synchro.tour();
@@ -79,9 +101,23 @@ export class Remarkable {
 		if (oui) void this.synchro.tour();
 	}
 
-	/** Sauvegarde l'index et met à jour l'état en haut des PDF. */
+	async afficherStatut(oui: boolean): Promise<void> {
+		this.statutLive = oui;
+		await this.changer();
+	}
+
+	/** Sauvegarde l'index et met à jour le statut. */
 	private async changer(): Promise<void> {
-		await this.ecrire({ hote: this.hote, autorise: this.autorise, carnets: this.registre.carnets });
-		majEntetes(this);
+		await this.ecrire({ hote: this.hote, autorise: this.autorise, statutLive: this.statutLive, carnets: this.registre.carnets });
+		this.majStatut();
+	}
+
+	/** « Live » ou « Déconnectée », seulement sur un PDF de la tablette. */
+	private majStatut(): void {
+		const etat = this.synchro.etat;
+		this.statut.textContent = etat === 'live' ? 'Live' : 'Déconnectée';
+		this.statut.dataset.etat = etat ?? '';
+		const fichier = this.app.workspace.getActiveViewOfType(FileView)?.file;
+		this.statut.hidden = !(this.autorise && this.statutLive && etat && fichier && this.registre.suivi(fichier.path));
 	}
 }
