@@ -64,9 +64,12 @@ export class Remarkable {
 		const version = this.app.statusBarItems.entries().filter((e) => e.owner === 'app').map((e) => (e.value as { el: HTMLElement }).el);
 		for (const el of version) el.hidden = true;
 		plugin.register(() => { for (const el of version) el.hidden = false; });
-		// Le statut ne se montre que sur un PDF de la tablette.
+		// Le statut se montre tant qu'un PDF de la tablette est à l'écran, dans n'importe quel panneau.
 		plugin.registerEvent(this.app.workspace.on('active-leaf-change', () => this.majStatut()));
 		plugin.registerEvent(this.app.workspace.on('file-open', () => this.majStatut()));
+		plugin.registerEvent(this.app.workspace.on('layout-change', () => this.majStatut()));
+		// Changer d'onglet au clic sur son en-tête n'émet aucun événement du workspace.
+		plugin.registerDomEvent(document, 'click', () => this.majStatut());
 
 		// Synchro coupée : la demande. Active : l'état de la tablette.
 		const icone = plugin.addRibbonIcon('tablet', 'reMarkable', () => {
@@ -114,12 +117,13 @@ export class Remarkable {
 		this.majStatut();
 	}
 
-	/** « Live » ou « Déconnectée », seulement sur un PDF de la tablette. */
+	/** « Live » ou « Déconnectée », seulement si un PDF de la tablette est affiché (onglet visible de son panneau). */
 	private majStatut(): void {
 		const etat = this.synchro.etat;
 		this.statut.textContent = etat === 'live' ? 'Live' : 'Déconnectée';
 		this.statut.dataset.etat = etat ?? '';
-		const fichier = this.app.workspace.getActiveViewOfType(FileView)?.file;
-		this.statut.hidden = !(this.autorise && this.statutLive && etat && fichier && this.registre.suivi(fichier.path));
+		const affiche = this.app.workspace.getLeavesOfType('pdf').some((leaf) => leaf.containerEl.offsetParent !== null
+			&& leaf.view instanceof FileView && leaf.view.file && this.registre.suivi(leaf.view.file.path));
+		this.statut.hidden = !(this.autorise && this.statutLive && etat && affiche);
 	}
 }

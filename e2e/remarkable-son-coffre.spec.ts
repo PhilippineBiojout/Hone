@@ -81,7 +81,7 @@ test('reMarkable : icônes uniques, commandes sync et show live status', async (
  * Une mise à jour de la tablette sur un PDF ouvert : on lisait le milieu de la
  * page 5, la page 4 change, on reste au même endroit de la page 5, et le
  * défilement ne passe jamais par 0 pendant le rechargement. Une fausse
- * tablette minimale sert un PDF de 8 pages.
+ * tablette minimale sert un PDF de 8 pages. Sans le layout du coffre, qui a ses propres PDF.
  */
 test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 	test.setTimeout(120_000);
@@ -90,7 +90,7 @@ test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 	const userData = path.join(base, 'userdata');
 	await mkdir(userData, { recursive: true });
 	await cp('/Users/philippinebiojout/Documents/IA/fragment-notes', vault, { recursive: true,
-		filter: (src) => !src.includes('node_modules') && !src.includes('/.git') });
+		filter: (src) => !src.includes('node_modules') && !src.includes('/.git') && !src.endsWith('.fragment/workspace.json') });
 
 	// La fausse tablette : un seul document, 8 pages, `modifie` change à chaque écriture.
 	const pages = Array.from({ length: 8 }, (_, i) => `page ${i + 1} version 1`);
@@ -181,5 +181,57 @@ test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 	} finally {
 		await electronApp.close();
 		serveur.close();
+	}
+});
+
+/**
+ * Le statut suit ce qui est à l'écran, pas l'onglet actif : un PDF de la
+ * tablette à gauche, une note active à droite, il reste ; un autre onglet
+ * par-dessus le PDF, il part. La tablette pointe sur une adresse morte :
+ * « Déconnectée » suffit. Sans le layout du coffre, qui a ses propres PDF.
+ */
+test('reMarkable : le statut reste tant que le PDF est affiché, même dans un autre panneau', async () => {
+	test.setTimeout(120_000);
+	const base = await mkdtemp(path.join(os.tmpdir(), 'remarkable-split-'));
+	const vault = path.join(base, 'vault');
+	const userData = path.join(base, 'userdata');
+	await mkdir(userData, { recursive: true });
+	await cp('/Users/philippinebiojout/Documents/IA/fragment-notes', vault, { recursive: true,
+		filter: (src) => !src.includes('node_modules') && !src.includes('/.git') && !src.endsWith('.fragment/workspace.json') });
+	const fichier = path.join(vault, '.fragment/plugins/hone/remarkable.json');
+	const donnees = JSON.parse(await readFile(fichier, 'utf8'));
+	await writeFile(fichier, JSON.stringify({ ...donnees, hote: 'http://127.0.0.1:9', autorise: true, statutLive: true }), 'utf8');
+	await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
+
+	const electronApp = await _electron.launch({
+		executablePath: '/Applications/Fragment.app/Contents/MacOS/Fragment',
+		args: [`--user-data-dir=${userData}`, `--vault-root=${vault}`],
+		env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: process.env.HOME! } as Record<string, string>,
+	});
+	try {
+		let page = electronApp.windows().find((w) => !w.url().startsWith('devtools'));
+		while (!page) page = await electronApp.waitForEvent('window');
+		await page.waitForFunction(() => !!(window as any).app?.workspace?.layoutReady, undefined, { timeout: 30_000 });
+		await page.setViewportSize({ width: 1400, height: 800 });
+		const statut = page.locator('.status-bar-item.remarkable-statut');
+
+		// À gauche : une note, puis le PDF de la tablette par-dessus. À droite : une note, active.
+		await page.evaluate(async () => {
+			const app = (window as any).app;
+			await app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('Lisez-moi.md'));
+			await app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('reMarkable/AI/Hackathon/Notes XIA.pdf'));
+			await app.workspace.getLeaf('split').openFile(app.vault.getFileByPath('Lisez-moi.md'), { active: true });
+		});
+		await expect.poll(() => page.evaluate(() => (window as any).app.workspace.activeLeaf?.getViewType())).toBe('markdown');
+		await expect(statut).toHaveText('Déconnectée', { timeout: 15_000 });
+		await expect(statut).toBeVisible();
+		await page.screenshot({ path: `${CAPTURES}/remarkable-statut-split.png` });
+
+		// À gauche, on clique l'onglet de la note : le PDF passe derrière, le statut part.
+		await page.locator('.workspace-tab-header', { hasText: 'Lisez-moi' }).first().click();
+		await expect(statut).toBeHidden();
+		await page.screenshot({ path: `${CAPTURES}/remarkable-statut-cache.png` });
+	} finally {
+		await electronApp.close();
 	}
 });
