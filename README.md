@@ -52,8 +52,10 @@ npm install
 npm run build
 ```
 
-Restart Fragment: Hone loads on its own, no activation needed. To update later: `git pull`,
-`npm install`, `npm run build`, then restart Fragment.
+Restart Fragment, then turn Hone on: **Settings → Community plugins → turn off Restricted mode →
+enable Hone**.
+
+To update later: `git pull`, `npm install`, `npm run build`, then restart Fragment.
 
 ### 3. Connect Codex
 
