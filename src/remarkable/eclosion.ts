@@ -74,9 +74,10 @@ export function ressort(raideur = 300, amortissement = 30): { easing: string; du
  * La bulle SORT du bouton comme une goutte (Skiper64) : dans un calque fantôme,
  * un rond reste sur le bouton, un autre file puis s'étire jusqu'à la bulle, et
  * le filtre goo les soude. Le fantôme, pas la bulle : le flou rendrait le texte
- * illisible. `bulle` doit être montée et placée.
+ * illisible. `bulle` doit être montée et placée. `vitesse` 2 : deux fois plus
+ * vite, même geste (le ressort garde son rebond).
  */
-export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement): Eclosion {
+export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement, vitesse = 1): Eclosion {
 	const parent = bulle.parentElement;
 	if (sansMouvement() || !parent) {
 		bulle.style.opacity = '';
@@ -124,9 +125,10 @@ export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement): Eclos
 	bulle.style.opacity = '0';
 	parent.appendChild(fantome);
 
-	const { easing, duree } = ressort();
+	// Raideur × v², amortissement × v : le même ressort, v fois plus rapide.
+	const { easing, duree } = ressort(300 * vitesse ** 2, 30 * vitesse);
 	// L'étirement part 150 ms après le rond (Skiper), et prend la teinte de la bulle.
-	const etire = { duration: duree, delay: 150, fill: 'both' as const };
+	const etire = { duration: duree, delay: 150 / vitesse, fill: 'both' as const };
 	const animations = [
 		goutte.animate([{ translate: `${depuis.x - depart.x}px ${depuis.y - depart.y}px` }, { translate: '0px 0px' }],
 			{ duration: duree, easing, fill: 'both' }),
@@ -142,7 +144,7 @@ export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement): Eclos
 		fantome.remove();
 		bulle.style.opacity = '';
 	}, () => {
-		const fondu = { duration: 140, easing: 'ease-out' };
+		const fondu = { duration: 140 / vitesse, easing: 'ease-out' };
 		const fin = [
 			bulle.animate([{ opacity: 0 }, { opacity: 1 }], fondu),
 			fantome.animate([{ opacity: 1 }, { opacity: 0 }], { ...fondu, fill: 'forwards' }),

@@ -22,7 +22,8 @@ export function bulle(bouton: HTMLElement, etat: Etat | null, ou: 'dessus' | 'dr
 	const r = bouton.getBoundingClientRect();
 	if (ou === 'droite') {
 		menu.showAtPosition(r.right + 8, r.top);
-		const eclosion = eclore(bouton, menu.dom);
+		// Deux fois plus vite que la carte de la demande : la bulle ne fait que renseigner.
+		const eclosion = eclore(bouton, menu.dom, 2);
 		menu.onHide(() => eclosion.annuler());
 	} else {
 		// Bord droit aligné sur celui du bouton, bas à 4 px au-dessus.
