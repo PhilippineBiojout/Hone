@@ -1,5 +1,5 @@
 /*
- * Codex feature wiring for Hone. Mirrors the `brancherScan` pattern: a single
+ * Codex feature wiring for Hone. Mirrors the `setupScan` pattern: a single
  * `brancherCodex(plugin, …)` call from `main.ts::onload` registers the view,
  * a ribbon icon and a command that reveal the Codex panel in the right sidedock.
  *

@@ -73,11 +73,11 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `pont/repondre.ts` : la façade que les composants appellent (chat/outils/oral) + repli factice ; `pont/protocole.ts` : les types de domaine.
 - `reglages/reglages.ts` : la clé API (`loadData`/`saveData`) et son Modal de saisie.
 - `scan/scan.ts` + `scan/relais.ts` : « scanner une feuille » (fusionné depuis l'ex-plugin `scan`, 2026-09-26).
-  `brancherScan(this)` dans `main.ts::onload` pose une icône de ruban (`addRibbonIcon('qr-code', …)`)
+  `setupScan(this)` dans `main.ts::onload` pose une icône de ruban (`addRibbonIcon('qr-code', …)`)
   qui ouvre une `ScanModal` (QR code via `qr-code-styling`). Le QR pointe vers le site téléphone
-  `https://rebornflamme.github.io/Hone/#<sessionId>` ; `scan/relais.ts` est le client WebSocket vers le
+  `https://philippinebiojout.github.io/Hone-web_scan/#<sessionId>` ; `scan/relais.ts` est le client WebSocket vers le
   worker Cloudflare `wss://hone-relay.lasky.workers.dev`. La photo reçue est rangée dans `Scans/`.
-  Site + worker vivent dans le dépôt `github.com/RebornFlamme/Hone` (dossiers `docs/` et `relay/`).
+  Site + worker vivent dans le dépôt `github.com/PhilippineBiojout/Hone-web_scan` (dossiers `docs/` et `relay/`).
   Styles sous `.scan-popover` / `.scan-qr` en fin de `styles.css`.
 - `codex/` : panneau de chat **Codex** (fusionné depuis l'ex-plugin `codex-on-fragment`, 2026-09-27).
   `brancherCodex(this, () => this.reglages.codex)` dans `main.ts::onload` pose une icône de ruban

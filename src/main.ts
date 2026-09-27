@@ -11,7 +11,7 @@ import { accesVault } from './cerveau/vault';
 import { brancherCodex } from './codex/codex';
 import { poserLeVerre } from './decor/verre';
 import { fusionner, ModalCle, type Reglages } from './reglages/reglages';
-import { brancherScan } from './scan/scan';
+import { setupScan } from './scan/scan';
 import { brancherRemarkable } from './remarkable/remarkable';
 
 /** Le plugin Hone : un calque par vue. OpenAI tourne EN PAGE (plus de procès forké) ;
@@ -72,7 +72,7 @@ export default class HonePlugin extends Plugin {
         });
 
         poserLeVerre(this);
-        brancherScan(this);
+        setupScan(this);
         await brancherRemarkable(this);
         brancherCodex(this, () => this.reglages.codex);
 
