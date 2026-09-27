@@ -10,7 +10,7 @@ export class AgentEnPause extends ErreurAgent {}
 export const citer = ({ passage: { texte, chemin, image } }: Demande, avant = '') =>
     `${avant ? `${avant}\n\n` : ''}Document ouvert : ${chemin || '(sans fichier)'}\n${image && !texte
         ? 'Passage sélectionné : l\'image jointe, une zone de la page que l\'utilisateur a entourée ou surlignée. '
-            + 'C\'est souvent de l\'écriture à la main : lis-la, et réponds sur ce qu\'elle dit.'
+            + 'C\'est souvent de l\'écriture à la main : lis-la. Pour le reste de la page ou du document, lis le document ouvert.'
         : `Passage sélectionné :\n"""\n${texte}\n"""${image
             ? '\nL\'image jointe montre cette zone telle qu\'elle est sur la page, avec le trait de l\'utilisateur : '
                 + 'formules, schémas et notes à la main qu\'elle contient comptent autant que le texte.'

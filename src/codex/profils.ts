@@ -44,17 +44,25 @@ export function outilsDuVault(acces: AccesVault): OutilFourni[] {
     return [
         {
             name: 'search_vault',
-            description: 'Cherche un mot ou une expression dans les notes du vault (.md, .txt) et renvoie jusqu\'à 8 extraits '
+            description: 'Cherche un mot ou une expression dans les notes du vault (.md, .txt), le texte des PDF et les noms de fichiers, et renvoie jusqu\'à 8 extraits '
                 + 'avec leur chemin. À utiliser AVANT toute recherche web.',
             inputSchema: objet({ requete: { type: 'string', description: 'Le mot ou l\'expression à chercher.' } }),
             executer: async ({ requete }) => chercherDansLeVault(acces, String(requete ?? '')),
         },
         {
             name: 'read_document',
-            description: 'Lit le texte d\'une note du vault. Le chemin est relatif à la racine du vault, tel que search_vault '
-                + 'le donne. Les dossiers cachés et tout ce qui est hors du vault sont refusés.',
-            inputSchema: objet({ chemin: { type: 'string', description: 'Chemin relatif à la racine du vault.' } }),
-            executer: async ({ chemin }) => lireDocument(acces, String(chemin ?? '')),
+            description: 'Lit un document du vault en entier : une note (.md, .txt) ou un PDF (cours, carnet reMarkable, scan). '
+                + 'Un PDF rend son texte page par page, et chaque page écrite à la main ou scannée en image, que tu lis. '
+                + 'Le chemin est relatif à la racine du vault, tel que search_vault ou « Document ouvert » le donne. '
+                + 'Les dossiers cachés et tout ce qui est hors du vault sont refusés.',
+            inputSchema: objet({
+                chemin: { type: 'string', description: 'Chemin relatif à la racine du vault.' },
+                pages: { type: ['string', 'null'], description: 'PDF : les pages à lire, « 3 », « 2-5 » ou « 1, 4 » ; null pour toutes.' },
+                en_image: { type: 'boolean', description: 'PDF : vrai pour voir ces pages en image même si elles ont du texte (formules, schémas, notes à la main).' },
+            }),
+            executer: async ({ chemin, pages, en_image }) => lireDocument(acces, String(chemin ?? ''), {
+                pages: typeof pages === 'string' ? pages : null, enImage: en_image === true,
+            }),
         },
     ];
 }

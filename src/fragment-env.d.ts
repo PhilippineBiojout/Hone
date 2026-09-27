@@ -12,3 +12,8 @@
 declare module "fragment" {
 	export * from "@usefragment/core";
 }
+
+// Le code du worker de pdf.js, exécuté dans la page (cerveau/pdf.ts) : le paquet ne le type pas.
+declare module 'pdfjs-dist/legacy/build/pdf.worker.mjs' {
+    export const WorkerMessageHandler: unknown;
+}

@@ -6,12 +6,15 @@ import { JsonRpcClient, type Json } from './rpc';
 // borné par son profil : ses consignes, SES outils (fournis par nous, `dynamicTools`),
 // le web ou non, et aucun accès à la machine (`environments: []`, ni shell ni fichiers).
 
+/** Ce qu'un outil rend à Codex : du texte, ou des images (les pages d'un PDF, en data URL). */
+export type ContenuOutil = { type: 'inputText'; text: string } | { type: 'inputImage'; imageUrl: string };
+
 /** Un outil qu'on fournit à Codex : il le voit, l'appelle, et c'est nous qui l'exécutons. */
 export interface OutilFourni {
     name: string;
     description: string;
     inputSchema: Json;
-    executer(args: Record<string, unknown>): Promise<string>;
+    executer(args: Record<string, unknown>): Promise<string | ContenuOutil[]>;
 }
 
 /** Ce qui borne un fil. */
@@ -197,20 +200,21 @@ export class ServeurCodex {
             return;
         }
         const outil = typeof p.threadId === 'string' ? this.fils.get(p.threadId)?.outils.get(String(p.tool)) : undefined;
-        let texte: string;
+        let rendu: string | ContenuOutil[];
         let success = true;
         if (!outil) {
-            texte = `Outil inconnu : ${String(p.tool)}`;
+            rendu = `Outil inconnu : ${String(p.tool)}`;
             success = false;
         } else {
             try {
-                texte = await outil.executer((p.arguments ?? {}) as Record<string, unknown>);
+                rendu = await outil.executer((p.arguments ?? {}) as Record<string, unknown>);
             } catch (err) {
-                texte = `Erreur : ${String((err as Error)?.message ?? err)}`;
+                rendu = `Erreur : ${String((err as Error)?.message ?? err)}`;
                 success = false;
             }
         }
-        rpc.respond(id, { success, contentItems: [{ type: 'inputText', text: texte }] });
+        const contentItems = typeof rendu === 'string' ? [{ type: 'inputText', text: rendu }] : rendu;
+        rpc.respond(id, { success, contentItems });
     }
 
     arreter(): void {

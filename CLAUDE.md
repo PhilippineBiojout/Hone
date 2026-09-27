@@ -5,7 +5,7 @@ sélection fait apparaître une barre qui ouvre un chat et des outils d'IA sur l
 
 ## Stack & commandes
 - TypeScript, bundlé par esbuild (`esbuild.config.mjs`), types via `@usefragment/core`.
-- Deps runtime (plus de SDK OpenAI depuis le 2026-09-27, `main.js` ~1,4 Mo) : `zod` (arguments de l'atelier), `pdf-lib`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable), `voice-glow` + `react`/`react-dom` (la lueur de la discussion orale, îlot React unique dans `ui/lueur.ts`).
+- Deps runtime (plus de SDK OpenAI depuis le 2026-09-27, `main.js` ~3 Mo) : `pdfjs-dist` (build legacy, Codex lit les PDF), `zod` (arguments de l'atelier), `pdf-lib`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable), `voice-glow` + `react`/`react-dom` (la lueur de la discussion orale, îlot React unique dans `ui/lueur.ts`).
 - Scripts : `npm run build` (tsc --noEmit + esbuild prod), `npm test` (vitest run src), `npm run dev`.
 - **node_modules pas versionné** : faire `npm install` avant un build à froid ; l'API Fragment se lit via l'usage, pas via le core.
 
@@ -118,6 +118,10 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - Le factice ne sert plus qu'avec le réglage `factice: true` (e2e). E2e réel : `e2e/codex-installee.spec.ts`. Lanceur et gestes communs des e2e : `e2e/hone-commun.ts`.
 - `vault.ts` : `AccesVault` sur l'API native `app.vault` (getFiles/cachedRead/getFileByPath) — interface injectable, testable avec un faux (`src/tests/`).
 - `outils-vault.ts` : `chercherDansLeVault`, `lireDocument` (LECTURE seule, **async**), exposés à Codex par `codex/profils.ts`.
+  Ils lisent aussi les PDF (`pdf.ts`, pdf.js embarqué, sans worker via `globalThis.pdfjsWorker`) :
+  texte par page, et les pages sans texte (carnets reMarkable, scans) rendues en image et rendues à
+  Codex en `inputImage` (`ContenuOutil` de `codex/serveur.ts`). Les consignes lui interdisent de
+  demander une capture : il va lire. E2e réel : `e2e/lire-tout-codex.spec.ts`.
 - `garde.ts` : validation de forme des chemins (pas d'absolu/dotfiles/.fragment, .md/.txt) ; la portée au vault est assurée par `app.vault`. Refus RENDU au modèle.
 - `langue.ts` : langue majoritaire du vault (pour Traduire), sur `app.vault`.
 - Repli factice (`pont/repondre.ts`) : seulement avec le réglage `factice` → réponses factices.

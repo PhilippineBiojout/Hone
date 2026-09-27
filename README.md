@@ -42,6 +42,10 @@ demande ouvre un fil éphémère, borné par son profil (`src/codex/profils.ts`)
 fournis par nous (`dynamicTools`), web ou non, et aucun accès à la machine. Le SDK OpenAI et la
 clé API ont été retirés le 2026-09-27.
 
+- **Codex lit tout le vault, PDF compris** : `read_document` rend le texte d'un PDF page par page,
+  et chaque page sans texte (carnet reMarkable, scan) en image (`inputImage`), 6 au plus par appel ;
+  `en_image` force l'image d'une page à texte. `search_vault` cherche aussi dans le texte des PDF.
+  pdf.js (build legacy) est embarqué et tourne dans la page sans worker (`src/cerveau/pdf.ts`).
 - Les outils qu'on donne à Codex : `search_vault` et `read_document` (selon le profil), les deux
   outils de la mémoire (`remember`, `note_preference`) et, si `atelierActif`, les six méta-outils
   de l'atelier avec son catalogue en tête de la demande. Le titre n'en reçoit aucun.
@@ -88,7 +92,8 @@ clé API ont été retirés le 2026-09-27.
 | ├ `consignes.ts` | `BASE` (qui est Hone) et la mission de chaque agent. |
 | ├ `demande.ts` | `citer` (le passage tel que Codex le lit), `ErreurAgent`, `AgentEnPause`. |
 | ├ `appel.ts`, `gradium.ts` | La discussion orale : Gradium écoute et parle, Codex répond. |
-| ├ `outils-vault.ts` | Lecture **seule** : `chercherDansLeVault`, `lireDocument` (async, sur `app.vault`). |
+| ├ `outils-vault.ts` | Lecture **seule** : `chercherDansLeVault`, `lireDocument` (notes et PDF, async, sur `app.vault`). |
+| ├ `pdf.ts` | pdf.js dans la page : texte des pages, image des pages écrites à la main. |
 | ├ `vault.ts` | `AccesVault` sur l'API native `app.vault` (injectable, testable). |
 | ├ `garde.ts` | Validation de forme des chemins ; la portée au vault vient d'`app.vault`. |
 | └ `langue.ts` | Détecte la langue du vault (FR/EN) sans appel modèle. |
@@ -204,7 +209,7 @@ qui tourne, avec la **racine du coffre** comme `cwd`.
 - **Unitaires** : `npm test` → `vitest run src` (les `*.test.ts` dans `src/tests/` :
   géométrie, sanitizer SVG, onde, placement, garde, outils-vault sur un faux vault).
 - **Build** : `npm run build` = `tsc --noEmit` (strict, `verbatimModuleSyntax`) puis esbuild —
-  **une seule entrée**, la page (`src/main.ts` → `main.js`, ~1,4 Mo).
+  **une seule entrée**, la page (`src/main.ts` → `main.js`, ~3 Mo, dont pdf.js).
 - **E2E** : les specs Playwright de `e2e/` se lancent depuis `Fragment-main/app/`, qui porte
   Playwright : y copier `e2e/hone-commun.ts` tel quel et chaque spec sous le nom `hone-<spec>`,
   puis `npx playwright test e2e/hone-agent-voix.spec.ts --workers=1`. `hone-commun.ts` porte le

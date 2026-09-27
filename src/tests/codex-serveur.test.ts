@@ -150,6 +150,20 @@ describe('mémoire et atelier sur Codex', () => {
     });
 });
 
+describe('un outil qui rend des images', () => {
+    it('ses pages partent telles quelles à Codex, texte et images', async () => {
+        const pages = [{ type: 'inputText' as const, text: '--- Page 1 ---' }, { type: 'inputImage' as const, imageUrl: 'data:image/png;base64,AAAA' }];
+        const lire = { name: 'read_document', description: 'x', inputSchema: {}, executer: async () => pages };
+        const { fabrique } = fauxCodex(async (emettre, reponse) => {
+            emettre({ id: 900, method: 'item/tool/call', params: { threadId: 'fil-1', tool: 'read_document', arguments: { chemin: 'DM.pdf' } } });
+            expect((await reponse(900)).result).toEqual({ success: true, contentItems: pages });
+            emettre({ method: 'item/completed', params: { threadId: 'fil-1', item: { type: 'agentMessage', id: 'f', phase: 'final_answer', text: 'Lu.' } } });
+            emettre({ method: 'turn/completed', params: { threadId: 'fil-1', turn: { status: 'completed', error: null } } });
+        });
+        expect((await new ServeurCodex('/v', fabrique).demander({ consignes: '', outils: [lire], web: false }, 'x')).texte).toBe('Lu.');
+    });
+});
+
 describe('profils', () => {
     it('Traduire n\'a que le web ; aucun autre agent n\'a le vault sans en avoir besoin', () => {
         const t = bornesDe('traduire', vaultVide);
