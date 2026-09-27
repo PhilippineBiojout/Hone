@@ -1,14 +1,21 @@
 import { FileView, type TFile, Modal, Notice, type App, type Plugin } from 'fragment';
 import QRCodeStyling from 'qr-code-styling';
-import { imageName, pageLine, putPage } from './pages';
 import { Relais, type PhotoMeta } from './relais';
-import { buildPdf } from './pdf';
+import { putPageInPdf } from './pdf';
+
+// Scanner des feuilles avec le téléphone : une icône de ruban montre un QR code, un
+// relais WebSocket relie le téléphone au bureau, et chaque photo devient une page du
+// PDF de son document (un document = un PDF). Mettre à jour une page remplace cette
+// page-là, sans toucher aux autres. Aucune image n'est gardée à côté : tout est dans le PDF.
+// Le site du téléphone et le relais vivent dans le dépôt Hone-web_scan
+// (GitHub Pages + worker Cloudflare) ; ici, seul le côté bureau.
+// Retrait : ce fichier, `relais.ts`, `pdf.ts`, l'appel dans main.ts, la section de styles.css.
 
 /** Le site que le téléphone ouvre : les pages GitHub du dossier docs/ de Hone-web_scan. */
 const SITE_URL = 'https://philippinebiojout.github.io/Hone-web_scan/';
-const SCAN_FOLDER = '';
 
-const SCAN_FORMAT: 'pdf' | 'md' = 'pdf';
+/** Où vont les PDF des scans : '' = la racine du vault, 'Scans' = un dossier « Scans/ » (créé au besoin). */
+const SCAN_FOLDER = '';
 
 /** Le chemin d'un fichier ou dossier dans SCAN_FOLDER. */
 function inScanFolder(name: string): string {
@@ -31,17 +38,17 @@ const CLOSE_MS = 140;
  */
 export function setupScan(plugin: Plugin): void {
     const sessionId = crypto.randomUUID();
-    // La note de chaque document de la session, par identifiant `doc` (envoyé par le téléphone)
-    const notes = new Map<string, Note>();
+    // Le PDF de chaque document de la session, par identifiant `doc` (envoyé par le téléphone)
+    const docs = new Map<string, ScanDoc>();
     // Les photos sont rangées UNE PAR UNE, dans l'ordre d'arrivée : deux pages envoyées
-    // coup sur coup ne réécrivent jamais la note en même temps (l'une effacerait l'autre).
+    // coup sur coup liraient sinon le même ancien PDF, et la seconde effacerait la première.
     let queue: Promise<void> = Promise.resolve();
     const relais = new Relais(
         sessionId,
         (connected) => { new Notice(connected ? 'Téléphone connecté' : 'Téléphone déconnecté'); },
         (photo, id, meta) => {
             queue = queue
-                .then(() => savePhoto(plugin.app, relais, notes, photo, id, meta))
+                .then(() => savePhoto(plugin.app, relais, docs, photo, id, meta))
                 .catch((error) => {
                     // La file continue quand même pour les photos suivantes
                     console.error('[scan]', error);
@@ -77,118 +84,60 @@ function deux(n: number): string {
     return String(n).padStart(2, '0');
 }
 
-/**
- * Un document : son dossier `folder`, sa note `path` (`<folder>/<base>.md`), et `base`
- * qui préfixe les images de ses pages (rangées dans le même dossier).
- */
-interface Note {
+/** Un document scanné : son nom `base` (« Scan 27-09-2026 02h36m01 ») et le chemin de son PDF. */
+interface ScanDoc {
     base: string;
-    folder: string;
     path: string;
-    pages: Map<number, string>
 }
 
 /**
- * Range une photo reçue : l'image dans le dossier de son document (créé au besoin), puis
- * sa ligne dans la note du document. Première page d'un document → on crée le dossier et
- * la note, et on l'ouvre ; page suivante → elle s'ajoute à la fin ; page mise à jour →
- * sa ligne est remplacée.
+ * Range une photo reçue : on lit le PDF de son document (s'il existe déjà), on y met la
+ * photo à sa page (ajoutée à la fin, ou à la place de l'ancienne pour une mise à jour),
+ * puis on le réécrit. Premier envoi d'un document → on crée le PDF et on l'ouvre dans
+ * un nouvel onglet ; ensuite → on le remplace et on recharge l'onglet qui l'affiche.
  */
 async function savePhoto(
     app: App,
     relais: Relais,
-    notes: Map<string, Note>,
+    docs: Map<string, ScanDoc>,
     photo: Blob,
     id: string,
     meta: PhotoMeta,
 ): Promise<void> {
-    const now = new Date();
-
     // Un ancien site n'envoie ni `doc` ni `page` : chaque photo est alors son propre document
-    const doc = meta.doc ?? crypto.randomUUID();
+    const docId = meta.doc ?? crypto.randomUUID();
     const page = meta.page ?? 1;
-    let note = notes.get(doc);
-    if (note === undefined) {
+    let scanDoc = docs.get(docId);
+    if (scanDoc === undefined) {
+        // Premier envoi du document : son nom = la date et l'heure locales de cette photo
+        const now = new Date();
         const base = `Scan ${jour(now)} ${heure(now)}`;
-        const folder = inScanFolder(base);
-        note = { base, folder, path: `${folder}/${base}.${SCAN_FORMAT}`, pages: new Map() };
-        notes.set(doc, note);
+        scanDoc = { base, path: inScanFolder(`${base}.pdf`) };
+        docs.set(docId, scanDoc);
     }
 
-    // Le dossier du document (et « Scans/ » au-dessus si SCAN_FOLDER le demande). Vérifié
-    // à chaque photo, pas seulement à la première : il a pu être supprimé entre-temps.
+    // Le dossier des scans, si SCAN_FOLDER en demande un (la racine existe toujours)
     if (SCAN_FOLDER !== '') await ensureFolder(app, SCAN_FOLDER);
-    await ensureFolder(app, note.folder);
 
-    // Toujours une nouvelle image, même pour une mise à jour (createBinary refuse d'écraser) :
-    // l'ancienne reste dans le dossier, seule la note ne l'affiche plus. L'heure suffit
-    // à la rendre unique : la date est déjà dans le nom du document.
-    const image = imageName(note.base, page, heure(now));
-    const imagePath = `${note.folder}/${image}`;
-    await app.vault.createBinary(`${note.folder}/${image}`, await photo.arrayBuffer());
+    // Le PDF actuel du document (null au premier envoi, ou s'il a été supprimé entre-temps)
+    const existing = app.vault.getFileByPath(scanDoc.path);
+    const oldPdf = existing ? await app.vault.readBinary(existing) : null;
+    const newPdf = await putPageInPdf(oldPdf, page, await photo.arrayBuffer());
 
-    const replaced = note.pages.get(page);
-    note.pages.set(page, imagePath);
-    // Le téléphone affiche « Envoyé ! » dès que l'image est dans le vault
-    relais.send({ type: 'photo-received', id });
-
-
-    if (SCAN_FORMAT ==='pdf'){
-        await writePdf(app, note);
-
+    if (existing === null){
+        // Nouveau PDF : on l'ouvre dans un NOUVEL onglet (getLeaf() sans argument
+        // remplacerait la note qu'on était en train de lire)
+        const created = await app.vault.createBinary(scanDoc.path, newPdf);
+        await app.workspace.getLeaf('tab').openFile(created);
     }
     else{
-        const line = pageLine(image);
-        const existing = app.vault.getFileByPath(note.path);
-        if (existing === null) {
-            //premier envoi du doc.
-            const created = await app.vault.create(note.path, `${line}\n`);
-            await app.workspace.getLeaf('tab').openFile(created);
-        } else {
-            // `process` lit et réécrit la note d'un seul coup : ce qu'on y a tapé entre-temps est gardé
-            await app.vault.process(existing, (text) => putPage(text, note.base, page, line));
-        }
+        await app.vault.modifyBinary(existing, newPdf);
+        await reloadPdf(app, existing);
     }
-
-    if (replaced !== undefined){
-        const old = app.vault.getFileByPath(replaced);
-        if (old !==null){
-            try{
-                await app.vault.trash(old, true);
-            }
-            catch (error){
-                console.warn('[scan] ancienne image non supprimée', replaced, error);
-            }
-        }
-    }
-
+    // Après l'écriture : « Envoyé ! » sur le téléphone veut dire « la page est dans le PDF »
+    relais.send({type: 'photo-received', id});
     new Notice(meta.replace ? `Page ${page} mise à jour` : `Page ${page} ajoutée`);
 }
-
-async function writePdf(app: App, note: Note): Promise<void> {
-    const paths = [...note.pages.entries()].sort((a,b) => a[0] - b[0]).map(([, path]) => path);
-    
-    const images: ArrayBuffer[] = [];
-
-    for (const path of paths){
-        const file = app.vault.getFileByPath(path);
-        if (file === null) continue;
-        images.push(await app.vault.readBinary(file));
-   }
-   const bytes = await buildPdf(images);
-
-   const existing = app.vault.getFileByPath(note.path)
-
-   if (existing === null){
-        const created = await app.vault.createBinary(note.path, bytes);
-        await app.workspace.getLeaf('tab').openFile(created);
-   }
-   else{
-        await app.vault.modifyBinary(existing, bytes);
-        await reloadPdf(app, existing);
-   }
-}
-
 
 /**
  * Recharge les onglets qui affichent ce PDF (la vue PDF du cœur n'écoute pas `modify`),
