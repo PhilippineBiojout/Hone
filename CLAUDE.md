@@ -66,7 +66,7 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `interactions/traces.ts` (CarnetTraces) : historique en mémoire, une icône par réponse fermée dans la marge gauche ; remappée à l'édition.
 - `positionnement/fenetre.ts` : widget déplaçable/redimensionnable (Cadre). `positionnement/placement.ts` : maths de placement (aCote).
 - `composants/BarreAgent.ts` : barre verticale (Toolbar) posée à côté du passage.
-- `composants/BulleAgent` (chat), `composants/ActionAgent` (carte d'outil), `composants/VoixAgent` (oral : barre en bas du panneau, back factice → « Gradium »).
+- `composants/BulleAgent` (chat), `composants/ActionAgent` (carte d'outil), `composants/VoixAgent` (oral : une lumière qui sort du bas du panneau et deux ronds, back factice → « Gradium »).
 - `ui/ui.ts` (atomes : OUTILS, boutonIcone, arc…), `ui/animations.ts` (éclore/résorber…), `ui/onde.ts` (le spectre en 5 bandes et le niveau d'une voix), `ui/lueur.ts` (le `VoiceBeam` de voice-glow, seul endroit où vit React).
 - `decor/verre.ts` : lentille de verre décorative (feDisplacementMap) sur toute `.toolbar` — indépendant de l'agent, Chromium seulement.
 - `ui/nettoyerSvg.ts` : assainit le SVG de « visualiser » avant affichage.

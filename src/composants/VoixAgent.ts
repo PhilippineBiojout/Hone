@@ -1,4 +1,4 @@
-import { Component, setIcon, type App, type WidgetHandle } from 'fragment';
+import { Component, type App, type WidgetHandle } from 'fragment';
 import { ressort } from '../ui/animations';
 import { niveaux, niveauVoix } from '../ui/onde';
 import { Lueur, ondulation, type LireNiveau } from '../ui/lueur';
@@ -7,9 +7,10 @@ import type { Repere } from '../positionnement/repere';
 import { parler, type ContexteQuestion, type ReponseOrale } from '../pont/repondre';
 import { boutonIcone, proteger } from '../ui/ui';
 
-const LARGEUR = 370;                // la barre de libraries.dev/voice : 740 × 207 px sur la capture @2x
+const LARGEUR = 500;                // la lumière, centrée : 500 px au plus
+const LARGEUR_BEAM = 370;           // la largeur pour laquelle le préréglage `default` de voice-glow est réglé
 const GOUTTIERE = 16;               // dans un panneau étroit, la barre garde 16 px de chaque côté
-const MONTEE = 24;                  // elle monte de 24 px, jusqu'à 24 px du bas du panneau
+const MONTEE = 24;                  // elle monte de 24 px, jusqu'au bord bas du panneau
 const RAIDEUR = 520;                // spring bounce 0.16 de Motion, celui de l'ancien étirement (Skiper3)
 const AMORTISSEMENT = 38;
 const RETARD_CONTENU = 120;
@@ -34,10 +35,11 @@ const LIGNES: Partial<Record<Etat, string>> = {
 };
 
 /**
- * La discussion orale : une barre en bas du panneau (libraries.dev/voice), qui
- * monte quand on touche le micro. Une ligne d'état en haut, le micro et la croix
- * en bas à droite, et la lueur de voice-glow au bord bas, qui suit la voix.
- * Le micro envoie le tour, l'agent répond à voix haute.
+ * La discussion orale : rien qu'une lumière (voice-glow, libraries.dev/voice) qui
+ * sort du bord bas du panneau quand on touche le micro, et suit la voix. Deux ronds
+ * centrés au-dessus : arrêter de parler (finir son tour, ou couper Hone) et fermer.
+ * L'état se lit dans la lumière ; la ligne d'état ne sert qu'aux lecteurs d'écran,
+ * sauf refus du micro ou erreur.
  */
 export class VoixAgent extends Component {
 
@@ -83,8 +85,8 @@ export class VoixAgent extends Component {
 
         const actions = this.contenuEl.appendChild(document.createElement('div'));
         actions.classList.add('agent-voix-actions');
-        this.stopEl = boutonIcone(actions, 'mic', '', () => this.surStop(), 'agent-voix-stop');
-        this.stopEl.dataset.icone = 'mic';
+        // Arrêter de parler : finir son tour en écoute, couper Hone quand il parle.
+        this.stopEl = boutonIcone(actions, 'square', '', () => this.surStop(), 'agent-voix-stop');
         boutonIcone(actions, 'x', 'Fermer', () => {
             this.parCroix = true;
             this.fermer();
@@ -110,12 +112,16 @@ export class VoixAgent extends Component {
         // ancienne encore là (lancer sans fermer) ne doit pas tourner dans le vide.
         this.lueur?.detruire();
         this.lueur?.el.remove();
-        this.lueur = new Lueur();
+        this.lueur = new Lueur(this.echelle());
         this.el.prepend(this.lueur.el);
         this.load();
         this.handle = this.repere.monter(this.el, (el) => this.placer(el));
+        // Le WidgetLayer pose pointer-events:auto en style sur chaque widget ; la lumière laisse
+        // passer les clics vers le texte, seuls les deux ronds les prennent (styles.css).
+        this.el.style.pointerEvents = 'none';
         const suivrePanneau = new ResizeObserver(() => {
             const a = this.placer(this.el);
+            this.lueur?.redimensionner(this.echelle());
             if (a) this.handle?.setAnchor(a);
         });
         suivrePanneau.observe(this.repere.pane);
@@ -161,9 +167,18 @@ export class VoixAgent extends Component {
 
     /** Centrée en bas du panneau ; dans un panneau étroit, elle rétrécit plutôt que déborder. */
     private placer(el: HTMLElement) {
-        const largeur = Math.min(LARGEUR, this.repere.paneClient().width - 2 * GOUTTIERE);
-        el.style.width = `${Math.max(0, largeur)}px`;
-        return this.repere.enBas(el, MONTEE);
+        el.style.width = `${this.largeur()}px`;
+        // Collée au bord : la lumière sort du bas du panneau.
+        return this.repere.enBas(el, 0);
+    }
+
+    private largeur(): number {
+        return Math.max(0, Math.min(LARGEUR, this.repere.paneClient().width - 2 * GOUTTIERE));
+    }
+
+    /** voice-glow est réglé pour 370 px : on grandit tout l'effet d'autant. */
+    private echelle(): number {
+        return Math.max(0.5, this.largeur() / LARGEUR_BEAM);
     }
 
     /** Vrai si le micro est ouvert ; refusé, absent ou lancement fermé : faux. */
@@ -230,6 +245,7 @@ export class VoixAgent extends Component {
             this.ecouter();
             // Après ecouter() : la ligne d'état l'aurait effacée.
             this.messageEl.textContent = `L'agent n'a pas pu répondre : ${err instanceof Error ? err.message : String(err)}`;
+            this.messageEl.classList.add('est-visible');
             return;
         }
         if (!estCourant()) return;
@@ -313,14 +329,9 @@ export class VoixAgent extends Component {
         this.stopEl.setAttribute('aria-label', libelle);
         this.stopEl.title = libelle;
         this.stopEl.disabled = etat !== 'ecoute' && etat !== 'repond';
-        // Pendant que Hone parle, le bouton coupe sa voix : un carré, plus un micro.
-        const icone = etat === 'repond' ? 'square' : 'mic';
-        if (this.stopEl.dataset.icone !== icone) {
-            this.stopEl.dataset.icone = icone;
-            this.stopEl.replaceChildren();
-            setIcon(this.stopEl, icone);
-        }
         this.messageEl.textContent = LIGNES[etat] ?? '';
+        // Sans boîte, la ligne ne se montre que pour ce que la lumière ne sait pas dire.
+        this.messageEl.classList.toggle('est-visible', etat === 'refuse');
         this.lueur?.reflechir(etat === 'reflechit');
         if (etat === 'reflechit' || etat === 'refuse' || etat === 'arrivee') this.lueur?.suivre(null);
     }

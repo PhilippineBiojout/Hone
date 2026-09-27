@@ -27,14 +27,14 @@
     position: absolute; top: 0; left: 0;
     color: var(--text-normal);
 }
-.agent-bulle, .agent-action-carte, .agent-action-cercle, .agent-action-forme, .agent-voix {
+.agent-bulle, .agent-action-carte, .agent-action-cercle, .agent-action-forme {
     background: var(--background-secondary);
     border: 1px solid var(--tab-outline-color);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 /* 950 : au-dessus de la toolbar (900), sous le menu (1000). 940 : la place de la barre. */
 .agent-bulle, .agent-action-carte { z-index: 950; border-radius: 12px; font-size: 13px; }
-.agent-action-cercle, .agent-voix { z-index: 940; width: 48px; height: 48px; box-sizing: border-box; }
+.agent-action-cercle { z-index: 940; width: 48px; height: 48px; box-sizing: border-box; }
 .agent-bulle { display: flex; flex-direction: column; width: 320px; }
 .agent-action-carte { width: 300px; }
 
@@ -258,46 +258,65 @@
 .agent-bulle.is-cadre .agent-bulle-fil { max-height: none; }
 
 /* ─── COMPOSANTS + UI · discussion orale (VoixAgent) + lueur (ui/lueur) ────── */
-/* La discussion orale : la barre de libraries.dev/voice, mesurée sur sa capture @2x (740 × 207).
-   370 × 104, rayon 26 ; la largeur est posée par VoixAgent.placer() (370, moins dans un panneau étroit). */
-.agent-voix {
-    --agent-voix-rayon: 26px;
-    height: 104px;
-    border-radius: var(--agent-voix-rayon);
-    overflow: hidden;
-    isolation: isolate;
+/* La discussion orale n'est plus qu'une lumière : pas de boîte, la lueur de voice-glow sort du
+   bord bas du panneau, sur 500 px au plus (largeur posée par VoixAgent.placer()), et deux ronds
+   centrés au-dessus. Le conteneur laisse passer les clics : le texte dessous reste à portée. */
+.agent-voix { z-index: 940; height: 160px; box-sizing: border-box; pointer-events: none; }
+/* Les bords de la lueur s'effacent (côtés et haut) : sans eux, le rectangle du canvas redessinerait une boîte. */
+.agent-voix-lueur {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    mask-image: linear-gradient(to right, transparent, #000 22%, #000 78%, transparent),
+                linear-gradient(to top, #000 45%, transparent);
+    mask-composite: intersect;
 }
-/* La lueur de voice-glow : un calque sur toute la barre, sous le contenu, jamais cible des clics. */
-.agent-voix-lueur { position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; }
 .agent-voix-faisceau { width: 100%; height: 100%; }
-.agent-voix-cadre { width: 100%; height: 100%; border-radius: var(--agent-voix-rayon); }
-.agent-voix-contenu { position: absolute; inset: 0; z-index: 1; }
-/* La ligne d'état, à la place de « Ask me anything.. » : centrée à 28 px du haut, à 14 px du bord.
-   Les cotes se comptent depuis le bord extérieur : 1 px de moins, pour le filet. */
-.agent-voix-message {
-    position: absolute; top: 15px; left: 13px; right: 13px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--text-muted);
-    font-size: 16px; line-height: 24px;
+/* voice-glow rend ses calques cliquables : aucun ne doit prendre le clic destiné au texte. */
+.agent-voix-lueur * { pointer-events: none !important; }
+/* L'enfant vide de voice-glow : transparent et sans rayon, son bord bas est celui du panneau. */
+.agent-voix-cadre { width: 100%; height: 100%; border-radius: 0; }
+.agent-voix-contenu { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+/* Les deux ronds de 40 px, centrés, à 28 px du bas, 12 px entre eux ; flou dessous pour rester lisibles. */
+.agent-voix-actions {
+    position: absolute; left: 50%; bottom: 28px;
+    display: flex; gap: 12px;
+    translate: -50% 0;
+    pointer-events: auto;
 }
-.agent-voix[data-etat="repond"] .agent-voix-message { color: var(--text-normal); }
-/* Les deux ronds de 36 px, à 12 px du bord droit et du bas, 12 px entre eux. */
-.agent-voix-actions { position: absolute; right: 11px; bottom: 11px; display: flex; gap: 12px; }
+.agent-voix .agent-voix-stop, .agent-voix .agent-voix-fermer, .agent-voix-message.est-visible {
+    border: 1px solid color-mix(in srgb, var(--text-normal) 12%, transparent);
+    background: color-mix(in srgb, var(--background-secondary) 70%, transparent);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
 .agent-voix .agent-voix-stop, .agent-voix .agent-voix-fermer {
-    flex: none; width: 36px; height: 36px;
-    border: 1px solid color-mix(in srgb, var(--text-normal) 10%, transparent);
+    flex: none; width: 40px; height: 40px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--text-normal) 8%, transparent);
     color: var(--text-normal);
     transition: background-color 120ms ease-out;
 }
 .agent-voix .agent-voix-stop:hover:not(:disabled), .agent-voix .agent-voix-fermer:hover {
-    background: color-mix(in srgb, var(--text-normal) 16%, transparent);
+    background: color-mix(in srgb, var(--background-secondary) 70%, var(--text-normal) 14%);
 }
 .agent-voix .agent-voix-stop svg, .agent-voix .agent-voix-fermer svg { width: 16px; height: 16px; }
-.agent-voix-stop:disabled { cursor: default; opacity: 0.5; }
+/* Seule l'icône pâlit : un rond transparent laisserait voir le texte dessous. */
+.agent-voix-stop:disabled { cursor: default; }
+.agent-voix-stop:disabled svg { opacity: 0.4; }
 .agent-voix[data-etat="refuse"] .agent-voix-stop { display: none; }
 .agent-voix[data-etat="arrivee"] .agent-voix-actions { visibility: hidden; }
+/* L'état se lit dans la lumière : la ligne n'est que pour les lecteurs d'écran, sauf refus ou erreur. */
+.agent-voix-message:not(.est-visible) {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+}
+.agent-voix-message.est-visible {
+    position: absolute; left: 50%; bottom: 80px;
+    max-width: calc(100% - 32px); padding: 4px 12px;
+    translate: -50% 0;
+    border-radius: 999px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text-normal);
+    font-size: 13px; line-height: 20px;
+}
 
 /* ─── DECOR · lentille de verre des toolbars (verre.ts) ───────────────────── */
 /* La lentille de verre des barres d'outils (verre.ts) : au-dessus des boutons, jamais cible des clics */

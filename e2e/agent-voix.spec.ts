@@ -5,9 +5,9 @@ import path from 'path';
 
 /**
  * La discussion orale (VoixAgent.ts) : le micro de la barre, après la tête de
- * chat, fait monter une barre en bas du panneau (libraries.dev/voice). La lueur
- * de voice-glow suit le micro, le micro de la barre envoie le tour, l'agent
- * répond à voix haute, la croix rend le micro.
+ * chat, fait sortir une lumière du bas du panneau (voice-glow, libraries.dev/voice),
+ * sans boîte. Elle suit le micro ; le rond ■ finit le tour, l'agent répond à voix
+ * haute, la croix rend le micro.
  *
  * Pas de vrai micro : `getUserMedia` est remplacé dans la page par un
  * oscillateur à 220 Hz dont on règle le volume, et la synthèse vocale par un
@@ -224,7 +224,7 @@ test('le micro est dans la barre courte, juste après la tête de chat', async (
     expect(libelles).toEqual(["Discuter avec Hone", "Parler à Hone", 'Définir', 'Visualiser', "Plus d'outils"]);
 });
 
-test('le micro fait monter une barre de 370 × 104, centrée en bas du panneau', async () => {
+test('le micro fait sortir la lumière du bas du panneau : pas de boîte, deux ronds centrés', async () => {
     const { page } = h;
     await simulerAudio(page);
     await surligner(page, 'Ligne 3 :', 'Révolution');
@@ -233,29 +233,51 @@ test('le micro fait monter une barre de 370 × 104, centrée en bas du panneau',
     await expect(barre(page)).toHaveCount(0);
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
     await attendrePosee(page);
+    // L'état se lit dans la lumière : la ligne n'est là que pour les lecteurs d'écran.
     await expect(voix(page).locator('.agent-voix-message')).toHaveText('Je vous écoute…');
+    await expect(voix(page).locator('.agent-voix-message')).not.toHaveClass(/est-visible/);
 
+    // Pas de boîte : ni fond, ni filet, ni ombre, et les clics passent au travers.
+    const style = await voix(page).evaluate((el) => {
+        const c = getComputedStyle(el);
+        return { fond: c.backgroundColor, filet: c.borderTopWidth, ombre: c.boxShadow, clics: c.pointerEvents };
+    });
+    expect(style).toEqual({ fond: 'rgba(0, 0, 0, 0)', filet: '0px', ombre: 'none', clics: 'none' });
+
+    // 500 px (moins dans un panneau étroit), centrée, collée au bas du panneau.
     const b = (await voix(page).boundingBox())!;
-    expect(b.width).toBeCloseTo(370, 0);
-    expect(b.height).toBeCloseTo(104, 0);
-    expect(await voix(page).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('26px');
-    // Centrée sur le panneau de la note, à 24 px de son bas.
     const pane = await page.evaluate(() => {
         const w = window as unknown as { app: any };
         const r = (w.app.workspace.getLeavesOfType('markdown')[0].view.contentEl as HTMLElement).getBoundingClientRect();
         return { x: r.left, width: r.width, bas: r.bottom };
     });
+    expect(b.width).toBeCloseTo(Math.min(500, pane.width - 32), 0);
     expect(b.x + b.width / 2).toBeCloseTo(pane.x + pane.width / 2, -1);
-    expect(pane.bas - (b.y + b.height)).toBeCloseTo(24, -1);
+    expect(b.y + b.height).toBeCloseTo(pane.bas, 0);
 
-    // Deux ronds de 36 px à 12 px du bord droit et du bas : le micro, puis la croix.
+    // Deux ronds de 40 px, centrés, 12 px entre eux, à 28 px du bas : arrêter de parler, puis fermer.
     const s = (await stop(page).boundingBox())!;
     const f = (await voix(page).locator('.agent-voix-fermer').boundingBox())!;
-    expect(s.width).toBeCloseTo(36, 0);
-    expect(f.width).toBeCloseTo(36, 0);
-    expect(b.x + b.width - (f.x + f.width)).toBeCloseTo(12, 0);
-    expect(b.y + b.height - (f.y + f.height)).toBeCloseTo(12, 0);
+    expect(s.width).toBeCloseTo(40, 0);
+    expect(f.width).toBeCloseTo(40, 0);
     expect(f.x - (s.x + s.width)).toBeCloseTo(12, 0);
+    expect((s.x + f.x + f.width) / 2).toBeCloseTo(b.x + b.width / 2, 0);
+    expect(b.y + b.height - (f.y + f.height)).toBeCloseTo(28, 0);
+    await expect(stop(page)).toHaveAttribute('aria-label', 'Finir de parler');
+});
+
+test('sous la lumière, le texte de la note reste cliquable', async () => {
+    const { page } = h;
+    await simulerAudio(page);
+    await ouvrirVoix(page);
+    await attendrePosee(page);
+    const b = (await voix(page).boundingBox())!;
+    // Dans la zone de la lumière, hors des ronds : le point touche la note, pas la voix.
+    const cible = await page.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        return { voix: !!el?.closest('.agent-voix'), note: !!el?.closest('.cm-editor') };
+    }, { x: b.x + 40, y: b.y + 40 });
+    expect(cible).toEqual({ voix: false, note: true });
 });
 
 test('la barre reste en bas quand on fait défiler la note', async () => {
@@ -290,12 +312,10 @@ test('la lueur de voice-glow est là, et balaie pendant que l\'agent réfléchit
     await expect(lueur(page)).toHaveAttribute('data-processing', /.*/);
     await expect(voix(page)).toHaveAttribute('data-etat', 'repond', { timeout: 4_000 });
     await expect(lueur(page)).not.toHaveAttribute('data-processing', /.*/);
-    // La réponse s'écrit sur la ligne d'état.
+    // La réponse s'écrit sur la ligne d'état (lue par les lecteurs d'écran).
     await expect(voix(page).locator('.agent-voix-message')).toContainText('numéro 1');
-    // Pendant que Hone parle, le bouton coupe sa voix : un carré, et le micro revient ensuite.
-    await expect(stop(page)).toHaveAttribute('data-icone', 'square');
-    await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
-    await expect(stop(page)).toHaveAttribute('data-icone', 'mic');
+    // Pendant que Hone parle, le même bouton coupe sa voix.
+    await expect(stop(page)).toHaveAttribute('aria-label', 'Couper la parole à Hone');
 });
 
 test('le micro de la barre orale envoie le tour : l\'agent réfléchit, répond à voix haute, puis la barre écoute de nouveau', async () => {
@@ -355,6 +375,7 @@ test('micro refusé : la barre le dit, et sa croix la ferme', async () => {
     await ouvrirVoix(page);
     await expect(voix(page)).toHaveAttribute('data-etat', 'refuse', { timeout: 4_000 });
     await expect(voix(page).locator('.agent-voix-message')).toHaveText('Micro refusé');
+    await expect(voix(page).locator('.agent-voix-message')).toBeVisible();
     await expect(stop(page)).toBeHidden();
     await voix(page).locator('[aria-label="Fermer"]').click();
     await expect(voix(page)).toHaveCount(0);

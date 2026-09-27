@@ -6,8 +6,12 @@ import { VoiceBeam } from 'voice-glow';
 // MIT), un faisceau coloré au bord bas qui monte avec la voix et balaie pendant
 // que Hone réfléchit. Le paquet est un composant React : plutôt que de le
 // refaire (55 ko de canvas et de filtres, qu'on aurait fait dériver), on lui
-// donne un petit îlot React, un calque vide posé sur toute la barre. Le reste de
-// la barre reste en DOM pur. Retirer ce fichier, c'est retirer React du bundle.
+// donne un petit îlot React, un calque vide et transparent : pas de boîte, la
+// lumière sort de son bord bas, qui est celui du panneau. Le reste reste en DOM
+// pur. Retirer ce fichier, c'est retirer React du bundle.
+
+/** Sans boîte, une lumière presque éteinte dans le silence ferait croire que rien n'écoute (0,23 par défaut). */
+const REPOS = 0.7;
 
 /** Une source de niveau (0 à 1), relue à chaque image par voice-glow sans re-render. */
 export type LireNiveau = () => number;
@@ -22,7 +26,8 @@ export class Lueur {
     private source: Source = null;
     private reflechit = false;
 
-    constructor() {
+    /** `echelle` : la taille de tout l'effet, 1 pour les 370 px du préréglage `default`. */
+    constructor(private echelle = 1) {
         this.el.classList.add('agent-voix-lueur');
         this.el.setAttribute('aria-hidden', 'true');
         this.racine = createRoot(this.el);
@@ -41,6 +46,12 @@ export class Lueur {
         this.rendre();
     }
 
+    redimensionner(echelle: number): void {
+        if (Math.abs(echelle - this.echelle) < 0.01) return;
+        this.echelle = echelle;
+        this.rendre();
+    }
+
     detruire(): void {
         this.racine.unmount();
     }
@@ -49,6 +60,8 @@ export class Lueur {
         const s = this.source;
         this.racine.render(createElement(VoiceBeam, {
             type: 'default',
+            scale: this.echelle,
+            idle: REPOS,
             // L'app suit prefers-color-scheme : voice-glow aussi.
             theme: 'auto',
             stream: s && 'flux' in s ? s.flux : null,
