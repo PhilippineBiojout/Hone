@@ -93,7 +93,7 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   tout et ouvre la vue par `workspace.getRightLeaf()` + `revealLeaf()` : ils existent dans le cœur
   (`Workspace.ts`) mais pas dans les types publiés `@usefragment/core` 0.1.0, d'où un cast local.
   Une feuille posée directement dans `rightSplit` (`createLeafInParent`) n'est jamais mise en page
-  (0 × 0) : c'était le panneau invisible du 2026-09-27. E2e : `e2e/codex.spec.ts` (vrai binaire).
+  (0 × 0) : c'était le panneau invisible du 2026-09-27. E2e : `e2e/codex-installee.spec.ts` (vrai binaire).
   Config dans les réglages (`reglages.ts::CodexSettings` : `codexPath`, `model`, `approvalPolicy`,
   `sandbox`), lue paresseusement. Styles `.codex-*` en fin de `styles.css`. `cwd` = racine du coffre.
   ⚠️ `esbuild.config.mjs` externalise aussi les builtins préfixés `node:` (`...builtins.map(m => 'node:'+m)`)
@@ -110,7 +110,7 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   `outputSchema` par tour. Seule la réponse `final_answer` s'affiche (pas les « commentary »).
 - `codex/profils.ts` : par agent, vault oui/non, web oui/non, schéma, effort. Les consignes sont
   `BASE` + `MISSIONS` de `agents.ts`, partagées avec le moteur OpenAI, qui reste en place sans être appelé.
-- Le factice ne sert plus qu'avec le réglage `factice: true` (e2e). E2e réel : `e2e/bulle-codex.spec.ts`.
+- Le factice ne sert plus qu'avec le réglage `factice: true` (e2e). E2e réel : `e2e/codex-installee.spec.ts`. Lanceur et gestes communs des e2e : `e2e/hone-commun.ts`.
 - `moteur.ts` : le chef d'orchestre côté IA (ex-`agent-serveur`). Construit les agents avec la clé,
   streame le chat, applique le plafond, mappe les erreurs (scrub `sk-…`). Singleton `ouvrirMoteur`/
   `moteurCourant`, reconstruit à chaque changement de réglages.

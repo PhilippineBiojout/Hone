@@ -1,14 +1,10 @@
-import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
-import { cp, mkdtemp, mkdir, writeFile } from 'fs/promises';
-import os from 'os';
-import path from 'path';
+import { test, expect, type Page } from '@playwright/test';
+import { lancer, type Harnais } from './hone-commun';
 
 /**
  * L'atelier dans le vrai renderer d'Electron : la seule preuve que le bac à sable
  * est fermé là où il compte (les tests unitaires tournent sous Node). Les fonctions
  * sont posées d'avance dans data.json, en mode factice : aucune clé, aucun appel.
- *
- *     npx playwright test e2e/agent-atelier.spec.ts --workers=1
  */
 
 const usage = { appels: 0, reussites: 0, echecs: 0 };
@@ -48,84 +44,43 @@ const FONCTIONS = {
     ],
 };
 
-interface Harnais { electronApp: ElectronApplication; page: Page }
+const lancerCommande = (page: Page, id: string) => page.evaluate((i) =>
+    (window as unknown as { app: any }).app.commands.executeCommandById(i), id);
 
-async function fenetreApp(electronApp: ElectronApplication): Promise<Page> {
-    const fin = Date.now() + 30_000;
-    while (Date.now() < fin) {
-        for (const w of electronApp.windows()) if (w.url().includes('localhost:5123')) return w;
-        await new Promise((r) => setTimeout(r, 200));
-    }
-    throw new Error('fenêtre app introuvable');
-}
-
-async function lancer(): Promise<Harnais> {
-    const base = await mkdtemp(path.join(os.tmpdir(), 'prom-atelier-'));
-    const vault = path.join(base, 'vault');
-    const userData = path.join(base, 'userdata');
-    const plugin = path.join(vault, '.fragment/plugins/hone');
-    await mkdir(vault, { recursive: true });
-    await mkdir(userData, { recursive: true });
-    await writeFile(path.join(vault, 'note.md'), '# Note de test\nLa Révolution française commence en 1789.', 'utf8');
-    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone', plugin, {
-        recursive: true,
-        // Ni node_modules, ni les données réelles (la clé ne sort pas du plugin).
-        filter: (src) => !src.includes('node_modules') && !/[\\/](data\.json|memoire\.jsonl)$/.test(src),
-    });
-    await writeFile(path.join(plugin, 'data.json'), JSON.stringify({ factice: true, atelier: { version: 1, fonctions: FONCTIONS } }), 'utf8');
-    await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
-
-    const electronApp = await _electron.launch({
-        args: ['.', `--user-data-dir=${userData}`],
-        env: { ...process.env, NODE_ENV: 'development' } as Record<string, string>,
-    });
-    const page = await fenetreApp(electronApp);
-    await page.waitForFunction(() => {
-        const w = window as unknown as { app?: any };
-        return (w.app?.commands?.listCommands?.() ?? []).some((c: { id: string }) => c.id === 'hone:chat-sonde');
-    }, undefined, { timeout: 30_000 });
-    return { electronApp, page };
-}
-
-const lancerCommande = (page: Page, id: string) => page.evaluate((i) => {
-    const w = window as unknown as { app: any };
-    return w.app.commands.executeCommandById(i);
-}, id);
+const commandes = (page: Page): Promise<string[]> => page.evaluate(() =>
+    (window as unknown as { app: any }).app.commands.listCommands().map((c: { id: string }) => c.id));
 
 test.describe('atelier de Hone', () => {
     let h: Harnais;
     test.beforeAll(async () => {
-        h = await lancer();
+        h = await lancer({
+            note: '# Note de test\nLa Révolution française commence en 1789.',
+            donnees: { atelier: { version: 1, fonctions: FONCTIONS } },
+            editeur: false,
+        });
+        await h.page.waitForFunction(() =>
+            (window as unknown as { app?: any }).app?.commands?.listCommands?.().some((c: { id: string }) => c.id === 'hone:chat-sonde'),
+        undefined, { timeout: 30_000 });
     });
-    test.afterAll(async () => {
-        await h?.electronApp.close();
-    });
+    test.afterAll(async () => { await h?.electronApp.close(); });
 
-    test('les fonctions apprises sont des commandes de la palette', async () => {
-        const ids = await h.page.evaluate(() => (window as unknown as { app: any }).app.commands.listCommands().map((c: { id: string }) => c.id));
+    test('les fonctions apprises sont des commandes de la palette, et la liste blanche d\'affichage existe', async () => {
+        const ids = await commandes(h.page);
         expect(ids).toEqual(expect.arrayContaining(['hone:chat-sonde', 'hone:chat-boucle']));
-    });
-
-    test('la liste blanche d\'affichage existe dans le vrai registre', async () => {
-        const ids: string[] = await h.page.evaluate(() => (window as unknown as { app: any }).app.commands.listCommands().map((c: { id: string }) => c.id));
-        // Journalisé pour relire les ids réels si le cœur en renomme un.
-        console.log('commandes du cœur :', ids.filter((i) => !i.startsWith('hone:')).join(', '));
+        // Si le cœur renomme une commande de la liste blanche (atelier/courtier.ts), c'est ici que ça casse.
         for (const id of ['workspace:new-tab', 'app:toggle-left-sidebar', 'app:toggle-right-sidebar', 'command-palette:open']) {
-            expect(ids).toContain(id);
+            expect(ids, `commandes du cœur : ${ids.filter((i) => !i.startsWith('hone:')).join(', ')}`).toContain(id);
         }
     });
 
-    test('dans le renderer, le bac à sable ne sort pas de Fragment', async () => {
+    test('dans le renderer, le bac à sable ne sort pas de Fragment, et une boucle infinie est tuée sans geler l\'app', async () => {
         expect(await lancerCommande(h.page, 'hone:chat-sonde')).toBe(true);
         const notice = h.page.locator('.notice', { hasText: 'sonde' }).last();
         await expect(notice).toBeVisible({ timeout: 10_000 });
         const texte = (await notice.textContent()) ?? '';
         expect(texte).not.toMatch(/échoué/);
-        const json = JSON.parse(texte.slice(texte.indexOf('{')));
-        expect(json).toEqual(FERME);
-    });
+        expect(JSON.parse(texte.slice(texte.indexOf('{')))).toEqual(FERME);
 
-    test('une boucle infinie est tuée sans geler l\'app', async () => {
         await lancerCommande(h.page, 'hone:chat-boucle');
         // Pendant la boucle, la page répond encore.
         const debut = Date.now();

@@ -201,9 +201,12 @@ qui tourne, avec la **racine du coffre** comme `cwd`.
   géométrie, sanitizer SVG, onde, placement, garde, outils-vault sur un faux vault).
 - **Build** : `npm run build` = `tsc --noEmit` (strict, `verbatimModuleSyntax`) puis esbuild —
   **une seule entrée**, la page (`src/main.ts` → `main.js`, ~1,9 Mo car le SDK OpenAI y est bundlé).
-- **E2E** : les specs Playwright de `e2e/` ne sont pas encore branchées au tooling (pas de
-  `playwright.config`, pas de script npm, `@playwright/test` non déclaré dans `package.json`) —
-  chantier à part.
+- **E2E** : les specs Playwright de `e2e/` se lancent depuis `Fragment-main/app/`, qui porte
+  Playwright : y copier `e2e/hone-commun.ts` tel quel et chaque spec sous le nom `hone-<spec>`,
+  puis `npx playwright test e2e/hone-agent-voix.spec.ts --workers=1`. `hone-commun.ts` porte le
+  lanceur et les gestes : `lancer()` pour l'app de dev en factice (`agent-*.spec.ts`),
+  `lancerInstallee()` pour l'app installée sur une copie de `fragment-notes`, avec le vrai Codex
+  (`codex-installee.spec.ts`, `voix-codex.spec.ts`).
 
 ---
 

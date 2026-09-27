@@ -1,8 +1,9 @@
-import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { execFileSync } from 'child_process';
-import { cp, mkdtemp, mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdtempSync, readFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
+import { barre, lancerInstallee, selectionnerInstallee, voix, type Harnais } from './hone-commun';
 
 /**
  * La discussion orale de bout en bout, dans l'app installée (/Applications/Fragment.app) sur
@@ -12,110 +13,30 @@ import path from 'path';
  *
  * Le micro : `getUserMedia` rend la question décodée dans la page. Le faux micro de Chromium
  * (--use-file-for-fake-audio-capture) ne joue que du silence dans Electron.
- *
- * À copier dans Fragment-main/app/e2e/ sous le nom hone-voix-codex.spec.ts :
- *     npx playwright test e2e/hone-voix-codex.spec.ts --workers=1
  */
 
-const NOTE = 'note-codex.md';
-const CONTENU = [
-    '# Test de la bulle Codex',
-    '',
-    'Ligne 2 : la photosynthèse transforme la lumière en énergie chimique.',
-    '',
-    'Ligne 4 : la Révolution française commence en 1789.',
-].join('\n');
-
-interface Harnais { electronApp: ElectronApplication; page: Page }
-
-let questionB64 = '';
-
-async function fenetreApp(electronApp: ElectronApplication): Promise<Page> {
-    const fin = Date.now() + 30_000;
-    while (Date.now() < fin) {
-        for (const w of electronApp.windows()) if (!w.url().startsWith('devtools')) return w;
-        await new Promise((r) => setTimeout(r, 200));
-    }
-    throw new Error('fenêtre app introuvable');
-}
-
-async function lancer(): Promise<Harnais> {
-    const base = await mkdtemp(path.join(os.tmpdir(), 'hone-voix-'));
-    const vault = path.join(base, 'vault');
-    const userData = path.join(base, 'userdata');
-    await mkdir(userData, { recursive: true });
-    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes', vault, { recursive: true,
-        filter: (src) => !src.includes('node_modules') && !src.includes('/.git') });
-    await writeFile(path.join(vault, NOTE), CONTENU, 'utf8');
-    await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
-    // La question, dite une fois puis du silence : le faux micro de Chromium boucle sur son fichier.
-    const brut = path.join(base, 'question.aiff');
-    const question = path.join(base, 'question.wav');
+/** La question, dite par la voix Thomas de macOS, en WAV 48 kHz (base64). */
+function question(): string {
+    const dossier = mkdtempSync(path.join(os.tmpdir(), 'hone-question-'));
+    const brut = path.join(dossier, 'question.aiff');
+    const wav = path.join(dossier, 'question.wav');
     execFileSync('/usr/bin/say', ['-v', 'Thomas', '-o', brut, 'Bonjour. Qui es-tu, et comment tu t\'appelles ?']);
-    execFileSync('/opt/homebrew/bin/ffmpeg', ['-loglevel', 'error', '-y', '-i', brut, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', question]);
-    questionB64 = (await readFile(question)).toString('base64');
-    const electronApp = await _electron.launch({
-        executablePath: '/Applications/Fragment.app/Contents/MacOS/Fragment',
-        args: [`--user-data-dir=${userData}`, `--vault-root=${vault}`],
-        env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: process.env.HOME! } as Record<string, string>,
-    });
-    const page = await fenetreApp(electronApp);
-    await page.waitForFunction(() => !!(window as any).app?.workspace, undefined, { timeout: 30_000 });
-    await page.setViewportSize({ width: 1400, height: 800 });
-    await page.waitForFunction(() => !!(window as any).app.commands.findCommand('hone:open-codex-panel'), undefined, { timeout: 30_000 });
-    await page.waitForFunction((note) => !!(window as any).app.vault.getFileByPath(note), NOTE, { timeout: 30_000 });
-    await page.evaluate((note) => {
-        const app = (window as any).app;
-        return app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath(note));
-    }, NOTE);
-    await page.locator('.cm-line:visible', { hasText: 'Ligne 2' }).first().waitFor();
-    return { electronApp, page };
+    execFileSync('/opt/homebrew/bin/ffmpeg', ['-loglevel', 'error', '-y', '-i', brut, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', wav]);
+    return readFileSync(wav).toString('base64');
 }
+const questionB64 = question();
 
-async function desarmer(page: Page): Promise<void> {
-    for (const outil of ['Crayon', 'Surligneur', 'Gomme']) {
-        const item = page.locator(`.toolbar-item[aria-label="${outil}"]`);
-        if (await item.count() && await item.first().evaluate((el) => el.classList.contains('is-active'))) await item.first().click();
-    }
-}
-
-/** Glisse la souris d'un bord à l'autre d'un morceau de ligne. */
-async function selectionner(page: Page, ligneTexte: string, mot: string): Promise<void> {
-    await desarmer(page);
-    const b = await page.evaluate(({ ligneTexte, mot }) => {
-        // Le coffre copié a d'autres onglets : on ne cherche que dans les lignes visibles.
-        const el = [...document.querySelectorAll('.cm-line')]
-            .find((l) => l.textContent?.includes(ligneTexte) && (l as HTMLElement).getBoundingClientRect().width > 0)!;
-        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-            const i = n.textContent!.indexOf(mot);
-            if (i < 0) continue;
-            const r = document.createRange();
-            r.setStart(n, i);
-            r.setEnd(n, i + mot.length);
-            const x = r.getBoundingClientRect();
-            return { x: x.left, y: x.top, width: x.width, height: x.height };
-        }
-        throw new Error(`mot introuvable : ${mot}`);
-    }, { ligneTexte, mot });
-    // Dans l'app installée, les coordonnées brutes de page.mouse ne sélectionnent rien ;
-    // les clics de locator, si : clic au début, puis Maj-clic à la fin (le pointerup déclenche la barre).
-    const ligne = page.locator('.cm-line:visible', { hasText: ligneTexte }).first();
-    const l = (await ligne.boundingBox())!;
-    const y = b.y + b.height / 2 - l.y;
-    await ligne.click({ position: { x: b.x - l.x + 1, y } });
-    await ligne.click({ position: { x: b.x + b.width - l.x - 1, y }, modifiers: ['Shift'] });
-}
-
-const barre = (page: Page) => page.locator('.agent-barre');
-const voix = (page: Page) => page.locator('.agent-voix');
 const message = (page: Page) => voix(page).locator('.agent-voix-message');
 
-// Copier tout le coffre et lancer l'app prend plus que les 30 s par défaut ; Codex aussi.
 test.describe.configure({ timeout: 240_000 });
 
 let h: Harnais;
-test.beforeEach(async () => { h = await lancer(); });
+test.beforeEach(async () => {
+    h = await lancerInstallee({
+        chemin: 'note-codex.md', ligne: 'Ligne 2',
+        contenu: '# Test de la voix\n\nLigne 2 : la photosynthèse transforme la lumière en énergie chimique.',
+    });
+});
 test.afterEach(async () => { await h?.electronApp.close(); });
 
 test('le micro part à Hone : transcrit sur la machine, réponse par Codex, et il se présente comme Hone', async () => {
@@ -137,7 +58,7 @@ test('le micro part à Hone : transcrit sur la machine, réponse par Codex, et i
         const dire = speechSynthesis.speak.bind(speechSynthesis);
         speechSynthesis.speak = (u) => { w.__dits.push(u.text); dire(u); };
     }, questionB64);
-    await selectionner(page, 'Ligne 2', 'la photosynthèse transforme la lumière en énergie chimique');
+    await selectionnerInstallee(page, 'Ligne 2', 'la photosynthèse transforme la lumière en énergie chimique');
     await expect(barre(page)).toBeVisible();
     await barre(page).locator('[aria-label="Parler à Hone"]').click();
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 10_000 });
