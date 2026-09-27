@@ -30,7 +30,7 @@ Download Fragment from **[usefragment.org](https://www.usefragment.org)** (Windo
 [usefragment.org/download/mac](https://www.usefragment.org/download/mac)), install it, and open a
 folder as your vault.
 
-**If your antivirus blocks the installer** (« le fichier contient un virus… »):
+**If your antivirus blocks the installer** (We haven't paid Microsoft yet...):
 1. Allow the installer in your antivirus:
    - **Windows Defender**: *Windows Security → Virus & threat protection → Protection history*,
      open the entry for `Fragment Setup…`, then *Actions → Allow on device*.
