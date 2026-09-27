@@ -128,7 +128,7 @@ export function ecouter(
             case 'step':
                 if (ouverte && !attendFlush && texte && m.vad && fin(m.vad)) {
                     attendFlush = true;
-                    ws.send(JSON.stringify({ type: 'send_flush', flush_id: ++flush }));
+                    ws.send(JSON.stringify({ type: 'flush', flush_id: ++flush }));
                 }
                 break;
             case 'flushed': {
