@@ -1,4 +1,4 @@
-import { setIcon, type TextSurface, type WidgetHandle } from 'fragment';
+import { setIcon, type Rect, type TextSurface, type WidgetHandle } from 'fragment';
 import type { Stroke } from './annotation';
 import type { Cadre } from '../positionnement/fenetre';
 import type { Repere } from '../positionnement/repere';
@@ -145,9 +145,9 @@ export class CarnetTraces {
         // Deux traces à la même hauteur se posent côte à côte, la plus récente plus loin du texte.
         const colonnes: number[][] = [];
         const places = visibles
-            .map((t) => ({ t, ligne: this.editor.coordsForRange(t.zone.from, t.zone.from + 1)[0] ?? null }))
+            .map((t) => ({ t, ...this.hauteurDe(t) }))
             .sort((a, b) => (a.ligne?.top ?? 0) - (b.ligne?.top ?? 0));
-        for (const { t, ligne } of places) {
+        for (const { t, ligne, ancre } of places) {
             const { el, rangee, handle } = this.icone(t);
             el.classList.toggle('is-ouverte', t.id === this.ouverte);
             // Le sujet peut arriver après l'icône : son infobulle se relit à chaque placement.
@@ -156,12 +156,12 @@ export class CarnetTraces {
                 el.title = etiquette;
                 el.setAttribute('aria-label', etiquette);
             }
-            if (!ligne) continue;
+            if (!ligne || !ancre) continue;
             const top = (ligne.top + ligne.bottom) / 2 - TAILLE / 2;
             let col = 0;
             while ((colonnes[col] ?? []).some((y) => Math.abs(y - top) < TAILLE + 2)) col++;
             (colonnes[col] ??= []).push(top);
-            const dy = top - ligne.top;
+            const dy = top - ancre.top;
             if (this.repere.widgets.gutterFits('left')) {
                 rangee.style.visibility = '';
                 el.style.marginRight = `${col * (TAILLE + ECART)}px`;
@@ -175,8 +175,27 @@ export class CarnetTraces {
             el.style.marginRight = '';
             const x = texte.left - ECART - TAILLE - col * (TAILLE + ECART);
             rangee.style.visibility = x < pane.left + 2 ? 'hidden' : '';
-            handle.setAnchor({ mode: 'document', pos: t.zone.from, dx: x - ligne.left, dy });
+            handle.setAnchor({ mode: 'document', pos: t.zone.from, dx: x - ancre.left, dy });
         }
+    }
+
+    /**
+     * La hauteur où poser l'icône (`ligne`) et le rectangle de `zone.from` dont l'ancre se décale (`ancre`).
+     * Une zone sans texte (écriture à la main, PDF scanné) a pour passage l'ancre de sa page, la même
+     * pour tous les traits de la page : toutes les icônes se posaient en haut à gauche, l'une sur
+     * l'autre. Elle se pose à la hauteur du haut de son trait.
+     */
+    private hauteurDe(t: Trace): { ligne: Rect | null; ancre: Rect | null } {
+        if (t.zone.from < t.zone.to) {
+            const ligne = this.editor.coordsForRange(t.zone.from, t.zone.from + 1)[0] ?? null;
+            return { ligne, ancre: ligne };
+        }
+        const ancre = this.editor.coordsAtPos(t.zone.from);
+        const trait = this.traitDe(t);
+        const glyphe = this.editor.coordsAtPos(trait.pos);
+        if (!ancre || !glyphe || trait.points.length === 0) return { ligne: null, ancre: null };
+        const haut = glyphe.top + Math.min(...trait.points.map((p) => p.dy));
+        return { ligne: { left: ancre.left, right: ancre.left, top: haut, bottom: haut + TAILLE }, ancre };
     }
 
     /** Retire les icônes de la vue ; les traces restent au registre. */
