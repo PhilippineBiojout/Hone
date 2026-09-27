@@ -33,8 +33,9 @@ test('la commande ouvre le panneau Codex, visible, connecté, et il répond', as
     await page.evaluate(() => (window as unknown as { app: any }).app.commands.executeCommandById('hone:open-codex-panel'));
     const panneau = page.locator('.codex-panel');
     await expect(panneau).toBeVisible({ timeout: 10_000 });
+    // Le dock s'élargit en s'ouvrant : on mesure une fois l'animation finie.
+    await expect.poll(async () => (await panneau.boundingBox())?.width ?? 0).toBeGreaterThan(150);
     const box = (await panneau.boundingBox())!;
-    expect(box.width).toBeGreaterThan(150);
     expect(box.height).toBeGreaterThan(150);
     await expect(page.locator('.codex-header__status')).toHaveText('ready', { timeout: 20_000 });
     await page.locator('.codex-composer__input').fill('Réponds seulement : OK');
