@@ -1,8 +1,8 @@
 /*
  * Codex feature wiring for Hone. Mirrors the `setupScan` pattern: a single
  * `brancherCodex(plugin, …)` call from `main.ts::onload` registers the view,
- * a ribbon icon, a command and the tongue (languette.ts) that show or hide the
- * Codex panel in the right sidedock.
+ * a ribbon icon and a command that show or hide the Codex panel in the right
+ * sidedock.
  *
  * The panel drives `codex app-server` over JSON-RPC (see transport.ts / rpc.ts /
  * session.ts). The connection belongs to the plugin (SessionCodex), not to the
@@ -13,7 +13,6 @@
 import { type Plugin, type WorkspaceLeaf } from "fragment";
 import { CodexView, VIEW_TYPE_CODEX } from "./view";
 import { SessionCodex } from "./session";
-import { poserLanguette } from "./languette";
 import type { CodexSettings } from "../reglages/reglages";
 
 /** Wires the Codex panel into a Hone plugin instance. */
@@ -35,8 +34,6 @@ export function brancherCodex(
 		icon: "bot",
 		callback: () => void basculer(),
 	});
-
-	poserLanguette(plugin, { ouvert: () => estOuvert(plugin, session), basculer });
 }
 
 /** `getRightLeaf` and `revealLeaf` exist in the core (Workspace.ts) but are
