@@ -30,6 +30,8 @@ export class Synchro {
 	/** `null` tant que le premier tour n'a pas répondu. */
 	etat: Etat | null = null;
 	private occupe = false;
+	/** Le dernier rechargement d'onglet PDF, auquel le suivant s'enchaîne. */
+	private rechargement: Promise<void> = Promise.resolve();
 
 	constructor(
 		private readonly app: App,
@@ -173,20 +175,32 @@ export class Synchro {
 	/**
 	 * La vue PDF du cœur n'écoute pas `modify` : un onglet ouvert garderait
 	 * l'ancienne version. On la recharge nous-mêmes (l'URL du fichier porte son
-	 * mtime, donc pas de cache), en gardant le zoom et l'endroit où on lisait.
+	 * mtime, donc pas de cache). La colonne garde sa hauteur pendant le
+	 * rechargement, donc le défilement ne retombe pas en haut et on reste sur la
+	 * page qu'on lisait ; le zoom, lui, est un champ de la vue et survit. Un
+	 * rechargement à la fois : le suivant attend la fin du précédent.
 	 */
-	private async recharger(fichier: TFile): Promise<void> {
-		for (const leaf of this.app.workspace.getLeavesOfFile(fichier)) {
-			const vue = leaf.view;
-			if (!(vue instanceof FileView) || vue.getViewType() !== 'pdf') continue;
-			const etat = vue.getEphemeralState();
-			const defilement = vue.contentEl.querySelector('.pdf-scroll');
-			const haut = defilement?.scrollTop ?? 0;
-			await vue.onUnloadFile(fichier);
-			await vue.onLoadFile(fichier);
-			vue.setEphemeralState(etat);
-			if (defilement) defilement.scrollTop = haut;
-		}
+	private recharger(fichier: TFile): Promise<void> {
+		this.rechargement = this.rechargement.catch(() => {}).then(async () => {
+			for (const leaf of this.app.workspace.getLeavesOfFile(fichier)) {
+				const vue = leaf.view;
+				if (!(vue instanceof FileView) || vue.getViewType() !== 'pdf') continue;
+				const defilement = vue.contentEl.querySelector<HTMLElement>('.pdf-scroll');
+				const pages = vue.contentEl.querySelector<HTMLElement>('.pdf-pages');
+				if (!defilement || !pages) continue;
+				const { scrollTop, scrollLeft } = defilement;
+				pages.style.minHeight = `${pages.offsetHeight}px`;
+				try {
+					await vue.onUnloadFile(fichier);
+					await vue.onLoadFile(fichier);
+					defilement.scrollTop = scrollTop;
+					defilement.scrollLeft = scrollLeft;
+				} finally {
+					pages.style.minHeight = '';
+				}
+			}
+		});
+		return this.rechargement;
 	}
 
 	/** Le cœur ne crée aucun dossier parent : on crée chaque niveau, un par un. */

@@ -247,14 +247,13 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		await attendre(() => contient('reMarkable/Notes.pdf', '/Count 2'), 'carnet mis à jour');
 		await attendre(async () => (await bleus()).length === 2, 'page ajoutée dans l’onglet ouvert');
 
-		// En haut du PDF, tablette connectée : « live », et la phrase au clic.
-		const statut = page.locator('.remarkable-statut:visible');
-		await expect(statut).toHaveText('live');
+		// Tablette connectée : « Live » dans la barre d'état, et plus rien en haut du PDF.
+		const statut = page.locator('.status-bar-item.remarkable-statut');
+		await expect(statut).toHaveText('Live');
+		await expect(page.locator('.view-actions .remarkable-statut, .view-actions svg.lucide-unplug')).toHaveCount(0);
+		await expect(page.locator('.view-actions .view-action', { hasText: /live/i })).toHaveCount(0);
 		await statut.click();
-		// La bulle sort du bouton, comme la demande de l'icône.
-		await expect(page.locator('.remarkable-eclosion')).toHaveCount(1);
-		await expect(page.locator('.remarkable-eclosion')).toHaveCount(0, { timeout: 3000 });
-		await expect(page.locator('.remarkable-bulle')).toHaveText('Tout ce que tu écris sur la tablette apparaît sur ce PDF.');
+		await expect(page.locator('.remarkable-bulle')).toHaveText('Tout ce que tu écris sur la tablette apparaît dans reMarkable/.');
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.remarkable-bulle')).toHaveCount(0);
 
@@ -301,20 +300,18 @@ test('la tablette arrive dans le vault et chaque PDF reste suivi où qu’on le 
 		tablette.ecrire('a');
 		await attendre(() => contient('Archive/A.pdf', 'a version 5'), 'A mis à jour après redémarrage');
 
-		// 8. Tablette débranchée : l'icône en haut du PDF, et les étapes au clic.
+		// 8. Tablette débranchée : « Déconnectée » dans la barre d'état, et l'étape au clic.
 		await page.evaluate(() => {
 			const app = (window as any).app;
 			return app.workspace.getLeaf('tab').openFile(app.vault.getFileByPath('Archive/A.pdf'));
 		});
-		await expect(page.locator('.remarkable-statut:visible')).toHaveText('live');
+		const barre = page.locator('.status-bar-item.remarkable-statut');
+		await expect(barre).toHaveText('Live');
 		tablette.arreter();
-		await expect(page.locator('.remarkable-statut:visible')).toHaveAttribute('aria-label', 'Tablette non connectée', { timeout: 15_000 });
-		await expect(page.locator('.remarkable-statut:visible svg')).toHaveCount(1);
-		await page.locator('.remarkable-statut:visible').click();
-		await expect(page.locator('.remarkable-eclosion')).toHaveCount(1);
-		await expect(page.locator('.remarkable-eclosion')).toHaveCount(0, { timeout: 3000 });
-		await expect(page.locator('.remarkable-bulle')).toContainText('Branche la tablette en USB-C.');
-		await expect(page.locator('.remarkable-bulle')).toContainText('Active l’interface web USB');
+		await expect(barre).toHaveText('Déconnectée', { timeout: 15_000 });
+		await expect(page.locator('.view-actions .remarkable-statut, .view-actions svg.lucide-unplug')).toHaveCount(0);
+		await barre.click();
+		await expect(page.locator('.remarkable-bulle')).toContainText('reMarkable déconnectée');
 		await page.screenshot({ path: path.join(os.tmpdir(), 'remarkable-debranchee.png') });
 	} finally {
 		await electronApp.close();
