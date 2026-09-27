@@ -15,16 +15,21 @@ import { barre, PLUGIN, lancerInstallee, selectionnerInstallee, voix, type Harna
  * (--use-file-for-fake-audio-capture) ne joue que du silence dans Electron.
  */
 
-/** La question, dite par la voix Thomas de macOS, en WAV 48 kHz (base64). */
-function question(): string {
+/** Une question dite par une voix de macOS, en WAV 48 kHz (base64). */
+function question(voixMac: string, texte: string): string {
     const dossier = mkdtempSync(path.join(os.tmpdir(), 'hone-question-'));
     const brut = path.join(dossier, 'question.aiff');
     const wav = path.join(dossier, 'question.wav');
-    execFileSync('/usr/bin/say', ['-v', 'Thomas', '-o', brut, 'Bonjour. Qui es-tu, et comment tu t\'appelles ?']);
+    execFileSync('/usr/bin/say', ['-v', voixMac, '-o', brut, texte]);
     execFileSync('/opt/homebrew/bin/ffmpeg', ['-loglevel', 'error', '-y', '-i', brut, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', wav]);
     return readFileSync(wav).toString('base64');
 }
-const questionB64 = question();
+
+/** La question, la voix Gradium attendue (gradium.ts, VOIX), et un mot qui dit la langue de la réponse. */
+const CAS = [
+    { langue: 'français', b64: question('Thomas', 'Bonjour. Qui es-tu, et comment tu t\'appelles ?'), voix: '6oIkS98REoVZ1dEw', mot: /je|suis|t'aide/i },
+    { langue: 'anglais', b64: question('Samantha', 'Hello. Who are you, and what is your name?'), voix: '4SZHfMpw-p46Ywgs', mot: /\b(I|I'm|your|you)\b/ },
+];
 
 const message = (page: Page) => voix(page).locator('.agent-voix-message');
 
@@ -43,12 +48,22 @@ test.beforeEach(async () => {
 });
 test.afterEach(async () => { await h?.electronApp.close(); });
 
-test('le micro part à Hone : Gradium entend, Codex répond, Gradium le dit, et il se présente comme Hone', async () => {
+for (const cas of CAS) test(`en ${cas.langue}, le micro part à Hone : Gradium entend, Codex répond dans la même langue, la voix de cette langue le dit`, async () => {
     const { page } = h;
     // Le micro joue la question, une fois. La synthèse du système est espionnée : elle ne doit pas servir.
     await page.evaluate((b64) => {
-        const w = window as unknown as { __dits: string[] };
+        const w = window as unknown as { __dits: string[]; __voix: string[] };
         w.__dits = [];
+        // Les voix demandées à Gradium, lues dans les messages de mise en route du TTS.
+        w.__voix = [];
+        const envoyer = WebSocket.prototype.send;
+        WebSocket.prototype.send = function (this: WebSocket, donnee) {
+            try {
+                const m = JSON.parse(String(donnee)) as { type?: string; voice_id?: string };
+                if (m.type === 'setup' && m.voice_id) w.__voix.push(m.voice_id);
+            } catch { /* audio, pas du JSON utile */ }
+            return envoyer.call(this, donnee);
+        };
         navigator.mediaDevices.getUserMedia = async () => {
             const ctx = new AudioContext();
             const octets = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -61,7 +76,7 @@ test('le micro part à Hone : Gradium entend, Codex répond, Gradium le dit, et 
         };
         const dire = speechSynthesis.speak.bind(speechSynthesis);
         speechSynthesis.speak = (u) => { w.__dits.push(u.text); dire(u); };
-    }, questionB64);
+    }, cas.b64);
     await selectionnerInstallee(page, 'Ligne 2', 'la photosynthèse transforme la lumière en énergie chimique');
     await expect(barre(page)).toBeVisible();
     await barre(page).locator('[aria-label="Parler à Hone"]').click();
@@ -75,9 +90,11 @@ test('le micro part à Hone : Gradium entend, Codex répond, Gradium le dit, et 
     expect(reponse).not.toMatch(/factice|n'a pas pu/i);
     expect(reponse).toContain('Hone');
     expect(reponse).not.toMatch(/Codex|ChatGPT/);
+    expect(reponse).toMatch(cas.mot);
+    expect(await page.evaluate(() => (window as unknown as { __voix: string[] }).__voix)).toEqual([cas.voix]);
     // C'est la voix de Gradium qui parle, pas celle du système.
     expect(await page.evaluate(() => (window as unknown as { __dits: string[] }).__dits)).toEqual([]);
-    await page.screenshot({ path: 'test-results/hone-voix-gradium.png' });
+    await page.screenshot({ path: `test-results/hone-voix-gradium-${cas.langue}.png` });
 
     // Elle se tait d'elle-même, et la barre écoute de nouveau ; la croix raccroche.
     await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 60_000 });

@@ -89,12 +89,12 @@ export async function appelGradium(
         e.replique({ auteur: 'moi', texte: phrase });
         e.reflechit(true);
         try {
-            const texte = await moteur.direOral(passage, fil, phrase);
+            const { texte, langue } = await moteur.direOral(passage, fil, phrase);
             fil.push({ auteur: 'moi', texte: phrase }, { auteur: 'agent', texte });
             if (fini) return;
             e.reflechit(false);
             e.replique({ auteur: 'agent', texte });
-            parole = dire(texte, await jeton(cle), e.erreur);
+            parole = dire(texte, langue, await jeton(cle), e.erreur);
             e.honeParle(parole.niveau);
             await parole.fin;
         } catch (err) {

@@ -6,6 +6,7 @@ import type { Memoire } from '../memoire/outils-memoire';
 import type { Demande, Etape, Message, Passage, Sortie, Source } from '../pont/protocole';
 import type { Reglages } from '../reglages/reglages';
 import { BASE } from './agents';
+import type { Langue } from './gradium';
 import { langueDuVault } from './langue';
 import { AgentEnPause, citer, ErreurAgent } from './moteur';
 import { accesVault, type AccesVault } from './vault';
@@ -55,8 +56,17 @@ function source(outils: string[]): Source {
 }
 
 /** La discussion orale : ce qui change de l'écrit. */
-const A_L_ORAL = `Tu parles à voix haute avec l'utilisateur, à propos du passage cité. Réponds en français, en deux ou trois phrases.
+const A_L_ORAL = `Tu parles à voix haute avec l'utilisateur, à propos du passage cité. Réponds en deux ou trois phrases.
+Réponds dans la langue où l'utilisateur vient de parler : en anglais s'il parle anglais, en français sinon. Indique cette langue dans \`langue\`.
 Pas de Markdown, pas de liste, pas de formule : tout ce que tu écris est dit.`;
+
+/** La réplique orale et sa langue, qui choisit la voix (gradium.ts). */
+const SCHEMA_ORAL = {
+    type: 'object',
+    properties: { texte: { type: 'string' }, langue: { type: 'string', enum: ['fr', 'en'] } },
+    required: ['texte', 'langue'],
+    additionalProperties: false,
+};
 
 function messagePourUtilisateur(err: unknown): string {
     const msg = String((err as Error)?.message ?? err);
@@ -137,7 +147,7 @@ export class MoteurCodex {
 
     /** La discussion orale : la réponse à une phrase dite (appel.ts), sans outils ni web.
      *  À l'oral, Hone parle et répond ; il ne va rien chercher, la réponse vient plus vite. */
-    async direOral(passage: Passage, historique: Message[], phrase: string): Promise<string> {
+    async direOral(passage: Passage, historique: Message[], phrase: string): Promise<{ texte: string; langue: Langue }> {
         if (!this.pret()) throw new AgentEnPause('Hone en factice.');
         const fil = historique.slice(-12)
             .map((m) => `${m.auteur === 'moi' ? 'Utilisateur' : 'Toi'} : ${m.texte}`).join('\n\n');
@@ -146,9 +156,10 @@ export class MoteurCodex {
         try {
             const fin = await this.serveur.demander(
                 { consignes: `${BASE}\n${A_L_ORAL}${this.memoire?.preferences.bloc() ?? ''}`, outils: [], web: false },
-                texte, { effort: 'low' },
+                texte, { effort: 'low', schema: SCHEMA_ORAL },
             );
-            return fin.texte;
+            const json = JSON.parse(fin.texte) as { texte?: unknown; langue?: unknown };
+            return { texte: String(json.texte ?? ''), langue: json.langue === 'en' ? 'en' : 'fr' };
         } catch (err) {
             console.error('[hone] codex oral :', err);
             throw new ErreurAgent(messagePourUtilisateur(err));

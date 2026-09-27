@@ -9,8 +9,15 @@ import type { LireNiveau } from '../ui/lueur';
 
 const API = 'https://api.gradium.ai/api';
 const WSS = 'wss://api.gradium.ai/api';
-/** Apolline : « une voix française vive et attentive, qui va droit au but avec le sourire ». */
-export const VOIX = '6oIkS98REoVZ1dEw';
+/** Une voix par langue : Hone répond dans la langue où on lui parle (appel.ts). Changer de
+ *  voix, c'est changer un identifiant ici (catalogue sur studio.gradium.ai). */
+export const VOIX = {
+    /** Apolline : « une voix française vive et attentive, qui va droit au but avec le sourire ». */
+    fr: '6oIkS98REoVZ1dEw',
+    /** Harper : « moderne, assurée et amicale, accent américain standard ». */
+    en: '4SZHfMpw-p46Ywgs',
+} as const;
+export type Langue = keyof typeof VOIX;
 
 const TAUX_MICRO = 24_000;      // le STT attend du PCM 16 bits mono à 24 kHz
 const TAUX_VOIX = 48_000;       // le TTS rend du PCM 16 bits mono à 48 kHz
@@ -113,7 +120,8 @@ export function ecouter(
     processeur.connect(audio.destination);
 
     ws.addEventListener('open', () => {
-        ws.send(JSON.stringify({ type: 'setup', model_name: 'default', input_format: 'pcm', json_config: { language: 'fr' } }));
+        // `any` : Gradium reconnaît seul la langue, français ou anglais.
+        ws.send(JSON.stringify({ type: 'setup', model_name: 'default', input_format: 'pcm', json_config: { language: 'any' } }));
     });
     ws.addEventListener('message', (ev) => {
         const m = JSON.parse(String(ev.data)) as { type: string; text?: string; vad?: { inactivity_prob: number }[]; message?: string };
@@ -170,8 +178,8 @@ export interface Parole {
     couper(): void;
 }
 
-/** Le TTS : dit `texte` avec la voix d'Apolline, morceau par morceau dès qu'ils arrivent. */
-export function dire(texte: string, token: string, erreur: (message: string) => void): Parole {
+/** Le TTS : dit `texte` avec la voix de sa langue, morceau par morceau dès qu'ils arrivent. */
+export function dire(texte: string, langue: Langue, token: string, erreur: (message: string) => void): Parole {
     const ws = socket('speech/tts', token);
     const audio = new AudioContext({ sampleRate: TAUX_VOIX });
     const analyseur = audio.createAnalyser();
@@ -201,7 +209,7 @@ export function dire(texte: string, token: string, erreur: (message: string) => 
     };
 
     ws.addEventListener('open', () => {
-        ws.send(JSON.stringify({ type: 'setup', voice_id: VOIX, model_name: 'default', output_format: 'pcm' }));
+        ws.send(JSON.stringify({ type: 'setup', voice_id: VOIX[langue], model_name: 'default', output_format: 'pcm' }));
     });
     ws.addEventListener('message', (ev) => {
         const m = JSON.parse(String(ev.data)) as { type: string; audio?: string; message?: string };
