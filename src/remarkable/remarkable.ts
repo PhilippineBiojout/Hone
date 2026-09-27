@@ -1,4 +1,4 @@
-import { FileView, type App, type Plugin } from 'fragment';
+import { FileView, setIcon, type App, type Plugin } from 'fragment';
 import { Registre, type Entree } from './registre';
 import { Synchro } from './synchro';
 import { HOTE_PAR_DEFAUT, Tablette } from './tablette';
@@ -56,7 +56,7 @@ export class Remarkable {
 	}
 
 	brancher(plugin: Plugin): void {
-		// « Live » ou « Déconnectée » dans la barre d'état du cœur ; au clic, ce qu'il faut faire.
+		// Une icône, en direct ou débranchée, dans la barre d'état du cœur ; au clic, ce qu'il faut faire.
 		this.statut = plugin.addStatusBarItem();
 		this.statut.classList.add('remarkable-statut');
 		this.statut.addEventListener('click', () => bulle(this.statut, this.synchro.etat, 'dessus'));
@@ -117,11 +117,18 @@ export class Remarkable {
 		this.majStatut();
 	}
 
-	/** « Live » ou « Déconnectée », seulement si un PDF de la tablette est affiché (onglet visible de son panneau). */
+	/** En direct ou débranchée, seulement si un PDF de la tablette est affiché (onglet visible de son panneau).
+	 *  L'icône n'est redessinée qu'au changement d'état : majStatut suit chaque clic du document. */
 	private majStatut(): void {
 		const etat = this.synchro.etat;
-		this.statut.textContent = etat === 'live' ? 'Live' : 'Déconnectée';
-		this.statut.dataset.etat = etat ?? '';
+		if (this.statut.dataset.etat !== (etat ?? '')) {
+			const live = etat === 'live';
+			setIcon(this.statut, live ? 'radio' : 'unplug');
+			const nom = live ? 'reMarkable en direct' : 'reMarkable déconnectée';
+			this.statut.setAttribute('aria-label', nom);
+			this.statut.title = nom;
+			this.statut.dataset.etat = etat ?? '';
+		}
 		const affiche = this.app.workspace.getLeavesOfType('pdf').some((leaf) => leaf.containerEl.offsetParent !== null
 			&& leaf.view instanceof FileView && leaf.view.file && this.registre.suivi(leaf.view.file.path));
 		this.statut.hidden = !(this.autorise && this.statutLive && etat && affiche);

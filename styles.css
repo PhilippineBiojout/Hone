@@ -546,10 +546,14 @@
 	--toolbar-glass-arete: rgba(255, 255, 255, 0.14);
 	--toolbar-glass-creux: rgba(0, 0, 0, 0.35);
 	--toolbar-glass-ombre: rgba(0, 0, 0, 0.35);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	height: 16px;
 	margin: 0 2px;
 	padding: 0 8px;
 	border-radius: 8px;
+	color: var(--text-muted);
 	background: var(--toolbar-glass-teinte);
 	backdrop-filter: blur(0.4px) saturate(1.5) brightness(1.08);
 	box-shadow:
@@ -570,9 +574,13 @@
 	display: none;
 }
 
+.status-bar-item.remarkable-statut svg {
+	width: 12px;
+	height: 12px;
+}
+
 .status-bar-item.remarkable-statut[data-etat="live"] {
 	color: var(--color-accent);
-	font-weight: 600;
 }
 
 @media (prefers-color-scheme: light) {

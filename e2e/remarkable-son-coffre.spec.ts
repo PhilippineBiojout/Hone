@@ -138,7 +138,8 @@ test('reMarkable : une mise à jour garde la page qu’on lisait', async () => {
 		});
 		const vue = page.locator('.pdf-scroll:visible');
 		await expect(vue.locator('.pdf-page')).toHaveCount(8, { timeout: 15_000 });
-		await expect(page.locator('.status-bar-item.remarkable-statut')).toHaveText('Live');
+		await expect(page.locator('.status-bar-item.remarkable-statut')).toHaveAttribute('aria-label', 'reMarkable en direct');
+		await expect(page.locator('.status-bar-item.remarkable-statut svg.lucide-radio')).toHaveCount(1);
 		// Plus de bouton « live » ni d'icône débranchée en haut du PDF.
 		await expect(page.locator('.view-actions .remarkable-statut, .view-actions svg.lucide-unplug')).toHaveCount(0);
 		await expect(page.locator('.view-actions .view-action', { hasText: /live/i })).toHaveCount(0);
@@ -247,7 +248,9 @@ test('reMarkable : le statut reste tant que le PDF est affiché, même dans un a
 			await app.workspace.getLeaf('split').openFile(app.vault.getFileByPath('Lisez-moi.md'), { active: true });
 		});
 		await expect.poll(() => page.evaluate(() => (window as any).app.workspace.activeLeaf?.getViewType())).toBe('markdown');
-		await expect(statut).toHaveText('Déconnectée', { timeout: 15_000 });
+		await expect(statut).toHaveAttribute('aria-label', 'reMarkable déconnectée', { timeout: 15_000 });
+		await expect(statut.locator('svg.lucide-unplug')).toHaveCount(1);
+		await expect(statut).toHaveText('');
 		await expect(statut).toBeVisible();
 		await page.screenshot({ path: `${CAPTURES}/remarkable-statut-split.png` });
 
