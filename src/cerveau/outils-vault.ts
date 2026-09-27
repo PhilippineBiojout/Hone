@@ -1,5 +1,3 @@
-import { tool } from '@openai/agents';
-import { z } from 'zod';
 import { RefusChemin, TAILLE_MAX, verifierChemin } from './garde';
 import type { AccesVault } from './vault';
 
@@ -41,25 +39,4 @@ export async function lireDocument(acces: AccesVault, rel: string): Promise<stri
     return texte.length > CARACTERES_MAX
         ? `${texte.slice(0, CARACTERES_MAX)}\n[… document tronqué à ${CARACTERES_MAX} caractères]`
         : texte;
-}
-
-export function outilsVault(acces: AccesVault) {
-    return [
-        tool({
-            name: 'search_vault',
-            description:
-                'Cherche un mot ou une expression dans les notes du vault (.md, .txt) et renvoie jusqu\'à 8 extraits '
-                + 'avec leur chemin. À utiliser AVANT toute recherche web.',
-            parameters: z.object({ requete: z.string().describe('Le mot ou l\'expression à chercher.') }),
-            execute: async ({ requete }) => chercherDansLeVault(acces, requete),
-        }),
-        tool({
-            name: 'read_document',
-            description:
-                'Lit le texte d\'une note du vault. Le chemin est relatif à la racine du vault, tel que search_vault '
-                + 'le donne. Les dossiers cachés et tout ce qui est hors du vault sont refusés.',
-            parameters: z.object({ chemin: z.string().describe('Chemin relatif à la racine du vault.') }),
-            execute: async ({ chemin }) => lireDocument(acces, chemin),
-        }),
-    ];
 }

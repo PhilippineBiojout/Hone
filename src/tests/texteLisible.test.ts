@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PROFILS } from '../codex/profils';
-import { MISSIONS } from '../cerveau/agents';
+import { MISSIONS } from '../cerveau/consignes';
 import { RegistreTraces } from '../interactions/registreTraces';
 import { etiquetteDeReponse, nettoyerSujet, sansMarkdown, titreDeCarte, titreDuChat } from '../ui/texteLisible';
 

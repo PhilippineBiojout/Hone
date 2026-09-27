@@ -1,8 +1,10 @@
-import { BASE, MISSIONS } from '../cerveau/agents';
+import { CONSIGNES_ATELIER } from '../atelier/consignes';
+import { BASE, MISSIONS } from '../cerveau/consignes';
 import { chercherDansLeVault, lireDocument } from '../cerveau/outils-vault';
 import type { AccesVault } from '../cerveau/vault';
 import type { NomAgent } from '../pont/protocole';
 import type { Json } from './rpc';
+import { objet } from './schema';
 import type { Bornes, OutilFourni, Tour } from './serveur';
 
 // Un profil par agent : ce que Codex sait de sa mission, et ce qu'il a le droit de faire.
@@ -18,10 +20,6 @@ export interface Profil {
     image?: boolean;
 }
 
-/** Un objet JSON Schema strict : tous les champs requis, aucun autre. */
-const objet = (proprietes: Record<string, Json>): Json => ({
-    type: 'object', properties: proprietes, required: Object.keys(proprietes), additionalProperties: false,
-});
 const chaine = { type: 'string' };
 const chaineOuNull = { type: ['string', 'null'] };
 
@@ -41,7 +39,7 @@ export const PROFILS: Record<NomAgent, Profil> = {
     titre: { vault: false, web: false, effort: 'low', schema: objet({ sujet: chaine }) },
 };
 
-/** Les deux outils de lecture du vault, les mêmes que ceux du moteur OpenAI (outils-vault.ts). */
+/** Les deux outils de lecture du vault, lus par outils-vault.ts. */
 export function outilsDuVault(acces: AccesVault): OutilFourni[] {
     return [
         {
@@ -69,12 +67,20 @@ Au lieu d'un dessin, tu peux générer une image avec ton outil de génération 
 Pour une image : génère-la une seule fois, en illustration de manuel sur fond clair uni, avec des légendes courtes dans la langue du passage et rien qui ne soit dans le passage ou le document. Rends alors possible à true et svg à null.
 La règle « aucune image » plus haut ne vaut qu'à l'intérieur du SVG.`;
 
-/** Ce qui borne le fil d'un agent : consignes (BASE + mission + préférences), outils, web, image. */
-export function bornesDe(agent: NomAgent, acces: AccesVault, preferences = ''): Bornes {
+/** Ce qu'un agent reçoit en plus de son profil : la mémoire (préférences et ses deux outils)
+ *  et l'atelier (ses consignes et ses méta-outils). Le titre n'en reçoit rien. */
+export interface Extras {
+    preferences?: string;
+    outils?: OutilFourni[];
+    atelier?: boolean;
+}
+
+/** Ce qui borne le fil d'un agent : consignes (BASE + mission + atelier + préférences), outils, web, image. */
+export function bornesDe(agent: NomAgent, acces: AccesVault, extras: Extras = {}): Bornes {
     const p = PROFILS[agent];
     return {
-        consignes: `${BASE}\n${MISSIONS[agent]}${p.image ? CONSIGNE_IMAGE : ''}${preferences}`,
-        outils: p.vault ? outilsDuVault(acces) : [],
+        consignes: `${BASE}\n${MISSIONS[agent]}${p.image ? CONSIGNE_IMAGE : ''}${extras.atelier ? CONSIGNES_ATELIER : ''}${extras.preferences ?? ''}`,
+        outils: [...(p.vault ? outilsDuVault(acces) : []), ...(extras.outils ?? [])],
         web: p.web,
         image: p.image === true,
     };

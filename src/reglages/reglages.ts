@@ -1,8 +1,8 @@
 import { Modal, type App } from 'fragment';
 
 // Les réglages de Hone, rangés dans les données du plugin (Plugin.loadData/saveData).
-// Il n'y a pas encore de PluginSettingTab dans l'API Fragment : on saisit la clé via
-// un petit Modal maison.
+// Il n'y a pas encore de PluginSettingTab dans l'API Fragment : on saisit la clé Gradium
+// via un petit Modal maison. Hone répond par Codex, avec le compte ChatGPT : pas de clé.
 
 /** Réglages du panneau Codex (pilote `codex app-server` en JSON-RPC). Édité à la
  *  main dans les données du plugin ; pas d'UI dédiée pour l'instant. */
@@ -18,15 +18,9 @@ export interface CodexSettings {
 }
 
 export interface Reglages {
-    /** La clé OpenAI. Vide → Hone répond en factice. */
-    cle: string;
     /** La clé Gradium : l'oreille et la voix de la discussion orale. Vide → pas de voix. */
     gradiumCle: string;
-    modeleFort: string;
-    modeleLeger: string;
-    /** Plafond de tokens par session (0 : sans plafond). */
-    plafond: number;
-    /** Force le mode factice même avec une clé (démos, tests). */
+    /** Force le mode factice : aucun appel à Codex (démos, tests). */
     factice: boolean;
     /** Les agents peuvent se fabriquer des fonctions (atelier/). La clé `atelier` de data.json
      *  est la bibliothèque elle-même : l'interrupteur a donc un autre nom. */
@@ -43,11 +37,7 @@ export const CODEX_DEFAUT: CodexSettings = {
 };
 
 export const REGLAGES_DEFAUT: Reglages = {
-    cle: '',
     gradiumCle: '',
-    modeleFort: 'gpt-5.4',
-    modeleLeger: 'gpt-5.4-mini',
-    plafond: 500_000,
     factice: false,
     atelierActif: true,
     codex: CODEX_DEFAUT,
@@ -58,11 +48,7 @@ export function fusionner(data: unknown): Reglages {
     const d = (data ?? {}) as Partial<Reglages>;
     const c = (d.codex ?? {}) as Partial<CodexSettings>;
     return {
-        cle: typeof d.cle === 'string' ? d.cle : REGLAGES_DEFAUT.cle,
         gradiumCle: typeof d.gradiumCle === 'string' ? d.gradiumCle : REGLAGES_DEFAUT.gradiumCle,
-        modeleFort: typeof d.modeleFort === 'string' && d.modeleFort ? d.modeleFort : REGLAGES_DEFAUT.modeleFort,
-        modeleLeger: typeof d.modeleLeger === 'string' && d.modeleLeger ? d.modeleLeger : REGLAGES_DEFAUT.modeleLeger,
-        plafond: typeof d.plafond === 'number' ? d.plafond : REGLAGES_DEFAUT.plafond,
         factice: d.factice === true,
         atelierActif: d.atelierActif !== false,
         codex: {
@@ -74,21 +60,13 @@ export function fusionner(data: unknown): Reglages {
     };
 }
 
-/** Ce qui distingue les deux clés dans le Modal de saisie. */
+/** Ce que le Modal de saisie montre d'une clé. */
 export interface SorteDeCle {
     titre: string;
     exemple: string;
     aide: string;
-    champ: 'cle' | 'gradiumCle';
+    champ: 'gradiumCle';
 }
-
-export const CLE_OPENAI: SorteDeCle = {
-    titre: 'Hone — clé API OpenAI',
-    exemple: 'sk-…',
-    aide: 'La clé est stockée dans les données du plugin et n\'est utilisée que par Hone, en local. '
-        + 'Sans clé, Hone répond en mode factice.',
-    champ: 'cle',
-};
 
 export const CLE_GRADIUM: SorteDeCle = {
     titre: 'Hone — clé Gradium',
@@ -98,13 +76,13 @@ export const CLE_GRADIUM: SorteDeCle = {
     champ: 'gradiumCle',
 };
 
-/** Le Modal de saisie d'une clé (OpenAI ou Gradium). */
+/** Le Modal de saisie d'une clé. */
 export class ModalCle extends Modal {
     constructor(
         app: App,
         private readonly reglages: Reglages,
         private readonly onEnregistrer: (r: Reglages) => void,
-        private readonly sorte: SorteDeCle = CLE_OPENAI,
+        private readonly sorte: SorteDeCle,
     ) {
         super(app);
     }

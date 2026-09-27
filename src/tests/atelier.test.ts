@@ -244,4 +244,21 @@ describe('atelier', () => {
         expect(a.map((t) => t.name)).toEqual(['list_commands', 'run_command', 'run_code', 'create_function', 'call_function', 'delete_function']);
         expect(a[0]).not.toBe(b[0]);
     });
+
+    it('create_function : trois créations au plus par demande, le compte repart à la suivante', async () => {
+        const m = monter();
+        // Des fonctions bien distinctes : l'atelier refuse celles qui se ressemblent.
+        const sujets: Record<string, string> = {
+            f_un: 'Compte les lignes vides.', f_deux: 'Liste les titres de second niveau.',
+            f_trois: 'Extrait chaque lien externe.', f_quatre: 'Trie les dates par ordre chronologique.',
+        };
+        const creer = (outils: ReturnType<Atelier['outils']>, nom: string) => outils.find((t) => t.name === 'create_function')!.executer({
+            nom, description: sujets[nom], parametres: JSON.stringify({ type: 'object', properties: {} }),
+            code: `return '${nom}';`, tests: JSON.stringify([{ args: {}, attendu: nom }, { args: {}, attendu: nom }]), args_commande: '{}',
+        });
+        const demande = m.atelier.outils('chat');
+        for (const nom of ['f_un', 'f_deux', 'f_trois']) expect(await creer(demande, nom)).toMatch(/Enregistrée/);
+        expect(await creer(demande, 'f_quatre')).toMatch(/3 créations au plus/);
+        expect(await creer(m.atelier.outils('chat'), 'f_quatre')).toMatch(/Enregistrée/);
+    });
 });

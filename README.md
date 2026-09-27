@@ -25,23 +25,26 @@ npm test           # vitest run src  (tests unitaires dans src/tests/)
 
 - **Le bundle `main.js` n'est PAS versionné** (artefact de build). Après un clone frais, lancer
   `npm install && npm run build` **avant** que Fragment puisse charger le plugin.
-- **Clé OpenAI** : dans Fragment, lancer la commande **« Hone : clé API… »** et coller la clé.
-  Elle est rangée dans les données du plugin (`loadData`/`saveData`), pas dans un `.env`. Sans
-  clé, Hone répond en **mode factice**.
+- **Codex** : Hone répond par le binaire `codex`, connecté au compte ChatGPT (`codex login` dans
+  un terminal). Aucune clé API. Le réglage `factice: true` de `data.json` coupe tout appel (e2e).
+- **Clé Gradium** (la voix) : commande **« Hone : clé Gradium… »**, rangée dans les données du
+  plugin (`loadData`/`saveData`), pas dans un `.env`.
 - **Fragment verrouille les dossiers des plugins chargés** : fermer l'app avant de supprimer /
   renommer un dossier, et la redémarrer pour recharger un plugin rebuildé.
 
 ---
 
-## Où tourne OpenAI : dans la page
+## Qui répond : Codex, avec le compte ChatGPT
 
-**Tout tourne dans le renderer** (plus de procès Node séparé, depuis le 2026-09-26). La CSP de
-Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le renderer a Node
-(`nodeIntegration`) : le SDK OpenAI est bundlé dans `main.js` et appelé en page, dans `src/cerveau/`.
+Le chat, les outils de la barre et l'oral passent par **un seul `codex app-server`** que la page
+pilote en JSON-RPC (`src/codex/serveur.ts`), lancé par `src/cerveau/moteur-codex.ts`. Chaque
+demande ouvre un fil éphémère, borné par son profil (`src/codex/profils.ts`) : consignes, outils
+fournis par nous (`dynamicTools`), web ou non, et aucun accès à la machine. Le SDK OpenAI et la
+clé API ont été retirés le 2026-09-27.
 
-- La **clé** vit dans les données du plugin (`Plugin.loadData/saveData`), saisie par un Modal
-  (commande « Hone : clé API… »). Conséquence assumée, à la manière d'Obsidian : la clé est
-  lisible en page.
+- Les outils qu'on donne à Codex : `search_vault` et `read_document` (selon le profil), les deux
+  outils de la mémoire (`remember`, `note_preference`) et, si `atelierActif`, les six méta-outils
+  de l'atelier avec son catalogue en tête de la demande. Le titre n'en reçoit aucun.
 - [`src/pont/protocole.ts`](./src/pont/protocole.ts) porte les **types de domaine** (`Demande` /
   `Sortie` / `Message`) ; le chat se streame par un simple **callback** (plus d'IPC).
 
@@ -54,7 +57,7 @@ Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le render
 
 | Dossier / fichier | Rôle |
 |---|---|
-| `main.ts` | Point d'entrée. `onload()` charge les réglages, ouvre le cerveau, enregistre le calque `hone` (un par vue), ajoute la commande « clé API », pose la lentille de verre, branche le scan et le panneau Codex. |
+| `main.ts` | Point d'entrée. `onload()` charge les réglages, ouvre le moteur Codex, enregistre le calque `hone` (un par vue), ajoute la commande « clé Gradium », pose la lentille de verre, branche le scan et le panneau Codex. |
 | `agentLayer.ts` | **L'orchestrateur** par vue : le seul fichier qui connaît toutes les pièces. Tient l'état `zone` (passage) + `trait`. |
 | `fragment-env.d.ts` | Shim de types pour l'import `fragment`. |
 | **`interactions/`** | Ce qui déclenche et ancre l'agent. |
@@ -80,16 +83,17 @@ Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le render
 | **`pont/`** | Façade + types de domaine. |
 | ├ `repondre.ts` | Façade appelée par les widgets (`repondre`, `agir`, `parler`, `resumerOral`) + repli factice. |
 | └ `protocole.ts` | Les types de domaine (`Demande` / `Sortie` / `Message`). |
-| **`cerveau/`** | Le moteur IA, en page. |
-| ├ `moteur.ts` | Construit les agents avec la clé, streame le chat, plafond, erreurs. Singleton `ouvrirMoteur`/`moteurCourant`. |
-| ├ `agents.ts` | Un `Agent` par mission (+ sorties zod). |
-| ├ `outils-vault.ts` | Outils **lecture seule** : `search_vault`, `read_document` (async, sur `app.vault`). |
+| **`cerveau/`** | Ce qui fait répondre Hone. |
+| ├ `moteur-codex.ts` | Une `Demande` entre, une `Sortie` sort, par Codex ; mémoire et atelier branchés. Singleton `ouvrirMoteurCodex`/`moteurCodexCourant`. |
+| ├ `consignes.ts` | `BASE` (qui est Hone) et la mission de chaque agent. |
+| ├ `demande.ts` | `citer` (le passage tel que Codex le lit), `ErreurAgent`, `AgentEnPause`. |
+| ├ `appel.ts`, `gradium.ts` | La discussion orale : Gradium écoute et parle, Codex répond. |
+| ├ `outils-vault.ts` | Lecture **seule** : `chercherDansLeVault`, `lireDocument` (async, sur `app.vault`). |
 | ├ `vault.ts` | `AccesVault` sur l'API native `app.vault` (injectable, testable). |
 | ├ `garde.ts` | Validation de forme des chemins ; la portée au vault vient d'`app.vault`. |
-| ├ `couts.ts` | Compte les tokens en mémoire + plafond de session. |
 | └ `langue.ts` | Détecte la langue du vault (FR/EN) sans appel modèle. |
 | **`reglages/`** | |
-| └ `reglages.ts` | La clé API (`loadData`/`saveData`) et son Modal de saisie. |
+| └ `reglages.ts` | Réglages (`loadData`/`saveData`) : clé Gradium et son Modal, `factice`, `atelierActif`, `codex`. |
 | **`scan/`** | Fonction « scanner une feuille ». |
 | ├ `scan.ts` | Icône ruban + `ScanModal` (QR via `qr-code-styling`) ; range la photo dans `Scans/`. |
 | └ `relais.ts` | Client WebSocket vers le worker Cloudflare qui relaie le téléphone. |
@@ -125,16 +129,16 @@ sélection souris ──────────┴─► declencheur ─► zon
 
 ### 2. Chat (réponse streamée)
 ```
-BulleAgent ─► pont/repondre.repondre ─► cerveau/moteur.demander
+BulleAgent ─► pont/repondre.repondre ─► cerveau/moteur-codex.demander
    ▲                                          │  { agent:'chat', passage, question, historique }
    │  morceau, morceau, …                     ▼
-   └──────── texte final ◄── run(@openai/agents) + outils (search_vault/read_document sur app.vault) ─► OpenAI
+   └──────── texte final ◄── codex app-server + nos outils (vault, mémoire, atelier) ─► compte ChatGPT
 ```
-Sans clé (ou réglage factice) → réponse factice.
+Réglage `factice` → réponse factice.
 
 ### 3. Outil (carte)
 ```
-BarreAgent ─► ActionAgent ─► pont/repondre.agir ─► cerveau/moteur ─► carte de résultat
+BarreAgent ─► ActionAgent ─► pont/repondre.agir ─► cerveau/moteur-codex ─► carte de résultat
                                                    (« visualiser » : SVG passé par ui/nettoyerSvg)
 ```
 
@@ -190,7 +194,7 @@ CodexView ─► transport (spawn `codex app-server`) ─► rpc (JSON-RPC NDJSO
    ▲  deltas streamés (agentMessage / reasoning / commandExecution)   │  initialize → thread/start → turn/start
    └──────────────────── approbations (Approve / For session / Decline) ◄── requêtes serveur
 ```
-Indépendant du cerveau OpenAI : c'est le binaire **Codex** (config dans `reglages.ts::CodexSettings`)
+Le panneau a son propre `codex app-server`, distinct de celui de la bulle : c'est le binaire **Codex** (config dans `reglages.ts::CodexSettings`)
 qui tourne, avec la **racine du coffre** comme `cwd`.
 
 ---
@@ -200,7 +204,7 @@ qui tourne, avec la **racine du coffre** comme `cwd`.
 - **Unitaires** : `npm test` → `vitest run src` (les `*.test.ts` dans `src/tests/` :
   géométrie, sanitizer SVG, onde, placement, garde, outils-vault sur un faux vault).
 - **Build** : `npm run build` = `tsc --noEmit` (strict, `verbatimModuleSyntax`) puis esbuild —
-  **une seule entrée**, la page (`src/main.ts` → `main.js`, ~1,9 Mo car le SDK OpenAI y est bundlé).
+  **une seule entrée**, la page (`src/main.ts` → `main.js`, ~1,4 Mo).
 - **E2E** : les specs Playwright de `e2e/` se lancent depuis `Fragment-main/app/`, qui porte
   Playwright : y copier `e2e/hone-commun.ts` tel quel et chaque spec sous le nom `hone-<spec>`,
   puis `npx playwright test e2e/hone-agent-voix.spec.ts --workers=1`. `hone-commun.ts` porte le
@@ -215,5 +219,5 @@ qui tourne, avec la **racine du coffre** comme `cwd`.
 - Français partout ; commentaires denses, style narratif. **Exception** : `src/codex/` est en
   anglais (repris tel quel de `codex-on-fragment`).
 - Cycle de vie Fragment : tout se `register` sur un `Component` et se défait au démontage.
-- La clé OpenAI vit dans les données du plugin (page), modèle Obsidian assumé ; scrubée des logs (`sk-…`).
+- La clé Gradium vit dans les données du plugin (page), modèle Obsidian assumé. Aucune clé OpenAI.
 - Un nouveau fichier va dans le dossier de sa responsabilité, **jamais à plat** dans `src/`.

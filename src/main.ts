@@ -3,7 +3,6 @@ import { createAgentLayer } from './agentLayer';
 import { RegistreTraces } from './interactions/registreTraces';
 import { AGENTS, Bibliotheque, lireAtelier } from './atelier/bibliotheque';
 import { Atelier } from './atelier/outils-atelier';
-import { ouvrirMoteur } from './cerveau/moteur';
 import { ouvrirMoteurCodex } from './cerveau/moteur-codex';
 import { Journal } from './memoire/journal';
 import { Memoire } from './memoire/outils-memoire';
@@ -15,15 +14,13 @@ import { CLE_GRADIUM, fusionner, ModalCle, type Reglages } from './reglages/regl
 import { setupScan } from './scan/scan';
 import { brancherRemarkable } from './remarkable/remarkable';
 
-/** Le plugin Hone : un calque par vue. OpenAI tourne EN PAGE (plus de procès forké) ;
- *  la clé vit dans les données du plugin (réglages), saisie via la commande dédiée.
+/** Le plugin Hone : un calque par vue. Il répond par Codex, avec le compte ChatGPT.
  *  L'atelier (les fonctions que les agents se fabriquent) vit à côté des réglages dans
  *  data.json ; il appartient au plugin, pas au moteur, qui est recréé à chaque réglage. */
 export default class HonePlugin extends Plugin {
     private reglages: Reglages = fusionner(null);
     private atelier: Atelier | null = null;
     private memoire: Memoire | null = null;
-    private fermerMoteur: (() => void) | null = null;
     private fermerCodex: (() => void) | null = null;
 
     async onload(): Promise<void> {
@@ -81,14 +78,8 @@ export default class HonePlugin extends Plugin {
         await tracesChargees;
 
         this.relancerMoteur();
-        this.register(() => this.fermerMoteur?.());
         this.register(() => this.fermerCodex?.());
 
-        this.addCommand({
-            id: 'cle-api',
-            name: 'Hone : clé API…',
-            callback: () => new ModalCle(this.app, this.reglages, (r) => void this.majReglages(r)).open(),
-        });
         this.addCommand({
             id: 'cle-gradium',
             name: 'Hone : clé Gradium…',
@@ -102,13 +93,10 @@ export default class HonePlugin extends Plugin {
 
     }
 
-    /** Un seul moteur vivant de chaque sorte : l'ancien est libéré avant d'en créer un neuf.
-     *  La bulle et les outils passent par Codex ; le moteur OpenAI reste en place sans être appelé. */
+    /** Un seul moteur vivant : l'ancien est libéré avant d'en créer un neuf. */
     private relancerMoteur(): void {
-        this.fermerMoteur?.();
-        this.fermerMoteur = ouvrirMoteur(this.app, this.reglages, this.atelier ?? undefined, this.memoire ?? undefined);
         this.fermerCodex?.();
-        this.fermerCodex = ouvrirMoteurCodex(this.app, this.reglages, this.memoire ?? undefined);
+        this.fermerCodex = ouvrirMoteurCodex(this.app, this.reglages, this.memoire ?? undefined, this.atelier ?? undefined);
     }
 
     /** data.json porte les réglages, la bibliothèque et les préférences : on écrit toujours tout. */
@@ -118,11 +106,11 @@ export default class HonePlugin extends Plugin {
         });
     }
 
-    /** Enregistre les réglages et reconstruit le cerveau (nouvelle clé / modèles). */
+    /** Enregistre les réglages et reconstruit le moteur (nouvelle clé Gradium). */
     private async majReglages(r: Reglages): Promise<void> {
         this.reglages = r;
         await this.sauver();
         this.relancerMoteur();
-        if (r.cle) new Notice('Clé Hone enregistrée.');
+        if (r.gradiumCle) new Notice('Clé Gradium enregistrée.');
     }
 }

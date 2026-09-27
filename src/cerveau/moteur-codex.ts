@@ -1,24 +1,26 @@
 import type { App } from 'fragment';
-import { bornesDe, PROFILS } from '../codex/profils';
+import type { Atelier } from '../atelier/outils-atelier';
+import { bornesDe, PROFILS, type Extras } from '../codex/profils';
 import { ServeurCodex, transportReel, type FabriqueTransport } from '../codex/serveur';
 import { rangerImage } from '../codex/images';
 import { vaultRoot } from '../codex/racine';
 import type { Memoire } from '../memoire/outils-memoire';
 import type { Demande, Etape, Message, Passage, Sortie, Sorties, Source } from '../pont/protocole';
 import type { Reglages } from '../reglages/reglages';
-import { BASE } from './agents';
+import { BASE } from './consignes';
 import type { Langue } from './gradium';
 import { langueDuVault } from './langue';
-import { AgentEnPause, citer, ErreurAgent } from './moteur';
+import { AgentEnPause, citer, ErreurAgent } from './demande';
 import { accesVault, type AccesVault } from './vault';
 
 // Le moteur qui fait tourner la bulle et les outils sur Codex, avec le compte ChatGPT
-// (pas de clé API). Même contrat que le moteur OpenAI (moteur.ts) : une Demande entre,
-// une Sortie sort ; la façade (pont/repondre.ts) ne voit pas la différence.
+// (pas de clé API) : une Demande entre, une Sortie sort (pont/repondre.ts).
 //
 // Codex ne voit ni l'écran ni le trait : le passage entouré est recopié dans le texte
 // de la demande (citer), avec le document et la mémoire. Le vault ne sert qu'à aller
 // plus loin, par les deux outils de lecture, pour les agents qui les ont (profils.ts).
+// Chaque agent sauf le titre reçoit en plus les outils de la mémoire et, si l'atelier
+// est actif, ses méta-outils et son catalogue.
 
 /** Le texte envoyé à Codex : mémoire et document, le passage, puis ce que la mission demande. */
 async function texteDe(acces: AccesVault, d: Demande, avant: string): Promise<string> {
@@ -84,7 +86,10 @@ export class MoteurCodex {
     /** La racine du vault : les chemins du vault s'y ajoutent pour Codex. */
     private readonly cwd: string;
 
-    constructor(private readonly app: App, private readonly reglages: Reglages, private readonly memoire?: Memoire, fabrique?: FabriqueTransport) {
+    constructor(
+        private readonly app: App, private readonly reglages: Reglages, private readonly memoire?: Memoire,
+        private readonly atelier?: Atelier, fabrique?: FabriqueTransport,
+    ) {
         this.acces = accesVault(app);
         const cwd = this.cwd = vaultRoot(app);
         this.serveur = new ServeurCodex(cwd, fabrique ?? transportReel(reglages.codex.codexPath, cwd));
@@ -101,9 +106,11 @@ export class MoteurCodex {
         const profil = PROFILS[demande.agent];
         try {
             const souvenirs = await this.memoire?.avant(demande);
-            const avant = [souvenirs?.memoire, souvenirs?.document].filter(Boolean).join('\n\n');
+            const atelier = this.atelierDe(demande.agent);
+            const avant = [atelier?.bibliotheque.catalogue(demande.agent), souvenirs?.memoire, souvenirs?.document]
+                .filter(Boolean).join('\n\n');
             const fin = await this.serveur.demander(
-                bornesDe(demande.agent, this.acces, this.memoire?.preferences.bloc() ?? ''),
+                bornesDe(demande.agent, this.acces, this.extras(demande, atelier)),
                 await texteDe(this.acces, demande, avant),
                 {
                     schema: profil.schema,
@@ -122,6 +129,22 @@ export class MoteurCodex {
             console.error(`[hone] codex ${demande.agent} :`, err);
             throw new ErreurAgent(messagePourUtilisateur(err));
         }
+    }
+
+    /** L'atelier, s'il est actif et que l'agent n'est pas le titre. */
+    private atelierDe(agent: Demande['agent']): Atelier | undefined {
+        return agent !== 'titre' && this.reglages.atelierActif ? this.atelier : undefined;
+    }
+
+    /** Mémoire et atelier pour UNE demande : les outils de l'atelier comptent ses créations. */
+    private extras(demande: Demande, atelier: Atelier | undefined): Extras {
+        const preferences = this.memoire?.preferences.bloc() ?? '';
+        if (demande.agent === 'titre') return { preferences };
+        return {
+            preferences,
+            outils: [...(this.memoire?.outils(demande.agent, demande.passage.chemin) ?? []), ...(atelier?.outils(demande.agent) ?? [])],
+            atelier: atelier !== undefined,
+        };
     }
 
     private sortieDe(demande: Demande, texte: string, outils: string[]): Sortie {
@@ -193,8 +216,8 @@ export class MoteurCodex {
 let moteur: MoteurCodex | null = null;
 
 /** Au chargement du plugin et à chaque changement de réglages ; la fonction rendue arrête Codex. */
-export function ouvrirMoteurCodex(app: App, reglages: Reglages, memoire?: Memoire): () => void {
-    const courant = moteur = new MoteurCodex(app, reglages, memoire);
+export function ouvrirMoteurCodex(app: App, reglages: Reglages, memoire?: Memoire, atelier?: Atelier): () => void {
+    const courant = moteur = new MoteurCodex(app, reglages, memoire, atelier);
     return () => {
         courant.arreter();
         if (moteur === courant) moteur = null;

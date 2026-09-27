@@ -153,6 +153,6 @@ describe('mémoire', () => {
         const avant = await m.avant(demande, MAINTENANT);
         expect(avant.memoire).toMatch(/Déjà dit sur ce document :\n.*« Pourquoi \? » → Parce que\./);
         expect(avant.document).toMatch(/Plan du document :\n# Cours/);
-        expect(m.outils('chat').map((t) => t.name)).toEqual(['remember', 'note_preference']);
+        expect(m.outils('chat', 'note.md').map((t) => t.name)).toEqual(['remember', 'note_preference']);
     });
 });

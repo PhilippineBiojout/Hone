@@ -3,6 +3,10 @@ import { CONSIGNE_IMAGE, PROFILS, bornesDe } from '../codex/profils';
 import { ServeurCodex, type FabriqueTransport } from '../codex/serveur';
 import type { TransportHandlers } from '../codex/transport';
 import type { AccesVault } from '../cerveau/vault';
+import { CONSIGNES_ATELIER } from '../atelier/consignes';
+import { Journal } from '../memoire/journal';
+import { Memoire } from '../memoire/outils-memoire';
+import { Preferences } from '../memoire/preferences';
 
 // Un faux `codex app-server` : il répond aux requêtes, et `scenario` joue le tour
 // (notifications, appel d'outil) quand `turn/start` arrive.
@@ -119,6 +123,30 @@ describe('ServeurCodex', () => {
             emettre({ method: 'turn/completed', params: { threadId: 'fil-1', turn: { status: 'failed', error: { message: 'usage limit' } } } });
         });
         await expect(new ServeurCodex('/v', fabrique).demander(bornesDe('chat', vaultVide), 'x')).rejects.toThrow('usage limit');
+    });
+});
+
+describe('mémoire et atelier sur Codex', () => {
+    it('le fil reçoit les outils de la mémoire et de l\'atelier, et Codex retient une préférence', async () => {
+        const preferences = new Preferences([], () => undefined);
+        const memoire = new Memoire(new Journal({ lire: async () => null, ajouter: async () => undefined }), preferences, vaultVide);
+        const atelier = [{ name: 'call_function', description: 'x', inputSchema: {}, executer: async () => 'ok' }];
+        const bornes = bornesDe('chat', vaultVide, { outils: [...memoire.outils('chat', 'poly.md'), ...atelier], atelier: true });
+        expect(bornes.consignes).toContain(CONSIGNES_ATELIER);
+        expect(bornesDe('chat', vaultVide).consignes).not.toContain(CONSIGNES_ATELIER);
+
+        const { fabrique, envoyes } = fauxCodex(async (emettre, reponse) => {
+            emettre({ method: 'item/started', params: { threadId: 'fil-1', item: { type: 'dynamicToolCall', tool: 'note_preference', arguments: {} } } });
+            emettre({ id: 900, method: 'item/tool/call', params: { threadId: 'fil-1', tool: 'note_preference', arguments: { preference: 'Plus court.', retirer: false } } });
+            await reponse(900);
+            emettre({ method: 'item/completed', params: { threadId: 'fil-1', item: { type: 'agentMessage', id: 'f', phase: 'final_answer', text: 'Noté.' } } });
+            emettre({ method: 'turn/completed', params: { threadId: 'fil-1', turn: { status: 'completed', error: null } } });
+        });
+        const fin = await new ServeurCodex('/v', fabrique).demander(bornes, 'x');
+        const fil = envoyes.find((m) => m.method === 'thread/start')!.params as { dynamicTools: { name: string }[] };
+        expect(fil.dynamicTools.map((t) => t.name)).toEqual(['search_vault', 'read_document', 'remember', 'note_preference', 'call_function']);
+        expect(fin.outils).toContain('note_preference');
+        expect(preferences.toutes()).toEqual(['Plus court.']);
     });
 });
 

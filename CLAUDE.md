@@ -5,21 +5,16 @@ sélection fait apparaître une barre qui ouvre un chat et des outils d'IA sur l
 
 ## Stack & commandes
 - TypeScript, bundlé par esbuild (`esbuild.config.mjs`), types via `@usefragment/core`.
-- Deps runtime : `@openai/agents` + `openai` (SDK bundlé DANS `main.js` → ~1,9 Mo), `zod`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable), `voice-glow` + `react`/`react-dom` (la lueur de la discussion orale, îlot React unique dans `ui/lueur.ts`).
+- Deps runtime (plus de SDK OpenAI depuis le 2026-09-27, `main.js` ~1,4 Mo) : `zod` (arguments de l'atelier), `pdf-lib`, `qr-code-styling` (QR du scan), `fflate` (carnets reMarkable), `voice-glow` + `react`/`react-dom` (la lueur de la discussion orale, îlot React unique dans `ui/lueur.ts`).
 - Scripts : `npm run build` (tsc --noEmit + esbuild prod), `npm test` (vitest run src), `npm run dev`.
 - **node_modules pas versionné** : faire `npm install` avant un build à froid ; l'API Fragment se lit via l'usage, pas via le core.
 
-## Tout en page (renderer) — depuis le 2026-09-26
-Historiquement OpenAI vivait dans un **procès Node forké** (`agent-serveur.js`, `lienAgent.ts`).
-Ce n'est plus le cas : **tout tourne dans le renderer**. La justification d'origine était devenue
-fausse — la CSP de Fragment autorise `connect-src … https:` (donc `api.openai.com`), et le renderer
-tourne en `nodeIntegration: true` / `contextIsolation: false`. Le SDK OpenAI est donc bundlé dans
-`main.js` et appelé en page (`cerveau/`).
-- **La clé vit dans les données du plugin** (`Plugin.loadData/saveData`, cf. `reglages/`), saisie
-  via la commande « Hone : clé API… » (Modal maison — pas encore de `PluginSettingTab` dans l'API).
-  Conséquence assumée (modèle Obsidian) : la clé est lisible en page. **Plus de `.env`.**
-- Client OpenAI : `new OpenAI({ apiKey, dangerouslyAllowBrowser: true })` posé via
-  `setDefaultOpenAIClient` (cf. `cerveau/moteur.ts`).
+## Tout en page (renderer), et plus d'API OpenAI (2026-09-27)
+Tout tourne dans le renderer. Hone répond par **Codex** (compte ChatGPT, `codex login`) :
+le SDK OpenAI, la clé API, la commande « Hone : clé API… », les modèles `gpt-5.4` et le plafond de
+tokens ont été retirés. Seule clé : Gradium (la voix), dans `data.json`.
+Exception connue : `scan/ocr/` (module d'Oscar, branché nulle part) appelle encore
+`api.openai.com` avec une clé qu'on lui passe.
 - `src/pont/protocole.ts` = les types de domaine (`Demande`/`Sortie(s)`/`Message`). Le streaming du
   chat passe par un **callback** `morceau` (plus d'IPC).
 
@@ -47,9 +42,9 @@ src/
   positionnement/       repere.ts, placement.ts, fenetre.ts
   composants/           BarreAgent.ts, BulleAgent.ts, ActionAgent.ts, VoixAgent.ts
   ui/                   ui.ts, animations.ts, onde.ts, lueur.ts, nettoyerSvg.ts
-  cerveau/              moteur.ts, agents.ts, outils-vault.ts, garde.ts, langue.ts, couts.ts, vault.ts
+  cerveau/              moteur-codex.ts, consignes.ts, demande.ts, appel.ts, gradium.ts, outils-vault.ts, garde.ts, langue.ts, vault.ts
   pont/                 repondre.ts (façade), protocole.ts (types de domaine)
-  reglages/             reglages.ts (clé API + Modal de saisie)
+  reglages/             reglages.ts (clé Gradium + Modal de saisie, factice, atelierActif, codex)
   scan/                 scan.ts, relais.ts
   remarkable/           remarkable.ts (brancherRemarkable), tablette.ts, rmdoc.ts, synchro.ts, registre.ts, …
   codex/                transport.ts, rpc.ts, view.ts, codex.ts
@@ -72,7 +67,7 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
 - `decor/verre.ts` : lentille de verre décorative (feDisplacementMap) sur toute `.toolbar` — indépendant de l'agent, Chromium seulement.
 - `ui/nettoyerSvg.ts` : assainit le SVG de « visualiser » avant affichage.
 - `pont/repondre.ts` : la façade que les composants appellent (chat/outils/oral) + repli factice ; `pont/protocole.ts` : les types de domaine.
-- `reglages/reglages.ts` : la clé API (`loadData`/`saveData`) et son Modal de saisie.
+- `reglages/reglages.ts` : réglages (`loadData`/`saveData`), la clé Gradium et son Modal de saisie.
 - `scan/scan.ts` + `scan/relais.ts` : « scanner une feuille » (fusionné depuis l'ex-plugin `scan`, 2026-09-26).
   `setupScan(this)` dans `main.ts::onload` pose une icône de ruban (`addRibbonIcon('qr-code', …)`)
   qui ouvre une `ScanModal` (QR code via `qr-code-styling`). Le QR pointe vers le site téléphone
@@ -84,7 +79,7 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   `brancherCodex(this, () => this.reglages.codex)` dans `main.ts::onload` pose une icône de ruban
   (`addRibbonIcon('bot', 'Open Codex')`) + la commande « Open Codex panel » qui révèle une `CodexView`
   (ItemView) dans le dock droit. **Code en anglais** (choix assumé : l'autre repo passe aussi en anglais).
-  N'utilise PAS OpenAI : pilote le binaire **`codex app-server`** en JSON-RPC sur stdin/stdout via
+  Pilote le binaire **`codex app-server`** en JSON-RPC sur stdin/stdout via
   `node:child_process` (résolu par le shim require de l'hôte — mêmes builtins que Node). 3 couches :
   `transport.ts` (spawn ; sur Windows passe par `cmd.exe /d /s /c` car `.cmd` non spawnable, kill via
   `taskkill /t`), `rpc.ts` (`JsonRpcClient` : 3 formes de messages — requête serveur `id+method`,
@@ -100,8 +95,8 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   car `builtin-modules` ne liste que les noms nus — sans ça le bundle échoue sur `node:child_process`.
 
 ## Cerveau (page) — `src/cerveau/`
-**Depuis le 2026-09-27, la bulle et les outils passent par Codex** (compte ChatGPT, pas de clé) :
-- `moteur-codex.ts` : même contrat que `moteur.ts` (`demander(Demande) → Sortie`), singleton
+**La bulle, les outils et l'oral passent par Codex** (compte ChatGPT, pas de clé) :
+- `moteur-codex.ts` : `demander(Demande) → Sortie`, singleton
   `ouvrirMoteurCodex`/`moteurCodexCourant`, appelé par `pont/repondre.ts`. Le passage entouré est
   recopié dans le texte de la demande (`citer`) : Codex ne voit ni l'écran ni le trait.
 - `codex/serveur.ts` : un seul `codex app-server` pour la page ; un fil éphémère par demande, borné
@@ -115,21 +110,19 @@ fichier va dans le dossier de sa responsabilité, jamais à plat dans `src/`.
   ne garde que le chemin (`ReponseOutil.image`), affiché par `getResourcePath`. E2e réel :
   `e2e/visualiser-image.spec.ts`.
 - `codex/profils.ts` : par agent, vault oui/non, web oui/non, schéma, effort. Les consignes sont
-  `BASE` + `MISSIONS` de `agents.ts`, partagées avec le moteur OpenAI, qui reste en place sans être appelé.
+  `BASE` + `MISSIONS` de `consignes.ts`. `bornesDe(agent, acces, extras)` ajoute les outils de la
+  mémoire (`remember`, `note_preference`) et, si `atelierActif`, les six méta-outils de l'atelier et
+  `CONSIGNES_ATELIER` ; le catalogue des fonctions arrive en tête de la demande. `titre` n'a rien de
+  tout ça. Schémas des outils : `codex/schema.ts`. E2e réel : `e2e/atelier-codex.spec.ts`.
+- `demande.ts` : `citer` (le passage tel que Codex le lit), `ErreurAgent`, `AgentEnPause`.
 - Le factice ne sert plus qu'avec le réglage `factice: true` (e2e). E2e réel : `e2e/codex-installee.spec.ts`. Lanceur et gestes communs des e2e : `e2e/hone-commun.ts`.
-- `moteur.ts` : le chef d'orchestre côté IA (ex-`agent-serveur`). Construit les agents avec la clé,
-  streame le chat, applique le plafond, mappe les erreurs (scrub `sk-…`). Singleton `ouvrirMoteur`/
-  `moteurCourant`, reconstruit à chaque changement de réglages.
-- `agents.ts` : un `Agent` @openai/agents par mission (chat, definir, resumer, traduire, aider, visualiser, bilan),
-  modèle fort/léger (`gpt-5.4`/`gpt-5.4-mini`), sorties structurées zod. Prompt BASE : vault d'abord, contenu = DONNÉE.
 - `vault.ts` : `AccesVault` sur l'API native `app.vault` (getFiles/cachedRead/getFileByPath) — interface injectable, testable avec un faux (`src/tests/`).
-- `outils-vault.ts` : `search_vault`, `read_document` (LECTURE seule, **async**) + webSearchTool pour certains.
+- `outils-vault.ts` : `chercherDansLeVault`, `lireDocument` (LECTURE seule, **async**), exposés à Codex par `codex/profils.ts`.
 - `garde.ts` : validation de forme des chemins (pas d'absolu/dotfiles/.fragment, .md/.txt) ; la portée au vault est assurée par `app.vault`. Refus RENDU au modèle.
-- `couts.ts` : compte les tokens **en mémoire**, plafond de session (plus de `couts.jsonl`).
 - `langue.ts` : langue majoritaire du vault (pour Traduire), sur `app.vault`.
 - Repli factice (`pont/repondre.ts`) : seulement avec le réglage `factice` → réponses factices.
 
 ## Contraintes / conventions
 - Tout en **français** (code, commentaires, UI). Commentaires denses, style narratif.
 - Cycle de vie Fragment : tout se `register` sur un `Component` et se défait au démontage.
-- La clé OpenAI vit dans les données du plugin, en page (modèle Obsidian assumé) : on la scrub des logs (`sk-…`) et on ne l'écrit jamais ailleurs.
+- La clé Gradium vit dans les données du plugin, en page (modèle Obsidian assumé) : on ne l'écrit jamais ailleurs.

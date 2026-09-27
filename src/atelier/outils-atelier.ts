@@ -1,6 +1,6 @@
-import { tool, type RunContext, type Tool } from '@openai/agents';
-import { z } from 'zod';
 import type { AccesVault } from '../cerveau/vault';
+import { chaine, objet } from '../codex/schema';
+import type { OutilFourni } from '../codex/serveur';
 import type { NomAgent } from '../pont/protocole';
 import { DELAI_MS, executer, type Execution, type OptionsExecution } from './bac-a-sable';
 import { Bibliotheque, egal, verifierArgs, type CasDeTest, type Definition, type Fonction } from './bibliotheque';
@@ -13,15 +13,12 @@ import { commandesPermises, creerCourtier, verifierCommande, type Commandes, typ
 //
 // Une fonction créée ne devient PAS un outil de plus : l'agent a un seul
 // call_function et lit son catalogue à chaque demande. La liste d'outils ne bouge
-// donc jamais (le cache de prompt d'OpenAI tient, l'agent reste sous 20 outils) et
-// un schéma écrit par le modèle n'a pas à passer le mode strict d'OpenAI : zod le
-// vérifie ici. Elle est quand même appelable dès le tour suivant du même run.
+// donc jamais (l'agent reste sous 20 outils) et un schéma écrit par le modèle n'a pas
+// à passer le mode strict des outils de Codex : verifierArgs le vérifie ici. Elle est
+// quand même appelable dès le tour suivant de la même demande.
 
 export const CREATIONS_PAR_RUN = 3;
 export const PROFONDEUR_MAX = 3;
-
-/** Ce que les outils lisent dans le contexte du run : les créations déjà faites. */
-export interface ContexteAtelier { creations: number }
 
 /** Ce que l'atelier sait faire du registre de commandes de Fragment (le Plugin, ou un faux). */
 export interface HoteCommandes {
@@ -164,24 +161,24 @@ export class Atelier {
         for (const agent of agents) for (const f of this.bibliotheque.lister(agent)) this.declarer(agent, f);
     }
 
-    /** Les méta-outils d'un agent. Chaque agent a son propre jeu, lié à sa bibliothèque. */
-    outils(agent: NomAgent): Tool[] {
-        const creations = (ctx?: RunContext<unknown>) => {
-            const c = ctx?.context as ContexteAtelier | undefined;
-            return c && typeof c.creations === 'number' ? c : null;
-        };
+    /** Les méta-outils d'un agent pour UNE demande : chaque agent a son propre jeu, lié à sa
+     *  bibliothèque, et le compte des créations repart de zéro à chaque demande. */
+    outils(agent: NomAgent): OutilFourni[] {
+        let creations = 0;
+        const texte = (v: unknown) => String(v ?? '');
         return [
-            tool({
+            {
                 name: 'list_commands',
                 description: 'Liste les commandes de Fragment que tu peux lancer (elles ne changent que l\'affichage).',
-                parameters: z.object({}),
-                execute: async () => JSON.stringify(commandesPermises(this.o.commandes)),
-            }),
-            tool({
+                inputSchema: objet({}),
+                executer: async () => JSON.stringify(commandesPermises(this.o.commandes)),
+            },
+            {
                 name: 'run_command',
                 description: 'Lance une commande de Fragment par son id (voir list_commands).',
-                parameters: z.object({ id: z.string() }),
-                execute: async ({ id }) => {
+                inputSchema: objet({ id: chaine() }),
+                executer: async (a) => {
+                    const id = texte(a.id);
                     try {
                         const nom = verifierCommande(this.o.commandes, id);
                         return this.o.commandes.lancer(id) ? `Lancée : ${nom}.` : `La commande « ${nom} » n'a pas tourné.`;
@@ -189,70 +186,69 @@ export class Atelier {
                         return String((err as Error).message);
                     }
                 },
-            }),
-            tool({
+            },
+            {
                 name: 'run_code',
                 description: 'Exécute un brouillon de code sans l\'enregistrer : le corps d\'une fonction async (args, hone) '
                     + 'qui retourne une valeur JSON. Pour un calcul ponctuel, ou pour mettre au point une fonction.',
-                parameters: z.object({
-                    code: z.string(),
-                    args: z.string().describe('Les args en JSON, par exemple {"chemin":"cours/poly.md"}.'),
+                inputSchema: objet({
+                    code: chaine(),
+                    args: chaine('Les args en JSON, par exemple {"chemin":"cours/poly.md"}.'),
                 }),
-                execute: async ({ code, args }) => {
+                executer: async (a) => {
                     try {
-                        return rendre(await this.executerFonction(agent, { code }, json(args, 'args')));
+                        return rendre(await this.executerFonction(agent, { code: texte(a.code) }, json(texte(a.args), 'args')));
                     } catch (err) {
                         return String((err as Error).message);
                     }
                 },
-            }),
-            tool({
+            },
+            {
                 name: 'create_function',
                 description: 'Crée (ou remplace, même nom) une fonction réutilisable dans ta bibliothèque. Elle est testée '
                     + 'avant d\'être enregistrée : chaque test doit rendre exactement le résultat attendu.',
-                parameters: z.object({
-                    nom: z.string().describe('snake_case, par exemple compter_definitions.'),
-                    description: z.string().describe('Ce qu\'elle fait et quand s\'en servir, en une ou deux phrases.'),
-                    parametres: z.string().describe('JSON Schema (type object) des args, en JSON.'),
-                    code: z.string().describe('Le corps d\'une fonction async (args, hone) qui retourne une valeur JSON.'),
-                    tests: z.string().describe('2 ou 3 cas en JSON : [{"args":{…},"attendu":…}].'),
-                    args_commande: z.string().describe('Les args (JSON) quand on la lance depuis la palette de commandes.'),
+                inputSchema: objet({
+                    nom: chaine('snake_case, par exemple compter_definitions.'),
+                    description: chaine('Ce qu\'elle fait et quand s\'en servir, en une ou deux phrases.'),
+                    parametres: chaine('JSON Schema (type object) des args, en JSON.'),
+                    code: chaine('Le corps d\'une fonction async (args, hone) qui retourne une valeur JSON.'),
+                    tests: chaine('2 ou 3 cas en JSON : [{"args":{…},"attendu":…}].'),
+                    args_commande: chaine('Les args (JSON) quand on la lance depuis la palette de commandes.'),
                 }),
-                execute: async (p, ctx) => {
-                    const c = creations(ctx);
-                    if (c && c.creations >= CREATIONS_PAR_RUN) return `Refusé : ${CREATIONS_PAR_RUN} créations au plus par demande.`;
+                executer: async (p) => {
+                    if (creations >= CREATIONS_PAR_RUN) return `Refusé : ${CREATIONS_PAR_RUN} créations au plus par demande.`;
                     try {
                         const d: Definition = {
-                            nom: p.nom, description: p.description, code: p.code,
-                            parametres: json(p.parametres, 'parametres') as Record<string, unknown>,
-                            tests: json(p.tests, 'tests') as CasDeTest[],
-                            argsCommande: json(p.args_commande, 'args_commande') as Record<string, unknown>,
+                            nom: texte(p.nom), description: texte(p.description), code: texte(p.code),
+                            parametres: json(texte(p.parametres), 'parametres') as Record<string, unknown>,
+                            tests: json(texte(p.tests), 'tests') as CasDeTest[],
+                            argsCommande: json(texte(p.args_commande), 'args_commande') as Record<string, unknown>,
                         };
-                        if (c) c.creations++;
+                        creations++;
                         return await this.creer(agent, d);
                     } catch (err) {
                         return String((err as Error).message);
                     }
                 },
-            }),
-            tool({
+            },
+            {
                 name: 'call_function',
                 description: 'Appelle une fonction de ta bibliothèque (voir ton catalogue) avec ses args.',
-                parameters: z.object({ nom: z.string(), args: z.string().describe('Les args en JSON.') }),
-                execute: async ({ nom, args }) => {
+                inputSchema: objet({ nom: chaine(), args: chaine('Les args en JSON.') }),
+                executer: async (a) => {
                     try {
-                        return rendre(await this.appeler(agent, nom, json(args, 'args')));
+                        return rendre(await this.appeler(agent, texte(a.nom), json(texte(a.args), 'args')));
                     } catch (err) {
                         return String((err as Error).message);
                     }
                 },
-            }),
-            tool({
+            },
+            {
                 name: 'delete_function',
                 description: 'Supprime une fonction de ta bibliothèque (inutile, fausse, ou pour faire de la place).',
-                parameters: z.object({ nom: z.string() }),
-                execute: async ({ nom }) => this.supprimer(agent, nom),
-            }),
+                inputSchema: objet({ nom: chaine() }),
+                executer: async (a) => this.supprimer(agent, texte(a.nom)),
+            },
         ];
     }
 }

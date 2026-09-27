@@ -1,5 +1,5 @@
 import { appelFactice, appelGradium, type Appel, type EcouteursAppel } from '../cerveau/appel';
-import { AgentEnPause } from '../cerveau/moteur';
+import { AgentEnPause } from '../cerveau/demande';
 import { moteurCodexCourant, type MoteurCodex } from '../cerveau/moteur-codex';
 import type { Etape, Message, Outil, Passage, Source, Sorties } from './protocole';
 import { nettoyerSujet, sansMarkdown } from '../ui/texteLisible';

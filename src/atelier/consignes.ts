@@ -3,8 +3,7 @@ import { PLAFOND_FONCTIONS } from './bibliotheque';
 import { CREATIONS_PAR_RUN } from './outils-atelier';
 
 // Ce que chaque agent lit en plus de sa mission quand l'atelier est actif. Le texte
-// est FIXE (il fait partie du préfixe mis en cache par OpenAI) : le catalogue, qui
-// change, arrive à la fin de la demande, pas ici.
+// est fixe : le catalogue, qui change, arrive avec la demande (moteur-codex.ts), pas ici.
 
 export const CONSIGNES_ATELIER = `
 Atelier : tu peux te fabriquer des fonctions, et elles restent dans ta bibliothèque d'une demande à l'autre.
