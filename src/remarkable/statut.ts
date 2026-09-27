@@ -20,16 +20,15 @@ export function bulle(bouton: HTMLElement, etat: Etat | null, ou: 'dessus' | 'dr
 		creer(menu.dom, 'p', '', ETAPE[etat ?? 'cable']);
 	}
 	const r = bouton.getBoundingClientRect();
-	if (ou === 'droite') menu.showAtPosition(r.right + 8, r.top);
-	else {
+	if (ou === 'droite') {
+		menu.showAtPosition(r.right + 8, r.top);
+		const eclosion = eclore(bouton, menu.dom);
+		menu.onHide(() => eclosion.annuler());
+	} else {
 		// Bord droit aligné sur celui du bouton, bas à 4 px au-dessus.
+		// Au clic sur le statut, pas d'animation pour l'instant (elle est à refaire).
 		menu.showAtPosition(r.right, r.top);
 		menu.dom.style.left = `${Math.max(8, r.right - menu.dom.offsetWidth)}px`;
 		menu.dom.style.top = `${Math.max(8, r.top - 4 - menu.dom.offsetHeight)}px`;
-	}
-	// Au clic sur le statut, pas d'animation pour l'instant (elle est à refaire).
-	if (ou === 'droite') {
-		const eclosion = eclore(bouton, menu.dom);
-		menu.onHide(() => eclosion.annuler());
 	}
 }

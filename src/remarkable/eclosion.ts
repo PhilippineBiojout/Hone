@@ -18,12 +18,8 @@ let compteur = 0;
 
 const px = (n: number): string => `${n}px`;
 const sansMouvement = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const fait = (): Eclosion => ({ fini: Promise.resolve(), annuler: () => {} });
-
-/** La translation client → repère du parent positionné de `el` (placé en left/top). */
-function decalage(el: HTMLElement, r: DOMRect): { dx: number; dy: number } {
-	return { dx: parseFloat(el.style.left || '0') - r.left, dy: parseFloat(el.style.top || '0') - r.top };
-}
+/** `v` ramené dans [min, max]. */
+const borne = (v: number, min: number, max: number): number => Math.min(Math.max(v, min), max);
 
 /**
  * Des animations annulables. `suite` s'enchaîne si rien n'est annulé ; à la fin
@@ -84,19 +80,19 @@ export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement): Eclos
 	const parent = bulle.parentElement;
 	if (sansMouvement() || !parent) {
 		bulle.style.opacity = '';
-		return fait();
+		return { fini: Promise.resolve(), annuler: () => {} };
 	}
 	const rb = bulle.getBoundingClientRect();
 	// Une boîte : le bouton a pu être retiré (la tête de chat d'une carte qui devient le chat).
 	const rk = bouton instanceof DOMRect ? bouton : bouton.getBoundingClientRect();
-	const { dx, dy } = decalage(bulle, rb);
+	// La translation client → repère du parent positionné de la bulle (placée en left/top).
+	const dx = parseFloat(bulle.style.left || '0') - rb.left;
+	const dy = parseFloat(bulle.style.top || '0') - rb.top;
 	const cible = { x: rb.left + dx, y: rb.top + dy, w: rb.width, h: rb.height };
 	const d = Math.min(rk.width, rk.height);
 	const depuis = { x: rk.left + dx + (rk.width - d) / 2, y: rk.top + dy + (rk.height - d) / 2, w: d, h: d };
 	// Le point de la bulle le plus proche du bouton : la goutte y file, puis s'ouvre.
-	const ax = Math.min(Math.max(depuis.x + d / 2, cible.x + d / 2), cible.x + cible.w - d / 2);
-	const ay = Math.min(Math.max(depuis.y + d / 2, cible.y + d / 2), cible.y + cible.h - d / 2);
-	const depart = { x: ax - d / 2, y: ay - d / 2, w: d, h: d };
+	const depart = { x: borne(depuis.x, cible.x, cible.x + cible.w - d), y: borne(depuis.y, cible.y, cible.y + cible.h - d), w: d, h: d };
 
 	// Le flou déborde des formes : 24 px de marge pour que le filtre ne le rogne pas.
 	const gauche = Math.min(depuis.x, cible.x) - 24;
@@ -115,9 +111,12 @@ export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement): Eclos
 		+ '<feGaussianBlur in="SourceGraphic" stdDeviation="4.4" result="blur"/>'
 		+ '<feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -7" result="goo"/>'
 		+ '<feBlend in="SourceGraphic" in2="goo"/></filter></defs></svg>';
-	const forme = (r: { x: number; y: number; w: number; h: number }): HTMLElement => {
+	type Boite = { x: number; y: number; w: number; h: number };
+	/** Une boîte en left/top/width/height, dans le repère du fantôme. */
+	const place = (r: Boite) => ({ left: px(r.x - gauche), top: px(r.y - haut), width: px(r.w), height: px(r.h) });
+	const forme = (r: Boite): HTMLElement => {
 		const el = creer(fantome, 'div', 'remarkable-eclosion-forme');
-		Object.assign(el.style, { left: px(r.x - gauche), top: px(r.y - haut), width: px(r.w), height: px(r.h), borderRadius: '50%' });
+		Object.assign(el.style, { ...place(r), borderRadius: '50%' });
 		return el;
 	};
 	forme(depuis);
@@ -132,8 +131,8 @@ export function eclore(bouton: HTMLElement | DOMRect, bulle: HTMLElement): Eclos
 		goutte.animate([{ translate: `${depuis.x - depart.x}px ${depuis.y - depart.y}px` }, { translate: '0px 0px' }],
 			{ duration: duree, easing, fill: 'both' }),
 		goutte.animate([
-			{ left: px(depart.x - gauche), top: px(depart.y - haut), width: px(d), height: px(d), borderRadius: px(d / 2) },
-			{ left: px(cible.x - gauche), top: px(cible.y - haut), width: px(cible.w), height: px(cible.h), borderRadius: '12px' },
+			{ ...place(depart), borderRadius: px(d / 2) },
+			{ ...place(cible), borderRadius: '12px' },
 		], { ...etire, easing }),
 		// Couleurs résolues ici : l'interpolation se fait en rgb, sans éclair au fondu.
 		goutte.animate([{ backgroundColor: getComputedStyle(goutte).backgroundColor }, { backgroundColor: getComputedStyle(bulle).backgroundColor }],

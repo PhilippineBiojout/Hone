@@ -2,7 +2,7 @@ import { FileView, type App, type Plugin } from 'fragment';
 import { Registre, type Entree } from './registre';
 import { Synchro } from './synchro';
 import { HOTE_PAR_DEFAUT, Tablette } from './tablette';
-import { DemandeAutorisation } from './demande';
+import { DemandeAutorisation, type Question } from './demande';
 import { bulle } from './statut';
 
 // Les carnets de la reMarkable en direct dans le vault, en PDF (voir README).
@@ -71,20 +71,22 @@ export class Remarkable {
 		// Synchro coupée : la demande. Active : l'état de la tablette.
 		const icone = plugin.addRibbonIcon('tablet', 'reMarkable', () => {
 			if (this.autorise) bulle(icone, this.synchro.etat, 'droite');
-			else new DemandeAutorisation(this.app, icone, 'rappel', (oui) => void this.autoriser(oui)).open();
+			else demander('rappel', (oui) => this.autoriser(oui));
 		});
+		const demander = (question: Question, repondre: (oui: boolean) => Promise<void>): void =>
+			new DemandeAutorisation(this.app, icone, question, (oui) => void repondre(oui)).open();
 		// La seule façon de couper la synchro, ou de la relancer : « reMarkable : sync » dans la palette.
 		plugin.addCommand({
 			id: 'remarkable-sync',
 			name: 'reMarkable : sync',
 			icon: 'tablet',
-			callback: () => new DemandeAutorisation(this.app, icone, this.autorise ? 'active' : 'coupee', (oui) => void this.autoriser(oui)).open(),
+			callback: () => demander(this.autorise ? 'active' : 'coupee', (oui) => this.autoriser(oui)),
 		});
 		plugin.addCommand({
 			id: 'remarkable-show-live-status',
 			name: 'reMarkable : show live status',
 			icon: 'tablet',
-			callback: () => new DemandeAutorisation(this.app, icone, this.statutLive ? 'affiche' : 'masque', (oui) => void this.afficherStatut(oui)).open(),
+			callback: () => demander(this.statutLive ? 'affiche' : 'masque', (oui) => this.afficherStatut(oui)),
 		});
 
 		this.app.workspace.onLayoutReady(async () => {

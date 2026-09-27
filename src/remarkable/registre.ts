@@ -53,11 +53,11 @@ export function cibles(docs: { id: string; chemin: string }[], carnets: Record<s
 	const sortie = new Map<string, string>();
 	for (const [base, ids] of parBase) {
 		const variante = (n: number) => (n === 1 ? `${base}.pdf` : `${base} (${n}).pdf`);
+		const variantes = ids.map((_, i) => variante(i + 1));
 		const prises = new Set<string>();
 		const restants: string[] = [];
 		for (const id of ids) {
 			const actuel = carnets[id]?.chemin;
-			const variantes = ids.map((_, i) => variante(i + 1));
 			if (actuel && variantes.includes(actuel) && !prises.has(actuel)) {
 				prises.add(actuel);
 				sortie.set(id, actuel);

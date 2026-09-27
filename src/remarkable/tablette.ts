@@ -22,12 +22,16 @@ export interface ElementTablette {
 // bloqué par la CSP de Fragment (pas de http:) : on passe par `http` avec le
 // parseur tolérant. Une connexion par requête (`agent: false`) : rien ne
 // garantit que la tablette tienne une connexion ouverte entre deux tours.
-function obtenir(url: string, delaiMs: number): Promise<{ statut: number; corps: Buffer }> {
+// Autre chose qu'un 200 est une erreur.
+function obtenir(url: string, delaiMs: number): Promise<Buffer> {
 	return new Promise((resoudre, rejeter) => {
 		const req = http.get(url, { insecureHTTPParser: true, timeout: delaiMs, agent: false }, (res) => {
 			const morceaux: Buffer[] = [];
 			res.on('data', (m: Buffer) => morceaux.push(m));
-			res.on('end', () => resoudre({ statut: res.statusCode ?? 0, corps: Buffer.concat(morceaux) }));
+			res.on('end', () => {
+				if (res.statusCode === 200) resoudre(Buffer.concat(morceaux));
+				else rejeter(new Error(`HTTP ${res.statusCode ?? 0} sur ${url}`));
+			});
 			res.on('error', rejeter);
 		});
 		req.on('timeout', () => req.destroy(new Error(`délai dépassé sur ${url}`)));
@@ -58,21 +62,15 @@ export class Tablette {
 
 	/** Tous les carnets et dossiers, en descendant dans chaque dossier. */
 	async lister(dossier = '', prefixe = ''): Promise<ElementTablette[]> {
-		const { statut, corps } = await obtenir(`${this.hote}/documents/${dossier}`, 4000);
-		if (statut !== 200) throw new Error(`HTTP ${statut} sur /documents/${dossier}`);
+		const corps = await obtenir(`${this.hote}/documents/${dossier}`, 4000);
 		const items = JSON.parse(corps.toString('utf8')) as { ID: string; VissibleName: string; Type: string; ModifiedClient: string; fileType?: string }[];
 
 		const sortie: ElementTablette[] = [];
 		for (const item of items) {
-			const el: ElementTablette = {
-				id: item.ID,
-				chemin: prefixe + segment(item.VissibleName),
-				dossier: item.Type === 'CollectionType',
-				modifie: item.ModifiedClient,
-				carnet: item.fileType === 'notebook',
-			};
-			sortie.push(el);
-			if (el.dossier) sortie.push(...(await this.lister(el.id, el.chemin + '/')));
+			const chemin = prefixe + segment(item.VissibleName);
+			const dossier = item.Type === 'CollectionType';
+			sortie.push({ id: item.ID, chemin, dossier, modifie: item.ModifiedClient, carnet: item.fileType === 'notebook' });
+			if (dossier) sortie.push(...(await this.lister(item.ID, chemin + '/')));
 		}
 		return sortie;
 	}
@@ -83,8 +81,7 @@ export class Tablette {
 	 * importé : le PDF que rend la tablette (environ 10 s), annotations comprises.
 	 */
 	async telecharger(id: string, carnet: boolean): Promise<ArrayBuffer> {
-		const { statut, corps } = await obtenir(`${this.hote}/download/${id}/${carnet ? 'rmdoc' : 'pdf'}`, 60000);
-		if (statut !== 200) throw new Error(`HTTP ${statut}`);
+		const corps = await obtenir(`${this.hote}/download/${id}/${carnet ? 'rmdoc' : 'pdf'}`, 60000);
 		return new Uint8Array(carnet ? rmdocEnPdf(corps, id) : corps).buffer;
 	}
 }

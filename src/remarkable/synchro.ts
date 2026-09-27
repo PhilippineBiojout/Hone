@@ -41,6 +41,11 @@ export class Synchro {
 		private readonly changer: () => Promise<void>,
 	) {}
 
+	/** Le PDF de l'entrée dans le vault, s'il y est encore. */
+	private fichier(e: Entree): TFile | null {
+		return e.chemin ? this.app.vault.getFileByPath(e.chemin) : null;
+	}
+
 	private async passer(etat: Etat): Promise<void> {
 		if (this.etat === etat) return;
 		this.etat = etat;
@@ -78,7 +83,7 @@ export class Synchro {
 		if (presents.size === 0) return;
 		for (const [id, e] of Object.entries(this.registre.carnets)) {
 			if (presents.has(id)) continue;
-			const fichier = e.chemin ? this.app.vault.getFileByPath(e.chemin) : null;
+			const fichier = this.fichier(e);
 			if (fichier) await this.app.vault.trash(fichier, false);
 			delete this.registre.carnets[id];
 			log(`${e.chemin} : supprimé sur la tablette, mis à la corbeille`);
@@ -88,30 +93,33 @@ export class Synchro {
 
 	private async suivre(el: ElementTablette, cible: string): Promise<void> {
 		const e = this.registre.entree(el.id);
-		const { vault } = this.app;
-		const fichier = e.chemin ? vault.getFileByPath(e.chemin) : null;
-
-		// Déplacé ou renommé sur la tablette : on le déplace dans le vault.
-		if (fichier && e.chemin !== cible) {
-			if (vault.getAbstractFileByPath(cible)) {
-				log(`${cible} : déjà pris, ${e.chemin} reste où il est pour ce tour`);
-			} else {
-				const avant = e.chemin;
-				await this.creerDossier(parent(cible));
-				e.chemin = cible;
-				await vault.rename(fichier, cible);
-				log(`${avant} → ${cible}`);
-				await this.changer();
-			}
-		}
+		const fichier = this.fichier(e);
+		if (fichier && e.chemin !== cible) await this.deplacer(e, fichier, cible);
 		// Écrit une fois mais plus là (sorti de reMarkable/ ou supprimé dans
 		// Fragment) : on le recrée, ce qui a été sorti reste une copie. Pas un
 		// document jamais écrit (export en échec) : il attend sa modification.
 		if (e.chemin && !fichier) Object.assign(e, { chemin: null, modifie: null });
 		if (e.modifie === el.modifie) return;
+		await this.telecharger(el, e, cible);
+	}
 
+	/** Déplacé ou renommé sur la tablette : on le déplace dans le vault. */
+	private async deplacer(e: Entree, fichier: TFile, cible: string): Promise<void> {
+		if (this.app.vault.getAbstractFileByPath(cible)) {
+			log(`${cible} : déjà pris, ${e.chemin} reste où il est pour ce tour`);
+			return;
+		}
+		const avant = e.chemin;
+		await this.creerDossier(parent(cible));
+		e.chemin = cible;
+		await this.app.vault.rename(fichier, cible);
+		log(`${avant} → ${cible}`);
+		await this.changer();
+	}
+
+	private async telecharger(el: ElementTablette, e: Entree, cible: string): Promise<void> {
 		const avant = e.modifie;
-		log(`${el.chemin} : ${fichier ? 'modifié' : 'à écrire'}, téléchargement…`);
+		log(`${el.chemin} : ${e.chemin ? 'modifié' : 'à écrire'}, téléchargement…`);
 		// On retient la version tout de suite : un export qui échoue n'est
 		// retenté qu'à la prochaine modification du carnet. Le réessayer à
 		// chaque tour bloquerait toute la boucle (un carnet dont l'export ne
@@ -139,7 +147,7 @@ export class Synchro {
 	/** Écrit le PDF là où il est, ou le crée à `cible`. */
 	private async ecrire(e: Entree, cible: string, octets: ArrayBuffer): Promise<void> {
 		const { vault } = this.app;
-		const fichier = e.chemin ? vault.getFileByPath(e.chemin) : null;
+		const fichier = this.fichier(e);
 		if (fichier) {
 			await vault.modifyBinary(fichier, octets);
 			await this.recharger(fichier);

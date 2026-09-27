@@ -87,43 +87,47 @@ function lireTraits(buf: Buffer): Trait[] {
 
 const nombre = (v: number) => v.toFixed(2);
 
+/** Un point de la tablette en coordonnées PDF (« x y »). */
+type Pt = (p: Trait['points'][number]) => string;
+
 /** Le dessin d'une page en opérateurs PDF, et sa taille en points. */
 function page(traits: Trait[]): { largeur: number; hauteur: number; dessin: string } {
 	let bas = HAUTEUR;
 	for (const t of traits) for (const [, y] of t.points) bas = Math.max(bas, y + MARGE_BAS);
 	const hauteur = Math.round(bas * ECHELLE);
 	// Le y du PDF monte depuis le bas ; la tablette cale la page en haut.
-	const pt = (x: number, y: number) => `${nombre((x + LARGEUR / 2) * ECHELLE)} ${nombre(hauteur - y * ECHELLE)}`;
-
-	const dessin = traits.filter((t) => !GOMMES.includes(t.outil) && t.points.length > 0).map((t) => {
-		const surligneur = SURLIGNEURS.includes(t.outil) || t.couleur === 9;
-		const [r, v, b] = (t.rvb ?? COULEURS[t.couleur] ?? [0, 0, 0]).map((c) => (c / 255).toFixed(3));
-		// Un point seul (un « . ») : un segment nul, que le bout rond rend visible.
-		const points = t.points.length > 1 ? t.points : [t.points[0], t.points[0]];
-		// Le surligneur : une largeur fixe, et « Darken » pour ne pas couvrir l'encre.
-		if (surligneur) {
-			const chemin = points.map(([x, y], i) => `${pt(x, y)} ${i ? 'l' : 'm'}`).join('\n');
-			return `q /Surligneur gs ${r} ${v} ${b} RG ${nombre(SURLIGNEUR * ECHELLE)} w\n${chemin}\nS Q`;
-		}
-		// Le stylo s'épaissit et s'affine le long du trait : chaque segment prend
-		// la largeur de son point d'arrivée, et les segments de même largeur (au
-		// centième de point) forment un seul chemin. Pas reproduit : la tablette
-		// épaissit encore un long trait appuyé à fond (jusqu'à 3 fois), ce que
-		// les points ne disent pas.
-		const morceaux: string[] = [];
-		let largeur = '';
-		for (let i = 1; i < points.length; i++) {
-			const w = nombre(Math.max(1, points[i][2] / 4) * ECHELLE);
-			if (w !== largeur) {
-				if (largeur) morceaux.push('S');
-				morceaux.push(`${w} w ${pt(points[i - 1][0], points[i - 1][1])} m`);
-				largeur = w;
-			}
-			morceaux.push(`${pt(points[i][0], points[i][1])} l`);
-		}
-		return `q ${r} ${v} ${b} RG\n${morceaux.join('\n')}\nS Q`;
-	});
+	const pt: Pt = ([x, y]) => `${nombre((x + LARGEUR / 2) * ECHELLE)} ${nombre(hauteur - y * ECHELLE)}`;
+	const dessin = traits.filter((t) => !GOMMES.includes(t.outil) && t.points.length > 0).map((t) => trait(t, pt));
 	return { largeur: Math.round(LARGEUR * ECHELLE), hauteur, dessin: `1 J 1 j\n${dessin.join('\n')}` };
+}
+
+/** Un trait en opérateurs PDF. */
+function trait(t: Trait, pt: Pt): string {
+	const [r, v, b] = (t.rvb ?? COULEURS[t.couleur] ?? [0, 0, 0]).map((c) => (c / 255).toFixed(3));
+	// Un point seul (un « . ») : un segment nul, que le bout rond rend visible.
+	const points = t.points.length > 1 ? t.points : [t.points[0], t.points[0]];
+	// Le surligneur : une largeur fixe, et « Darken » pour ne pas couvrir l'encre.
+	if (SURLIGNEURS.includes(t.outil) || t.couleur === 9) {
+		const chemin = points.map((p, i) => `${pt(p)} ${i ? 'l' : 'm'}`).join('\n');
+		return `q /Surligneur gs ${r} ${v} ${b} RG ${nombre(SURLIGNEUR * ECHELLE)} w\n${chemin}\nS Q`;
+	}
+	// Le stylo s'épaissit et s'affine le long du trait : chaque segment prend
+	// la largeur de son point d'arrivée, et les segments de même largeur (au
+	// centième de point) forment un seul chemin. Pas reproduit : la tablette
+	// épaissit encore un long trait appuyé à fond (jusqu'à 3 fois), ce que
+	// les points ne disent pas.
+	const morceaux: string[] = [];
+	let largeur = '';
+	for (let i = 1; i < points.length; i++) {
+		const w = nombre(Math.max(1, points[i][2] / 4) * ECHELLE);
+		if (w !== largeur) {
+			if (largeur) morceaux.push('S');
+			morceaux.push(`${w} w ${pt(points[i - 1])} m`);
+			largeur = w;
+		}
+		morceaux.push(`${pt(points[i])} l`);
+	}
+	return `q ${r} ${v} ${b} RG\n${morceaux.join('\n')}\nS Q`;
 }
 
 /** Le PDF d'un carnet, depuis son rmdoc. Une page sans trait n'a pas de `.rm` : elle reste blanche. */
@@ -154,7 +158,11 @@ export function rmdocEnPdf(zip: Uint8Array, id: string): Buffer {
 	}
 	objets[0] = '<< /Type /Catalog /Pages 2 0 R >>';
 	objets[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;
+	return pdf(objets);
+}
 
+/** Le fichier PDF autour de ses objets, numérotés à partir de 1 (le catalogue). */
+function pdf(objets: (string | Buffer)[]): Buffer {
 	// L'en-tête, les objets numérotés, puis la table des positions (xref) qu'un lecteur PDF lit en premier.
 	const morceaux = [Buffer.from('%PDF-1.4\n')];
 	let taille = morceaux[0].length;
