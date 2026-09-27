@@ -27,6 +27,32 @@ export default class HonePlugin extends Plugin {
     private fermerCodex: (() => void) | null = null;
 
     async onload(): Promise<void> {
+        // L'historique de la marge : traces.json, à côté de data.json. Il vit avec le plugin,
+        // pas avec la vue, que le cœur remonte à chaque fichier ouvert.
+        const adapter = this.app.vault.adapter;
+        const fichierTraces = `${this.app.plugins.pluginsDir}/${this.manifest.id}/traces.json`;
+        const traces = new RegistreTraces({
+            lire: async () => ((await adapter.exists(fichierTraces)) ? adapter.read(fichierTraces) : null),
+            ecrire: (texte) => adapter.write(fichierTraces, texte),
+        });
+        // Pas d'attente ici : le calque se déclare avant tout `await` (plus bas), et la marge se
+        // redessine quand le fichier est lu (charger() prévient les vues).
+        const tracesChargees = traces.charger();
+        this.register(() => void traces.vider());
+        this.registerEvent(this.app.vault.on('rename', (fichier, ancien) => traces.renommer(ancien, fichier.path)));
+        this.registerEvent(this.app.vault.on('delete', (fichier) => traces.oublierDocument(fichier.path)));
+
+        // Le cœur n'active un calque « d'office » que sur les vues ouvertes APRÈS sa déclaration :
+        // déclaré après un `await`, il manquait à la note ouverte au démarrage (pas de barre).
+        this.registerLayer({
+            id: 'hone',
+            name: 'Hone',
+            icon: 'message-circle',
+            defaultEnabled: true,
+            appliesTo: (view) => view.leaf.parent !== null,
+            create: (ctx) => createAgentLayer(ctx, traces),
+        });
+
         const data = await this.loadData();
         this.reglages = fusionner(data);
         this.atelier = new Atelier({
@@ -44,7 +70,6 @@ export default class HonePlugin extends Plugin {
         this.atelier.declarerTout(AGENTS);
 
         // La mémoire : memoire.jsonl à côté de data.json, dans le dossier du plugin.
-        const adapter = this.app.vault.adapter;
         const fichier = `${this.app.plugins.pluginsDir}/${this.manifest.id}/memoire.jsonl`;
         const journal = new Journal({
             lire: async () => ((await adapter.exists(fichier)) ? adapter.read(fichier) : null),
@@ -53,30 +78,11 @@ export default class HonePlugin extends Plugin {
         await journal.charger();
         this.memoire = new Memoire(journal, new Preferences(lirePreferences(data), () => void this.sauver()), accesVault(this.app));
 
-        // L'historique de la marge : traces.json, à côté de data.json. Il vit avec le plugin,
-        // pas avec la vue, que le cœur remonte à chaque fichier ouvert.
-        const fichierTraces = `${this.app.plugins.pluginsDir}/${this.manifest.id}/traces.json`;
-        const traces = new RegistreTraces({
-            lire: async () => ((await adapter.exists(fichierTraces)) ? adapter.read(fichierTraces) : null),
-            ecrire: (texte) => adapter.write(fichierTraces, texte),
-        });
-        await traces.charger();
-        this.register(() => void traces.vider());
-        this.registerEvent(this.app.vault.on('rename', (fichier, ancien) => traces.renommer(ancien, fichier.path)));
-        this.registerEvent(this.app.vault.on('delete', (fichier) => traces.oublierDocument(fichier.path)));
+        await tracesChargees;
 
         this.relancerMoteur();
         this.register(() => this.fermerMoteur?.());
         this.register(() => this.fermerCodex?.());
-
-        this.registerLayer({
-            id: 'hone',
-            name: 'Hone',
-            icon: 'message-circle',
-            defaultEnabled: true,
-            appliesTo: (view) => view.leaf.parent !== null,
-            create: (ctx) => createAgentLayer(ctx, traces),
-        });
 
         this.addCommand({
             id: 'cle-api',

@@ -75,6 +75,8 @@ export class RegistreTraces {
             if (traces.length > 0) this.parDocument.set(chemin, traces);
             for (const t of traces) this.prochainId = Math.max(this.prochainId, t.id + 1);
         }
+        // Les vues déjà montées (la note ouverte au démarrage) placent leurs icônes maintenant.
+        for (const chemin of this.parDocument.keys()) for (const cb of this.abonnes) cb(chemin);
     }
 
     pour(chemin: string): readonly Trace[] {
