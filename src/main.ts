@@ -30,7 +30,7 @@ export default class HonePlugin extends Plugin {
         });
 
         poserLeVerre(this);
-        setupScan(this, () => this.reglages.cle);
+        setupScan(this);
 
         if (!this.reglages.cle) {
             new Notice('Hone : ajoute ta clé OpenAI via la commande « Hone : clé API… ».', 8000);

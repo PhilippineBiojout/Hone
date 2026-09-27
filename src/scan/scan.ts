@@ -1,13 +1,16 @@
 import { Modal, Notice, type App, type Plugin } from 'fragment';
 import QRCodeStyling from 'qr-code-styling';
-import { Relais } from './relais';
-import { transcrire } from './transcrire';
+import { imageName, pageLine, putPage } from './pages';
+import { Relais, type PhotoMeta } from './relais';
 
-// Scanner une feuille avec le téléphone : une icône de ruban montre un QR code,
-// un relais WebSocket relie le téléphone au bureau, et la photo reçue se range
-// dans « Scans/ ». Le site du téléphone et le relais vivent dans le dépôt
-// Hone-web_scan (GitHub Pages + worker Cloudflare) ; ici, seul le côté bureau.
-// Retrait : ce fichier, `relais.ts`, l'appel dans main.ts, la section de styles.css.
+// Scanner des feuilles avec le téléphone : une icône de ruban montre un QR code,
+// un relais WebSocket relie le téléphone au bureau, et les photos reçues se rangent
+// dans « Scans/ ». Les pages d'un même document vont dans UNE seule note, les unes
+// à la suite des autres (une image par page) ; mettre à jour une page remplace son
+// image. Pas de transcription ici : le texte, c'est Codex qui s'en charge dans Fragment.
+// Le site du téléphone et le relais vivent dans le dépôt Hone-web_scan
+// (GitHub Pages + worker Cloudflare) ; ici, seul le côté bureau.
+// Retrait : ce fichier, `relais.ts`, `pages.ts`, l'appel dans main.ts, la section de styles.css.
 
 /** Le site que le téléphone ouvre : les pages GitHub du dossier docs/ de Hone-web_scan. */
 const SITE_URL = 'https://philippinebiojout.github.io/Hone-web_scan/';
@@ -19,48 +22,92 @@ const CLOSE_MS = 140;
  * Branche « scanner une feuille » sur le plugin : le relais (fermé au démontage),
  * puis l'icône de ruban qui fait jaillir le QR code à côté d'elle.
  */
-export function setupScan(plugin: Plugin, getKey: () => string): void {
+export function setupScan(plugin: Plugin): void {
     const sessionId = crypto.randomUUID();
+    // La note de chaque document de la session, par identifiant `doc` (envoyé par le téléphone)
+    const notes = new Map<string, Note>();
+    // Les photos sont rangées UNE PAR UNE, dans l'ordre d'arrivée : deux pages envoyées
+    // coup sur coup ne réécrivent jamais la note en même temps (l'une effacerait l'autre).
+    let queue: Promise<void> = Promise.resolve();
     const relais = new Relais(
         sessionId,
         (connected) => { new Notice(connected ? 'Téléphone connecté' : 'Téléphone déconnecté'); },
-        (photo, id) => void savePhoto(plugin.app, relais, photo, id, getKey),
+        (photo, id, meta) => {
+            queue = queue
+                .then(() => savePhoto(plugin.app, relais, notes, photo, id, meta))
+                .catch((error) => {
+                    // La file continue quand même pour les photos suivantes
+                    console.error('[scan]', error);
+                    new Notice('Scan : impossible de ranger la photo dans le vault', 8000);
+                });
+        },
     );
     relais.connect();
     plugin.register(() => relais.close());
 
     const button = plugin.addRibbonIcon('qr-code', 'Scanner une feuille', () => {
-        new ScanModal(plugin.app, `${SITE_URL}#${sessionId}`, button).open();
+        // Anti-cache : `?v=<horodatage>` rend l'adresse du site neuve à chaque QR affiché.
+        // Le téléphone ne peut donc pas ressortir un vieux HTML de son cache, et le site
+        // recopie ce même `?v=…` sur son CSS et son JS (voir docs/index.html de Hone-web_scan).
+        // L'horodatage, et pas l'id de session : ce qui suit `?` part au serveur GitHub,
+        // l'id de session (après `#`) reste dans le téléphone.
+        const url = `${SITE_URL}?v=${Date.now().toString(36)}#${sessionId}`;
+        new ScanModal(plugin.app, url, button).open();
     });
 }
 
-/** Range la photo reçue dans « Scans/ » (créé au besoin) et accuse réception. */
-async function savePhoto(app: App, relais: Relais, photo: Blob, id: string, getKey: () => string): Promise<void> {
+/** La note d'un document : `Scans/<base>.md`, et `<base>` préfixe les images de ses pages. */
+interface Note {
+    base: string;
+    path: string;
+}
+
+/**
+ * Range une photo reçue : l'image dans « Scans/ » (créé au besoin), puis sa ligne dans
+ * la note de son document. Première page d'un document → on crée la note et on l'ouvre ;
+ * page suivante → elle s'ajoute à la fin ; page mise à jour → sa ligne est remplacée.
+ */
+async function savePhoto(
+    app: App,
+    relais: Relais,
+    notes: Map<string, Note>,
+    photo: Blob,
+    id: string,
+    meta: PhotoMeta,
+): Promise<void> {
     if (app.vault.getFolderByPath('Scans') === null) {
         await app.vault.createFolder('Scans');
     }
     const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-    const name = `scan-${stamp}`;
-    const octets = await photo.arrayBuffer();
-    await app.vault.createBinary(`Scans/${name}.jpg`, octets);
-    relais.send({ type: 'photo-received', id });
-    new Notice('Scan reçu — transcription…');
-    try {
-        const { markdown, fichiers } = await transcrire(photo, getKey());
-        for (const file of fichiers) {
-            const path = `Scans/${file.nom}`;
-            const folder = path.slice(0, path.lastIndexOf('/'));
-            if (app.vault.getFolderByPath(folder) === null) await app.vault.createFolder(folder);
-            if (typeof file.donnees === 'string') await app.vault.create(path, file.donnees);
-            else await app.vault.createBinary(path, file.donnees);
-        }
 
-        const note = await app.vault.create(`Scans/${name}.md`, `${markdown}\n\n![[${name}.jpg]]\n`);
-        await app.workspace.getLeaf().openFile(note);
-        new Notice('Note créée');
-    } catch (error) {
-        new Notice(error instanceof Error ? error.message : 'Transcription impossible', 8000);
+    // Un ancien site n'envoie ni `doc` ni `page` : chaque photo est alors son propre document
+    const doc = meta.doc ?? crypto.randomUUID();
+    const page = meta.page ?? 1;
+    let note = notes.get(doc);
+    if (note === undefined) {
+        const base = `scan-${stamp}`;
+        note = { base, path: `Scans/${base}.md` };
+        notes.set(doc, note);
     }
+
+    // Toujours une nouvelle image, même pour une mise à jour (createBinary refuse d'écraser) :
+    // l'ancienne reste dans « Scans/ », seule la note ne l'affiche plus.
+    const image = imageName(note.base, page, stamp);
+    await app.vault.createBinary(`Scans/${image}`, await photo.arrayBuffer());
+    // Le téléphone affiche « Envoyé ! » dès que l'image est dans le vault
+    relais.send({ type: 'photo-received', id });
+
+    const line = pageLine(image);
+    const existing = app.vault.getFileByPath(note.path);
+    if (existing === null) {
+        // Premier envoi du document (ou note supprimée entre-temps) : on la crée et on l'ouvre
+        const created = await app.vault.create(note.path, `${line}\n`);
+        await app.workspace.getLeaf().openFile(created);
+    } else {
+        // `process` lit et réécrit la note d'un seul coup : ce qu'on y a tapé entre-temps est gardé
+        await app.vault.process(existing, (text) => putPage(text, note.base, page, line));
+    }
+    new Notice(meta.replace ? `Page ${page} mise à jour` : `Page ${page} ajoutée`);
 }
 
 /**

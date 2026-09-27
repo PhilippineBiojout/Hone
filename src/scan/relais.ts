@@ -4,18 +4,29 @@
 
 const RELAY_URL = 'wss://hone-relay.lasky.workers.dev';
 
+/**
+ * Où ranger la photo, d'après le téléphone (champs de `photo-start`) : la page `page`
+ * du document `doc`, à ajouter ou à remplacer (`replace`). Un ancien site n'envoie
+ * rien de tout ça : les champs sont alors absents.
+ */
+export interface PhotoMeta {
+    doc?: string;
+    page?: number;
+    replace?: boolean;
+}
+
 export class Relais {
     socket: WebSocket | null = null;
     sessionId: string;
     stopped = false;
     onPhone: (connected: boolean) => void;
-    onPhoto: (photo: Blob, id: string) => void;
-    incoming: { id: string; mime: string; size: number; chunks: ArrayBuffer[] } | null = null;
+    onPhoto: (photo: Blob, id: string, meta: PhotoMeta) => void;
+    incoming: { id: string; mime: string; size: number; meta: PhotoMeta; chunks: ArrayBuffer[] } | null = null;
 
     constructor(
         sessionId: string,
         onPhone: (connected: boolean) => void,
-        onPhoto: (photo: Blob, id: string) => void,
+        onPhoto: (photo: Blob, id: string, meta: PhotoMeta) => void,
     ) {
         this.sessionId = sessionId;
         this.onPhone = onPhone;
@@ -36,12 +47,13 @@ export class Relais {
             if (message.type === 'peer' && message.role === 'phone') {
                 this.onPhone(message.connected);
             } else if (message.type === 'photo-start') {
-                this.incoming = { id: message.id, mime: message.mime || 'image/jpeg', size: message.size, chunks: [] };
+                this.incoming = { id: message.id, mime: message.mime || 'image/jpeg', size: message.size, meta: lireMeta(message), chunks: [] };
             } else if (message.type === 'photo-end') {
                 if (this.incoming === null || this.incoming.id !== message.id) return;
                 const photo = new Blob(this.incoming.chunks, { type: this.incoming.mime });
+                const meta = this.incoming.meta;
                 this.incoming = null;
-                this.onPhoto(photo, message.id);
+                this.onPhoto(photo, message.id, meta);
             }
         };
 
@@ -64,4 +76,13 @@ export class Relais {
         this.stopped = true;
         this.socket?.close(1000);
     }
+}
+
+/** Garde de `photo-start` seulement des champs du bon type : le reste est ignoré. */
+function lireMeta(message: { doc?: unknown; page?: unknown; replace?: unknown }): PhotoMeta {
+    return {
+        doc: typeof message.doc === 'string' ? message.doc : undefined,
+        page: Number.isInteger(message.page) && (message.page as number) > 0 ? (message.page as number) : undefined,
+        replace: message.replace === true,
+    };
 }
