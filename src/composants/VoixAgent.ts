@@ -73,7 +73,8 @@ export class VoixAgent extends Component {
         private readonly onFermer: (historique: Message[], boite: DOMRect, parCroix: boolean) => void,
     ) {
         super();
-        this.el.classList.add('agent-voix');
+        // `hone-voix` en plus : l'ancien plugin `agent` style aussi `.agent-voix` (styles.css).
+        this.el.classList.add('agent-voix', 'hone-voix');
         this.el.setAttribute('role', 'group');
         this.el.setAttribute('aria-label', 'Discussion orale');
 

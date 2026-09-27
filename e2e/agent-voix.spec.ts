@@ -50,6 +50,8 @@ async function lancer(): Promise<Harnais> {
     await writeFile(path.join(vault, 'note.md'), CONTENU, 'utf8');
     await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone', path.join(vault, '.fragment/plugins/hone'), { recursive: true, // Ni node_modules, ni le .env (la clé ne sort pas du plugin : sans lui, l'agent répond en factice), ni le journal des coûts.
         filter: (src) => !src.includes('node_modules') && !/[\\/](\.env|couts\.jsonl)$/.test(src) });
+    // Depuis le cœur 3c4dbe4, un coffre sans community-plugins.json est en mode restreint : rien ne se charge.
+    await writeFile(path.join(vault, '.fragment/community-plugins.json'), JSON.stringify(['hone']), 'utf8');
     await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
 
     const electronApp = await _electron.launch({
@@ -264,6 +266,26 @@ test('le micro fait sortir la lumière du bas du panneau : pas de boîte, deux r
     expect((s.x + f.x + f.width) / 2).toBeCloseTo(b.x + b.width / 2, 0);
     expect(b.y + b.height - (f.y + f.height)).toBeCloseTo(28, 0);
     await expect(stop(page)).toHaveAttribute('aria-label', 'Finir de parler');
+});
+
+test('l\'ancien plugin agent, s\'il est activé, ne remet pas de boîte autour de la lumière', async () => {
+    const { page } = h;
+    // Sa feuille habille tout `.agent-voix` (fond, filet, ombre, rayon 24, 48 × 48, contenu en flex).
+    await page.addStyleTag({ path: '/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/agent/styles.css' });
+    await simulerAudio(page);
+    await ouvrirVoix(page);
+    await expect(voix(page)).toHaveAttribute('data-etat', 'ecoute', { timeout: 4_000 });
+    await attendrePosee(page);
+    const style = await voix(page).evaluate((el) => {
+        const c = getComputedStyle(el);
+        return { fond: c.backgroundColor, filet: c.borderTopWidth, ombre: c.boxShadow, rayon: c.borderTopLeftRadius, hauteur: c.height };
+    });
+    expect(style).toEqual({ fond: 'rgba(0, 0, 0, 0)', filet: '0px', ombre: 'none', rayon: '0px', hauteur: '160px' });
+    for (const rond of [stop(page), voix(page).locator('.agent-voix-fermer')]) {
+        const b = (await rond.boundingBox())!;
+        expect(b.width).toBeCloseTo(40, 0);
+        expect(await rond.evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('50%');
+    }
 });
 
 test('sous la lumière, le texte de la note reste cliquable', async () => {
