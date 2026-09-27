@@ -128,6 +128,15 @@ test('la bulle répond par Codex, sur le passage sélectionné', async () => {
     const suite = bulle(page).locator('.agent-message.mod-agent').last();
     await expect(suite).not.toHaveClass(/is-pending/, { timeout: 120_000 });
     await expect(suite).toContainText(/photosynth/i);
+
+    // L'assistant s'appelle Hone, pas Codex.
+    await bulle(page).locator('.agent-bulle-champ').fill('Qui es-tu ? Réponds en une phrase.');
+    await bulle(page).locator('.agent-bulle-champ').press('Enter');
+    const nom = bulle(page).locator('.agent-message.mod-agent').last();
+    await expect(nom).not.toHaveClass(/is-pending/, { timeout: 120_000 });
+    console.log('IDENTITE', await nom.textContent());
+    await expect(nom).toContainText('Hone');
+    await expect(nom).not.toContainText('Codex');
 });
 
 test('Traduire traduit le passage entouré, par Codex', async () => {
