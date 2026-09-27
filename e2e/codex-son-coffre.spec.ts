@@ -4,6 +4,10 @@ import os from 'os';
 import path from 'path';
 
 /**
+ * Le panneau Codex dans l'app installée (/Applications/Fragment.app) sur une copie
+ * complète de fragment-notes : son workspace.json gardait la feuille Codex posée
+ * directement dans le dock (ancien code), restaurée à 0 × 0.
+ *
  * Le panneau Codex (src/codex/) : la commande l'ouvre dans le dock droit, il
  * lance `codex app-server` et arrive à « ready ». Appelle le vrai binaire codex
  * (connexion, thread, puis un vrai message).
@@ -28,45 +32,31 @@ async function fenetreApp(electronApp: ElectronApplication): Promise<Page> {
     const fin = Date.now() + 30_000;
     while (Date.now() < fin) {
         for (const w of electronApp.windows()) {
-            if (w.url().includes('localhost:5123')) return w;
+            if (!w.url().startsWith('devtools')) return w;
         }
         await new Promise((r) => setTimeout(r, 200));
     }
     throw new Error('fenêtre app introuvable');
 }
 
-async function lancer(): Promise<Harnais> {
+async function lancer(disposition?: unknown): Promise<Harnais> {
     const base = await mkdtemp(path.join(os.tmpdir(), 'prom-agent-'));
     const vault = path.join(base, 'vault');
     const userData = path.join(base, 'userdata');
-
-    await mkdir(vault, { recursive: true });
     await mkdir(userData, { recursive: true });
-    await writeFile(path.join(vault, 'note.md'), CONTENU, 'utf8');
-    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes/.fragment/plugins/hone', path.join(vault, '.fragment/plugins/hone'), { recursive: true, // Ni node_modules, ni le .env (la clé ne sort pas du plugin : sans lui, l'agent répond en factice), ni le journal des coûts.
-        filter: (src) => !src.includes('node_modules') && !/[\\/](\.env|couts\.jsonl)$/.test(src) });
-    // Depuis le cœur 3c4dbe4, un coffre sans community-plugins.json est en mode restreint : rien ne se charge.
-    await writeFile(path.join(vault, '.fragment/community-plugins.json'), JSON.stringify(['hone']), 'utf8');
+    // Copie fidèle du coffre de Philippine (disposition et plugins compris), sans node_modules ni data.json de Hone.
+    await cp('/Users/philippinebiojout/Documents/IA/fragment-notes', vault, { recursive: true,
+        filter: (src) => !src.includes('node_modules') && !src.includes('/.git') });
     await writeFile(path.join(userData, 'config.json'), JSON.stringify({ vaultRoot: vault }), 'utf8');
-
     const electronApp = await _electron.launch({
-        args: ['.', `--user-data-dir=${userData}`],
-        env: { ...process.env, NODE_ENV: 'development' } as Record<string, string>,
+        executablePath: '/Applications/Fragment.app/Contents/MacOS/Fragment',
+        args: [`--user-data-dir=${userData}`, `--vault-root=${vault}`],
+        env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: process.env.HOME! } as Record<string, string>,
     });
 
     const page = await fenetreApp(electronApp);
-    await page.waitForFunction(
-        () => {
-            const w = window as unknown as { app?: any };
-            const leaves = w.app?.workspace?.getLeavesOfType?.('markdown') ?? [];
-            return leaves.length > 0 && !!leaves[0].view?.editor;
-        },
-        undefined,
-        { timeout: 30_000 },
-    );
-    // Assez large pour la colonne, la barre et le chat côte à côte.
+    await page.waitForFunction(() => !!(window as any).app?.workspace, undefined, { timeout: 30_000 });
     await page.setViewportSize({ width: 1400, height: 800 });
-
     return { electronApp, page };
 }
 

@@ -44,7 +44,13 @@ interface WorkspaceDroit {
  *  `rightSplit` (createLeafInParent) is never laid out and stays 0 × 0. */
 async function activerVue(plugin: Plugin): Promise<void> {
 	const workspace = plugin.app.workspace as typeof plugin.app.workspace & WorkspaceDroit;
-	let leaf = workspace.getLeavesOfType(VIEW_TYPE_CODEX)[0];
+	let leaf: WorkspaceLeaf | undefined = workspace.getLeavesOfType(VIEW_TYPE_CODEX)[0];
+	// A leaf the old code placed straight in the dock is saved that way in
+	// workspace.json and restored as is, still 0 × 0: replace it.
+	if (leaf && leaf.parent === workspace.rightSplit) {
+		await leaf.detach();
+		leaf = undefined;
+	}
 	if (!leaf) {
 		leaf = workspace.getRightLeaf();
 		await leaf.setViewState({ type: VIEW_TYPE_CODEX, active: true });
