@@ -19,7 +19,7 @@ export class BulleAgent extends Component {
     readonly dom = creer(null, 'div', 'agent-bulle');
 
     private readonly extraitEl: HTMLElement;
-    /** Le sujet écrit par Hone ; tant qu'il manque, la tête montre le passage lisible. */
+    /** Le sujet écrit par Hone ; tant qu'il manque, la tête dit « Chat ». */
     private sujet: string | null = null;
     private readonly filEl: HTMLElement;
     private readonly champEl: HTMLTextAreaElement;
@@ -202,12 +202,11 @@ export class BulleAgent extends Component {
 
     private poserContexte(contexte: ContexteQuestion): void {
         this.contexte = contexte;
-        this.extraitEl.textContent = titreDuChat(this.sujet, contexte.texte);
+        this.extraitEl.textContent = titreDuChat(this.sujet);
         this.extraitEl.title = sansMarkdown(contexte.texte);
-        this.extraitEl.classList.toggle('is-sujet', this.sujet !== null);
     }
 
-    /** Le sujet du passage est arrivé : « Question sur … » remplace le passage, par un fondu. */
+    /** Le sujet du passage est arrivé : « Question sur … » remplace « Chat », par un fondu. */
     titrer(sujet: string | null): void {
         if (sujet === this.sujet) return;
         this.sujet = sujet;

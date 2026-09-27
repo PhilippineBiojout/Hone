@@ -33,9 +33,13 @@ export function sansMarkdown(texte: string): string {
         .trim();
 }
 
-/** La tête du chat : le sujet écrit par Hone, sinon le passage lisible. */
-export function titreDuChat(sujet: string | null, passage: string): string {
-    return sujet ? `Question sur ${sujet}` : sansMarkdown(passage);
+/** Ce que dit la tête du chat tant que Hone n'a pas écrit le sujet (ou s'il ne l'écrit pas). */
+export const TITRE_CHAT = 'Chat';
+
+/** La tête du chat : le sujet écrit par Hone, sinon « Chat ». Le passage, lui, ne se lisait pas
+ *  pendant l'attente : on le voyait, puis il changeait. Il reste en infobulle. */
+export function titreDuChat(sujet: string | null): string {
+    return sujet ? `Question sur ${sujet}` : TITRE_CHAT;
 }
 
 /** La tête d'une carte : l'outil, puis son sujet quand Hone l'a écrit. */
@@ -56,7 +60,7 @@ export function nettoyerSujet(brut: string): string | null {
 
 /** L'infobulle d'une icône de la marge : le titre de la réponse, ou son outil et le passage lisible. */
 export function etiquetteDeReponse(libelle: string, estChat: boolean, sujet: string | null, passage: string): string {
-    if (sujet) return estChat ? titreDuChat(sujet, passage) : titreDeCarte(libelle, sujet);
+    if (sujet) return estChat ? titreDuChat(sujet) : titreDeCarte(libelle, sujet);
     const extrait = sansMarkdown(passage);
     return `${libelle} : « ${extrait.length > 60 ? `${extrait.slice(0, 60)}…` : extrait} »`;
 }

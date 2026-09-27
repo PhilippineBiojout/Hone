@@ -44,7 +44,7 @@ test.afterEach(async () => {
     await h.electronApp.close();
 });
 
-test('la tête du chat : le passage sans Markdown, puis « Question sur » le sujet', async () => {
+test('la tête du chat : « Chat » pendant l’attente, puis « Question sur » le sujet, jamais le passage', async () => {
     const { page } = h;
     await surlignerPassage(page);
     // Le passage cité porte bien du Markdown brut : c'est ce que la tête ne doit pas montrer.
@@ -54,9 +54,21 @@ test('la tête du chat : le passage sans Markdown, puis « Question sur » le su
     });
     expect(passage).toContain('**Pascaline**');
 
+    // Chaque texte que la tête prend, dès sa création : le passage ne doit jamais s'y montrer.
+    await page.evaluate(() => {
+        const vus: string[] = [];
+        (window as unknown as { teteVue: string[] }).teteVue = vus;
+        const noter = (): void => {
+            const t = document.querySelector('.agent-bulle-extrait')?.textContent ?? null;
+            if (t !== null && vus.at(-1) !== t) vus.push(t);
+        };
+        new MutationObserver(noter).observe(document.body, { subtree: true, childList: true, characterData: true });
+    });
     await ouvrirChat(page);
-    await expect(teteChat(page)).not.toHaveText(/[*#]/);
     await expect(teteChat(page)).toHaveText(/^Question sur le sujet factice Pascaline/, { timeout: 4_000 });
+    const vus = await page.evaluate(() => (window as unknown as { teteVue: string[] }).teteVue);
+    expect(vus[0]).toBe('Chat');
+    expect(vus.every((t) => t === 'Chat' || t.startsWith('Question sur '))).toBe(true);
     await expect(teteChat(page)).not.toHaveText(/[*#]/);
     expect(await teteChat(page).getAttribute('title')).not.toMatch(/[*#]/);
     // Le titre ne déborde pas : une ligne, coupée par des points de suspension.

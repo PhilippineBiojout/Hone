@@ -31,9 +31,9 @@ describe('sansMarkdown', () => {
 });
 
 describe('les titres', () => {
-    it('chat : le sujet s’il est là, sinon le passage lisible', () => {
-        expect(titreDuChat('le machine learning', '**Le ML** apprend')).toBe('Question sur le machine learning');
-        expect(titreDuChat(null, '**Le ML** apprend')).toBe('Le ML apprend');
+    it('chat : le sujet s’il est là, sinon « Chat » (jamais le passage, qui changeait sous les yeux)', () => {
+        expect(titreDuChat('le machine learning')).toBe('Question sur le machine learning');
+        expect(titreDuChat(null)).toBe('Chat');
     });
 
     it('carte : l’outil, puis son sujet', () => {

@@ -96,20 +96,13 @@
 /* La bulle du chat */
 .agent-bulle-tete, .agent-action-tete { display: flex; align-items: center; gap: 8px; }
 .agent-bulle-tete { padding: 8px 8px 8px 12px; }
+/* La tête : « Chat », puis « Question sur … » quand Hone a écrit le sujet. Un titre, pas une citation. */
 .agent-bulle-extrait {
     flex: 1; min-width: 0;
-    padding-left: 8px;
-    border-left: 2px solid var(--color-accent);
-    color: var(--text-muted);
-    font-size: var(--font-ui-small);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* Le sujet écrit par Hone : un titre, plus une citation du passage. */
-.agent-bulle-extrait.is-sujet {
-    padding-left: 0;
-    border-left: none;
     color: var(--text-normal);
+    font-size: var(--font-ui-small);
     font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .agent-bulle-fermer, .agent-bulle-micro, .agent-bulle-envoyer { flex-shrink: 0; }
 .agent-bulle-fil {
