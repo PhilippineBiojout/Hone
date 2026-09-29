@@ -1,5 +1,7 @@
 # Hone
 
+[Video Demo](https://youtu.be/azyeI1L1MFs?is=ujEfq9KjnOSvYAH2)
+
 **Hone** is an AI study companion for [Fragment](https://www.usefragment.org). It lives inside your
 notes and PDFs, and answers where you are working.
 
